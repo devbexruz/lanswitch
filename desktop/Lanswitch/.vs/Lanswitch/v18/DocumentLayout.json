@@ -1,0 +1,87 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|s:\\myprojects\\lanswitch\\desktop\\lanswitch\\viewlocator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|solutionrelative:viewlocator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|s:\\myprojects\\lanswitch\\desktop\\lanswitch\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|s:\\myprojects\\lanswitch\\desktop\\lanswitch\\views\\mainwindow.axaml||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|solutionrelative:views\\mainwindow.axaml||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|s:\\myprojects\\lanswitch\\desktop\\lanswitch\\app.axaml||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{46E33643-20D9-2D0F-80BC-5D1DFD6D9BC1}|Lanswitch.csproj|solutionrelative:app.axaml||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "ViewLocator.cs",
+              "DocumentMoniker": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\ViewLocator.cs",
+              "RelativeDocumentMoniker": "ViewLocator.cs",
+              "ToolTip": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\ViewLocator.cs",
+              "RelativeToolTip": "ViewLocator.cs",
+              "ViewState": "AgIAAAkAAAAAAAAAAAAAABMAAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T13:02:47.187Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Program.cs",
+              "DocumentMoniker": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAAkAAAAAAAAAAAAYwA4AAAA1AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T12:57:28.245Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "App.axaml",
+              "DocumentMoniker": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\App.axaml",
+              "RelativeDocumentMoniker": "App.axaml",
+              "ToolTip": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\App.axaml",
+              "RelativeToolTip": "App.axaml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAcAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-06-24T12:56:14.079Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "MainWindow.axaml",
+              "DocumentMoniker": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\Views\\MainWindow.axaml",
+              "RelativeDocumentMoniker": "Views\\MainWindow.axaml",
+              "ToolTip": "S:\\MyProjects\\lanswitch\\desktop\\Lanswitch\\Views\\MainWindow.axaml",
+              "RelativeToolTip": "Views\\MainWindow.axaml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-06-24T12:55:58.83Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

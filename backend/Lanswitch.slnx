@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Lanswitch.Api/Lanswitch.Api.csproj" />
+  <Project Path="Lanswitch.Application/Lanswitch.Application.csproj" />
+  <Project Path="Lanswitch.Domain/Lanswitch.Domain.csproj" />
+  <Project Path="Lanswitch.Infrastructure/Lanswitch.Infrastructure.csproj" />
+</Solution>
