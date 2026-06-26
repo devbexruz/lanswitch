@@ -1,0 +1,88 @@
+.flex-between { display: flex; justify-content: space-between; align-items: flex-end; }
+
+/* Stats Grid */
+.stats-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;
+}
+
+.stat-card {
+  padding: 1.5rem; border-radius: 16px; display: flex; align-items: center; gap: 1.2rem; transition: transform var(--transition-normal);
+}
+.stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+
+.stat-icon {
+  width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.stat-icon svg { width: 24px; height: 24px; }
+
+.stat-info { display: flex; flex-direction: column; }
+.stat-value { font-size: 1.8rem; font-family: var(--font-display); font-weight: 700; line-height: 1.2; }
+.stat-label { font-size: 0.9rem; color: var(--text-secondary); }
+
+.ml-auto { margin-left: auto; }
+.btn-outline-warning { border: 1px solid var(--color-papaya-whip); color: var(--color-papaya-whip); background: transparent; cursor: pointer; border-radius: 8px; transition: all 0.2s; }
+.btn-outline-warning:hover { background: rgba(253, 240, 213, 0.1); }
+.small-btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
+
+/* Vocabulary List */
+.vocabulary-list-container {
+  padding: 1.5rem; border-radius: 16px;
+}
+
+.list-controls {
+  display: flex; gap: 1rem; margin-bottom: 1.5rem;
+}
+.search-input, .filter-select {
+  padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.2); color: white; font-family: var(--font-main);
+}
+.search-input { flex: 1; }
+.filter-select { width: 150px; }
+.search-input:focus, .filter-select:focus { outline: none; border-color: var(--accent-secondary); }
+
+.vocabulary-table {
+  width: 100%; border-collapse: collapse; text-align: left;
+}
+.vocabulary-table th {
+  padding: 1rem; border-bottom: 1px solid var(--border-glass); color: var(--text-secondary); font-weight: 500; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px;
+}
+.vocabulary-table td {
+  padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle;
+}
+.vocabulary-table tr:last-child td { border-bottom: none; }
+.vocabulary-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.word-cell { font-weight: 600; font-size: 1.1rem; color: white; }
+.translation-cell { color: var(--text-secondary); }
+.time-cell { font-size: 0.9rem; color: var(--text-secondary); }
+
+.status-badge {
+  padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; display: inline-block;
+}
+.status-badge.active { background: rgba(102, 155, 188, 0.15); color: var(--color-steel-blue); border: 1px solid rgba(102, 155, 188, 0.3); }
+.status-badge.inactive { background: rgba(244, 211, 94, 0.15); color: var(--color-papaya-whip); border: 1px solid rgba(244, 211, 94, 0.3); }
+
+.icon-btn-small {
+  background: transparent; border: none; color: var(--text-secondary); cursor: pointer; transition: color 0.2s; padding: 0.5rem; border-radius: 50%;
+}
+.icon-btn-small:hover { color: var(--accent-secondary); background: rgba(255,255,255,0.05); }
+.icon-btn-small svg { width: 20px; height: 20px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.modal-content {
+  width: 100%; max-width: 600px; padding: 2rem; border-radius: 24px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); border: 1px solid var(--border-glass); background: rgba(13, 59, 102, 0.95);
+}
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.modal-header h2 { font-size: 1.5rem; font-family: var(--font-display); margin: 0; }
+.close-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 2rem; cursor: pointer; line-height: 1; padding: 0; }
+.close-btn:hover { color: white; }
+
+.modal-body p { color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.95rem; }
+.words-textarea {
+  width: 100%; padding: 1rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; font-family: var(--font-main); resize: vertical; margin-bottom: 1.5rem; font-size: 1rem;
+}
+.words-textarea:focus { outline: none; border-color: var(--accent-secondary); box-shadow: 0 0 10px rgba(244, 211, 94, 0.1); }
+
+.modal-footer { display: flex; justify-content: flex-end; gap: 1rem; }

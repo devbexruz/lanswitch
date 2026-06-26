@@ -1,0 +1,139 @@
+.dropdown-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 99; /* Below dropdown but above page */
+}
+
+.notifications-dropdown {
+  position: absolute;
+  top: 70px; /* Below header */
+  right: 20px;
+  width: 350px;
+  border-radius: 16px;
+  background: rgba(13, 30, 50, 0.98);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  z-index: 100;
+  overflow: hidden;
+  transform-origin: top right;
+}
+
+.animate-slide-down {
+  animation: slideDownFade 0.2s ease-out forwards;
+}
+
+@keyframes slideDownFade {
+  from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.notifications-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.mark-read-btn {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.notifications-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for notifications */
+.notifications-list::-webkit-scrollbar {
+  width: 5px;
+}
+.notifications-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 5px;
+}
+
+.notification-item {
+  display: flex;
+  gap: 15px;
+  padding: 15px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+  position: relative;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.notification-item.unread {
+  background: rgba(102, 155, 188, 0.05);
+}
+
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.bg-success { background: rgba(244, 211, 94, 0.2); }
+.bg-warning { background: rgba(193, 18, 31, 0.2); }
+.bg-info { background: rgba(102, 155, 188, 0.2); }
+
+.notification-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-content h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: white;
+}
+
+.notification-content p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: 5px;
+}
+
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  transform: translateY(-50%);
+}
+
+.notifications-footer {
+  padding: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.2);
+}

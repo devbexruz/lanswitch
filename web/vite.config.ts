@@ -9,6 +9,13 @@ export default defineConfig({
     allowedHosts: [
       'lanswitch.developerlogic.uz',
       'localhost'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5273',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 })
