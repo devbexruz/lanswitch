@@ -8,9 +8,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Scalar.AspNetCore;
 using Lanswitch.Domain.Interfaces;
-using Lanswitch.Application.Interfaces;
-using Lanswitch.Application.Services;
-using Lanswitch.Infrastructure.Repositories;
+using Lanswitch.Infrastructure;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,25 +50,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Xizmatlar (Services)
-
-builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-// Services
-builder.Services.AddMemoryCache();
-builder.Services.AddSingleton<Lanswitch.Application.Interfaces.IBotStateManager, Lanswitch.Application.Services.BotStateManager>();
-
-builder.Services.AddScoped<ICloudStorageService, CloudStorageService>();
-builder.Services.AddScoped<IVideoProcessor, VideoProcessor>();
-builder.Services.AddScoped<Lanswitch.Application.Interfaces.ISubtitleParserService, Lanswitch.Application.Services.SubtitleParserService>();
-builder.Services.AddHttpClient<Lanswitch.Application.Interfaces.IGeminiAiService, Lanswitch.Application.Services.GeminiAiService>();
-builder.Services.AddScoped<IAuthAppService, AuthAppService>();
-builder.Services.AddScoped<IUserAppService, UserAppService>();
-builder.Services.AddScoped<ITelegramBotAppService, TelegramBotAppService>();
-
-builder.Services.AddSingleton<ICloudStorageService, CloudStorageService>();
-builder.Services.AddScoped<IMTProtoClient, MTProtoClientService>();
-builder.Services.AddTransient<IVideoProcessor, VideoProcessor>();
+builder.Services.AddLanswitchServices(builder.Configuration);
 
 // Controllerlarni qo'shish va JSON tsikllarini oldini olish (Reference Cycles)
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -122,66 +103,8 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// --- AVTOMATIK WEBHOOK SOZLASHTIRISH QISMI ---
-using (var scope = app.Services.CreateScope())
-{
-    var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var webhookUrl = builder.Configuration["BotConfiguration:WebhookUrl"];
-    
-    // Baza migratsiyasi va Seed
-    try
-    {
-        dbContext.Database.Migrate();
-        if (!dbContext.Languages.Any())
-        {
-            dbContext.Languages.AddRange(
-                new Lanswitch.Domain.Entities.Language { Title = "O'zbekcha" },
-                new Lanswitch.Domain.Entities.Language { Title = "English" },
-                new Lanswitch.Domain.Entities.Language { Title = "Русский" }
-            );
-            dbContext.SaveChanges();
-            Console.WriteLine("✅ Boshlang'ich tillar bazaga qo'shildi!");
-        }
-        
-        if (!dbContext.Categories.Any())
-        {
-            dbContext.Categories.Add(new Lanswitch.Domain.Entities.Category { Name = "Asosiy Kategoriya" });
-            dbContext.SaveChanges();
-            Console.WriteLine("✅ Boshlang'ich kategoriya bazaga qo'shildi!");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"❌ Baza migratsiya/seed xatosi: {ex.Message}");
-    }
-
-    Console.WriteLine("=====================================");
-    Console.WriteLine($"⏳ Webhook Telegramga yuborilmoqda...");
-    Console.WriteLine($"🔗 Manzil: {webhookUrl}");
-    
-    if (!string.IsNullOrEmpty(webhookUrl))
-    {
-        try
-        {
-            // Telegramga yangi manzilni aytamiz va eski o'qilmagan xabarlarni tozalaymiz
-            await botClient.SetWebhook(
-                url: webhookUrl,
-                dropPendingUpdates: true
-            );
-            Console.WriteLine("✅ Webhook muvaffaqiyatli sozlandi!");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Webhook o'rnatishda xatolik yuz berdi: {ex.Message}");
-        }
-    }
-    else
-    {
-        Console.WriteLine("❌ Webhook url topilmadi!");
-    }
-    Console.WriteLine("=====================================\n");
-}
+// Webhook and database seeding moved to extension method
+await app.UseTelegramWebhook(builder.Configuration);
 
 app.UseAuthorization();
 app.MapControllers();

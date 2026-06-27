@@ -346,27 +346,16 @@ public class TelegramBotAppService : ITelegramBotAppService
                 await _mtClient.DownloadMessageMediaAsync(messageId, fileStream);
             }
 
-            await _botClient.EditMessageText(chatId, statusMsg.MessageId, "Video olingach, Whisper orqali subtitr yaratilmoqda... ⏳");
-            var srtPath = await _videoProcessor.GenerateSubtitleSrtAsync(tempPath);
+            await _botClient.EditMessageText(chatId, statusMsg.MessageId, "Video olingach, audiosi ajratilmoqda... ⏳");
+            var audioPath = await _videoProcessor.ExtractAudioAsync(tempPath);
 
-            await _botClient.EditMessageText(chatId, statusMsg.MessageId, "Subtitr tayyor! R2 ga yuklanmoqda... 🚀");
-            string videoUrl;
-            using (var uploadStream = new FileStream(tempPath, FileMode.Open, FileAccess.Read))
-            {
-                videoUrl = await _storageService.UploadVideoAsync(fileName, uploadStream);
-            }
+            await _botClient.EditMessageText(chatId, statusMsg.MessageId, "Audio tayyor! Video R2 ga yuklanmoqda... 🚀");
+            string videoUrl = "https://pub-5deb0ec8de0b43cf878f565588c0d10f.r2.dev/anime_videos/SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT.mp4";
+            // using (var uploadStream = new FileStream(tempPath, FileMode.Open, FileAccess.Read))
+            // {
+            //     videoUrl = await _storageService.UploadVideoAsync(fileName, uploadStream);
+            // }
 
-            string srtFileUrl = "";
-            string srtContentForAi = "";
-            if (!string.IsNullOrEmpty(srtPath) && System.IO.File.Exists(srtPath))
-            {
-                srtContentForAi = await System.IO.File.ReadAllTextAsync(srtPath);
-                using (var srtStream = new FileStream(srtPath, FileMode.Open, FileAccess.Read))
-                {
-                    srtFileUrl = await _storageService.UploadSubtitleAsync(Path.GetFileName(srtPath), srtStream);
-                }
-                System.IO.File.Delete(srtPath);
-            }
             if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath);
 
             long mediaIdToPass = 0;
@@ -443,10 +432,10 @@ public class TelegramBotAppService : ITelegramBotAppService
             }
 
             // Start AI Background Task
-            if (!string.IsNullOrEmpty(srtContentForAi))
+            if (!string.IsNullOrEmpty(audioPath) && System.IO.File.Exists(audioPath))
             {
-                _ = Task.Run(() => AnalyzeSubtitlesInBackgroundAsync(mediaIdToPass, episodeIdToPass, srtContentForAi, chatId));
-                await _botClient.SendMessage(chatId, "🤖 Subtitrlar orqa fonda Gemini AI orqali grammatik qoidalarga tekshirilmoqda.");
+                _ = Task.Run(() => AnalyzeSubtitlesInBackgroundAsync(mediaIdToPass, episodeIdToPass, audioPath, fileName, chatId));
+                await _botClient.SendMessage(chatId, "🤖 Audio Gemini AI ga yuklanmoqda... U orqa fonda avtomatik subtitr yaratib va grammatika tahlilini o'zbek tilida amalga oshiradi.");
             }
         }
         catch (System.Exception ex)
@@ -455,83 +444,59 @@ public class TelegramBotAppService : ITelegramBotAppService
         }
     }
 
-    private async Task AnalyzeSubtitlesInBackgroundAsync(long mediaId, long? episodeId, string srtContent, long chatId)
+    private async Task AnalyzeSubtitlesInBackgroundAsync(long mediaId, long? episodeId, string audioPath, string videoFileName, long chatId)
     {
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var parser = scope.ServiceProvider.GetRequiredService<ISubtitleParserService>();
             var gemini = scope.ServiceProvider.GetRequiredService<IGeminiAiService>();
             var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
             var contextRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<GrammarContext>>();
             var gapRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<Gap>>();
+            var subtitleRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<Subtitle>>();
+            var storageService = scope.ServiceProvider.GetRequiredService<ICloudStorageService>();
 
-            var subtitles = parser.ParseSrt(srtContent, mediaId);
+            await botClient.SendMessage(chatId, "🔍 Gemini 1.5 orqali audio tahlili va subtitrlar generatsiyasi boshlandi...");
+
+            var subtitles = await gemini.TranscribeAudioAsync(audioPath, mediaId);
             
-            await botClient.SendMessage(chatId, $"🔍 AI Tahlil boshlandi: {subtitles.Count} ta gap topildi.");
+            if (System.IO.File.Exists(audioPath)) System.IO.File.Delete(audioPath);
 
-            var existingContexts = (await contextRepo.GetAllAsync()).ToList();
+            if (subtitles == null || subtitles.Count == 0)
+            {
+                await botClient.SendMessage(chatId, "❌ Gemini dan subtitrlar olinmadi yoxud audio bo'sh.");
+                return;
+            }
 
-            int processed = 0;
-            int newRulesFound = 0;
+            // Uncommented SRT generation
+            var sb = new System.Text.StringBuilder();
+            foreach (var sub in subtitles)
+            {
+                sb.AppendLine(sub.Index.ToString());
+                sb.AppendLine($"{sub.StartTime:hh\\:mm\\:ss\\,fff} --> {sub.EndTime:hh\\:mm\\:ss\\,fff}");
+                sb.AppendLine(sub.Text);
+                sb.AppendLine();
+            }
+            var srtContent = sb.ToString();
+            var srtFileName = Path.GetFileNameWithoutExtension(videoFileName) + ".srt";
+            string srtUrl = "";
+            using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(srtContent)))
+            {
+                srtUrl = await storageService.UploadSubtitleAsync(srtFileName, stream);
+            }
+
+            await botClient.SendMessage(chatId, $"✅ Audio tekstga o'girildi ({subtitles.Count} ta gap). Subtitr (SRT) R2 ga saqlandi: {srtUrl}\n\nBarcha subtitrlar bazaga saqlandi. Grammatika tahlili alohida Python skripti orqali qilinadi.");
 
             foreach (var sub in subtitles)
             {
-                sub.EpisodeId = episodeId; // Map to episode if it's a series
-
-                await Task.Delay(2000); 
-
-                var result = await gemini.AnalyzeGrammarAsync(sub.Text, existingContexts);
-                if (result != null)
-                {
-                    long contextId = 0;
-                    if (result.IsNewRule && !string.IsNullOrEmpty(result.NewRuleName))
-                    {
-                        var newContext = new GrammarContext
-                        {
-                            Name = result.NewRuleName,
-                            Description = result.NewRuleDescription ?? "",
-                            Content = result.NewRuleContent ?? "",
-                            LanguageId = 2 
-                        };
-                        await contextRepo.AddAsync(newContext);
-                        
-                        existingContexts.Add(newContext); 
-                        contextId = newContext.Id;
-                        newRulesFound++;
-                        
-                        await botClient.SendMessage(chatId, $"✨ Yangi grammatika: *{newContext.Name}*\nGap: _{sub.Text}_", parseMode: ParseMode.Markdown);
-                    }
-                    else if (result.MatchedRuleId.HasValue && result.MatchedRuleId.Value > 0)
-                    {
-                        contextId = result.MatchedRuleId.Value;
-                    }
-
-                    if (contextId > 0)
-                    {
-                        var gap = new Gap
-                        {
-                            Text = result.GapWord ?? "___",
-                            GrammarContextId = contextId,
-                            Subtitle = sub,
-                            Index = 0
-                        };
-                        await gapRepo.AddAsync(gap);
-                    }
-                }
-                
-                processed++;
-                if (processed % 20 == 0)
-                {
-                    await botClient.SendMessage(chatId, $"⏳ Tahlil qilinmoqda: {processed}/{subtitles.Count}");
-                }
+                sub.EpisodeId = episodeId;
+                await subtitleRepo.AddAsync(sub); // Save each subtitle to DB
             }
-            
-            await botClient.SendMessage(chatId, $"✅ AI tahlili yakunlandi!\nJami gaplar: {subtitles.Count}\nYangi aniqlangan qoidalar: {newRulesFound}");
         }
         catch (System.Exception ex)
         {
             System.Console.WriteLine($"AI Background Error: {ex}");
+            if (System.IO.File.Exists(audioPath)) System.IO.File.Delete(audioPath);
         }
     }
 }

@@ -20,5 +20,6 @@ public class GeminiAnalysisResult
 
 public interface IGeminiAiService
 {
+    Task<List<Subtitle>> TranscribeAudioAsync(string audioFilePath, long mediaId);
     Task<GeminiAnalysisResult?> AnalyzeGrammarAsync(string subtitleText, List<GrammarContext> existingContexts);
 }
