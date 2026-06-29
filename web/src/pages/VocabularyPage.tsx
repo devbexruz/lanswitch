@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import './VocabularyPage.css';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -114,9 +115,9 @@ const VocabularyPage: React.FC = () => {
       </div>
 
       {/* Discover New Words Modal */}
-      {isAddModalOpen && (
+      {isAddModalOpen && ReactDOM.createPortal(
         <div className="modal-overlay">
-          <div className="modal-content glass-panel animate-fade-in" style={{ maxWidth: '500px' }}>
+          <div className="modal-content animate-fade-in" style={{ maxWidth: '500px' }}>
             <div className="modal-header">
               <h2>Yangi so'zlar kashf etish</h2>
               <button className="close-btn" onClick={() => setIsAddModalOpen(false)}>
@@ -139,26 +140,27 @@ const VocabularyPage: React.FC = () => {
                 
                 <div className="dict-item glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 15px' }}>
                   <div>
-                    <h4 style={{ margin: 0, color: 'white' }}>{learningLanguage === 'en' ? 'Fascinating' : 'Очаровательный'}</h4>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Jozibali, qiziqarli</span>
+                    <h4 style={{ margin: 0, color: 'white' }}>{learningLanguage === 'en' ? 'Perseverance' : 'Настойчивость'}</h4>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Qat'iyat</span>
                   </div>
                   <button className="btn btn-outline-light small-btn" onClick={() => alert('So\'z lug\'atingizga qo\'shildi!')}>+ Yodlash</button>
                 </div>
 
                 <div className="dict-item glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 15px' }}>
                   <div>
-                    <h4 style={{ margin: 0, color: 'white' }}>{learningLanguage === 'en' ? 'Ubiquitous' : 'Повсеместный'}</h4>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Keng tarqalgan, hamma joyda bor</span>
+                    <h4 style={{ margin: 0, color: 'white' }}>{learningLanguage === 'en' ? 'Inevitable' : 'Неизбежный'}</h4>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Muqarrar</span>
                   </div>
                   <button className="btn btn-outline-light small-btn" onClick={() => alert('So\'z lug\'atingizga qo\'shildi!')}>+ Yodlash</button>
                 </div>
               </div>
             </div>
-            <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="modal-footer" style={{ marginTop: '20px' }}>
               <button className="btn btn-primary" onClick={() => setIsAddModalOpen(false)}>Yopish</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

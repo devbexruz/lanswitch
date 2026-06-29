@@ -54,4 +54,10 @@ public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
         _dbSet.Remove(entity);
         _context.SaveChanges();
     }
+
+    public void RemoveRange(IEnumerable<T> entities)
+    {
+        _dbSet.RemoveRange(entities);
+        _context.SaveChanges();
+    }
 }

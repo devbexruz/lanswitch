@@ -3,21 +3,23 @@ import type { ReactNode } from 'react';
 
 interface User {
   id: number;
-  fullName?: string;
-  telegramId?: string;
+  telegramId: string;
+  fullName: string;
   profileImage?: string;
-  nativeLanguageId?: number;
-  createdAt?: string;
+  nativeLanguageId: number;
+  isAdmin: boolean;
+  createdAt: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (userData: User) => void;
+  login: () => void;
   logout: () => void;
   showAuthModal: boolean;
   setShowAuthModal: (show: boolean) => void;
   requireAuth: (callback: () => void) => void;
+  checkAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,9 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkAuth();
+    
+    const handleAuthFailed = () => {
+      setUser(null);
+    };
+    
+    window.addEventListener('auth-failed', handleAuthFailed);
+    return () => window.removeEventListener('auth-failed', handleAuthFailed);
   }, []);
 
-  const login = async (userData: User) => {
+  const login = async () => {
     // Backend login succeed bo'lganda chaqiriladi
     await checkAuth();
   };
@@ -72,14 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      login,
-      logout,
-      showAuthModal,
-      setShowAuthModal,
-      requireAuth
-    }}>
+        user,
+        isAuthenticated: !!user,
+        login,
+        logout,
+        showAuthModal,
+        setShowAuthModal,
+        requireAuth,
+        checkAuth
+      }}>
       {!isLoading && children}
     </AuthContext.Provider>
   );

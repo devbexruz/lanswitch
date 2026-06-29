@@ -3,8 +3,26 @@ import { useAuth } from '../context/AuthContext';
 import './ProfilePage.css';
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout, checkAuth } = useAuth();
   
+  const handleEditName = async () => {
+    const newName = prompt("Yangi ism-familiyani kiriting:", user?.fullName);
+    if (newName && newName.trim() !== user?.fullName) {
+      try {
+        const res = await fetch('/api/users/me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullName: newName.trim() })
+        });
+        if (res.ok) {
+          await checkAuth(); // refresh user context
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
   return (
     <div className="profile-page animate-fade-in">
       <div className="profile-header glass-panel">
@@ -18,8 +36,8 @@ const ProfilePage: React.FC = () => {
             <p className="profile-email">Telegram ID: {user?.telegramId}</p>
             <p className="profile-bio">O'rganishda doim oldinda!</p>
             <div className="profile-actions">
-              <button className="btn btn-primary">Tahrirlash</button>
-              <button className="btn btn-outline-light">Sozlamalar</button>
+              <button className="btn btn-primary" onClick={handleEditName}>Tahrirlash</button>
+              <button className="btn btn-outline-light" onClick={logout}>Chiqish</button>
             </div>
           </div>
         </div>

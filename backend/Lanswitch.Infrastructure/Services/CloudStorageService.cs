@@ -61,4 +61,20 @@ public class CloudStorageService : ICloudStorageService
         await _s3Client.PutObjectAsync(putRequest);
         return $"{_publicUrl}/{s3Key}";
     }
+
+    public async Task<string> UploadImageAsync(string fileName, Stream fileStream, string contentType)
+    {
+        var s3Key = $"images/{fileName}";
+        var putRequest = new PutObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = s3Key,
+            InputStream = fileStream,
+            ContentType = contentType,
+            DisablePayloadSigning = true
+        };
+
+        await _s3Client.PutObjectAsync(putRequest);
+        return $"{_publicUrl}/{s3Key}";
+    }
 }

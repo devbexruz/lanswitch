@@ -1,0 +1,176 @@
+.custom-video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #1c264a;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 12px;
+}
+
+.custom-video-container.fullscreen {
+    border-radius: 0;
+}
+
+.video-element {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.video-controls {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.hide-controls .video-controls {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.center-controls {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 40px;
+}
+
+.center-btn {
+    background: none;
+    border: 2px solid white;
+    border-radius: 50%;
+    color: white;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.center-btn.play-btn {
+    width: 64px;
+    height: 64px;
+    border: none;
+}
+.center-btn.play-btn svg {
+    width: 48px;
+    height: 48px;
+}
+.center-btn.skip-btn svg {
+    width: 32px;
+    height: 32px;
+}
+
+.center-btn:hover {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.controls-bottom {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 30px;
+    gap: 10px;
+}
+
+.bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.control-btn {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.control-btn:hover {
+    transform: scale(1.1);
+}
+
+.control-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.fullscreen-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 8px;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+.fullscreen-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: none; /* Prevents scaling that causes scrollbar loops/screen shaking */
+}
+
+.fullscreen-btn svg {
+    width: 28px;
+    height: 28px;
+}
+
+.time-display {
+    color: white;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+}
+
+/* Custom Sliders */
+input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255,255,255,0.3);
+    border-radius: 4px;
+    height: 6px;
+    outline: none;
+    cursor: pointer;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.3);
+}
+
+.progress-container {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    height: 20px;
+}
+
+.progress-slider {
+    width: 100%;
+    background-image: linear-gradient(#4C75FF, #4C75FF); /* Blue progress */
+    background-repeat: no-repeat;
+}

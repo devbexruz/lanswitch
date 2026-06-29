@@ -33,103 +33,248 @@ public class GeminiAiService : IGeminiAiService
         public string? Text { get; set; }
     }
 
-    public async Task<List<Subtitle>> TranscribeAudioAsync(string audioFilePath, long mediaId)
+    public async Task<List<Subtitle>> TranscribeAudioAsync(List<string> audioFilePaths, long mediaId, int chunkMinutes = 11, int overlapMinutes = 1)
     {
-        var subtitles = new List<Subtitle>();
+        var allSubtitles = new List<Subtitle>();
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
-            return subtitles;
+            return allSubtitles;
+        
         var uploadUrl = $"https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key={_apiKey}";
-        var audioBytes = await _fileStorage.ReadAsync(audioFilePath);
-        using var uploadContent = new ByteArrayContent(audioBytes);
-        uploadContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mp3");
-        uploadContent.Headers.Add("X-Goog-Upload-Mime-Type", "audio/mp3");
-        var uploadResponse = await _httpClient.PostAsync(uploadUrl, uploadContent);
-        if (!uploadResponse.IsSuccessStatusCode)
+        var generateUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        
+        int chunkIndex = 0;
+        var chunkSubtitlesList = new List<List<Subtitle>>();
+
+        foreach (var chunkPath in audioFilePaths)
         {
-            var err = await uploadResponse.Content.ReadAsStringAsync();
-            Console.WriteLine($"Gemini Upload Error: {err}");
-            return subtitles;
-        }
-        var uploadJson = await uploadResponse.Content.ReadAsStringAsync();
-        var uploadDoc = JsonDocument.Parse(uploadJson);
-        var fileUri = uploadDoc.RootElement.GetProperty("file").GetProperty("uri").GetString();
-        if (string.IsNullOrEmpty(fileUri)) return subtitles;
-        var generateUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent?key={_apiKey}";
-        var prompt = "Listen to this audio. Generate full subtitles for it. Return ONLY a JSON array of objects. Each object must have exactly these keys: 'Index' (integer starting from 1), 'StartTime' (string format 'hh:mm:ss,fff'), 'EndTime' (string format 'hh:mm:ss,fff'), and 'Text' (string containing the exact spoken English sentence). Do not include any markdown formatting or extra text, just the raw JSON array.";
-        var requestBody = new
-        {
-            contents = new[] {
-                new {
-                    parts = new object[] {
-                        new { fileData = new { fileUri = fileUri, mimeType = "audio/mp3" } },
-                        new { text = prompt }
+            var chunkSubtitles = new List<Subtitle>();
+            try
+            {
+                var audioBytes = await System.IO.File.ReadAllBytesAsync(chunkPath);
+                using var uploadContent = new ByteArrayContent(audioBytes);
+                uploadContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mp3");
+                uploadContent.Headers.Add("X-Goog-Upload-Mime-Type", "audio/mp3");
+                
+                var uploadResponse = await _httpClient.PostAsync(uploadUrl, uploadContent);
+                if (!uploadResponse.IsSuccessStatusCode)
+                {
+                    var err = await uploadResponse.Content.ReadAsStringAsync();
+                    throw new Exception($"Gemini Upload Error for chunk {chunkIndex}: {err}");
+                }
+                var uploadJson = await uploadResponse.Content.ReadAsStringAsync();
+                var uploadDoc = JsonDocument.Parse(uploadJson);
+                var fileUri = uploadDoc.RootElement.GetProperty("file").GetProperty("uri").GetString();
+                if (string.IsNullOrEmpty(fileUri)) continue;
+
+                var prompt = "Listen to this audio chunk. Generate full subtitles for it. Return ONLY a JSON array of objects. Each object must have exactly these keys: 'Index', 'StartTime' (string format 'hh:mm:ss,fff'), 'EndTime' (string format 'hh:mm:ss,fff'), and 'Text' (string containing the exact spoken English sentence). Do not include any markdown formatting or extra text, just the raw JSON array. If there is absolutely no speech, return an empty array [].";
+
+                var requestBody = new
+                {
+                    contents = new[] {
+                        new {
+                            parts = new object[] {
+                                new { fileData = new { fileUri = fileUri, mimeType = "audio/mp3" } },
+                                new { text = prompt }
+                            }
+                        }
+                    },
+                    generationConfig = new { temperature = 0.1 }
+                };
+                
+                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(generateUrl, content);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Gemini Transcription Error for chunk {chunkIndex}: {err}");
+                }
+                
+                var responseJson = await response.Content.ReadAsStringAsync();
+                var jsonDoc = JsonDocument.Parse(responseJson);
+                
+                string? textResult = null;
+                try
+                {
+                    textResult = jsonDoc.RootElement
+                        .GetProperty("candidates")[0]
+                        .GetProperty("content")
+                        .GetProperty("parts")[0]
+                        .GetProperty("text").GetString();
+                }
+                catch { }
+                
+                if (string.IsNullOrWhiteSpace(textResult)) continue;
+                
+                var cleanJson = textResult.Trim();
+                if (cleanJson.StartsWith("```json")) cleanJson = cleanJson.Substring(7);
+                else if (cleanJson.StartsWith("```")) cleanJson = cleanJson.Substring(3);
+                if (cleanJson.EndsWith("```")) cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
+                cleanJson = cleanJson.Trim();
+
+                if (cleanJson == "[]") continue;
+
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var dtoList = JsonSerializer.Deserialize<List<GeminiSubtitleDto>>(cleanJson, options);
+                
+                if (dtoList != null)
+                {
+                    TimeSpan chunkOffset = TimeSpan.FromMinutes(chunkIndex * (chunkMinutes - overlapMinutes));
+                    foreach (var dto in dtoList)
+                    {
+                        TimeSpan.TryParse(dto.StartTime?.Replace(',', '.'), out var st);
+                        TimeSpan.TryParse(dto.EndTime?.Replace(',', '.'), out var et);
+                        chunkSubtitles.Add(new Subtitle
+                        {
+                            MediaId = mediaId,
+                            StartTime = st.Add(chunkOffset),
+                            EndTime = et.Add(chunkOffset),
+                            Text = dto.Text ?? ""
+                        });
                     }
                 }
-            },
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing chunk {chunkIndex}: {ex.Message}");
+            }
+            finally
+            {
+                if (chunkSubtitles.Any()) chunkSubtitlesList.Add(chunkSubtitles);
+                chunkIndex++;
+                try { if (System.IO.File.Exists(chunkPath)) System.IO.File.Delete(chunkPath); } catch { }
+            }
+        }
+
+        if (chunkSubtitlesList.Count == 0) return allSubtitles;
+
+        var mergedSubtitles = new List<Subtitle>();
+        mergedSubtitles.AddRange(chunkSubtitlesList[0]);
+
+        for (int i = 1; i < chunkSubtitlesList.Count; i++)
+        {
+            var previousChunk = mergedSubtitles;
+            var currentChunk = chunkSubtitlesList[i];
+
+            TimeSpan overlapStart = TimeSpan.FromMinutes(i * (chunkMinutes - overlapMinutes));
+            TimeSpan overlapEnd = overlapStart.Add(TimeSpan.FromMinutes(overlapMinutes));
+
+            var overlapFromPrev = previousChunk.Where(s => s.EndTime >= overlapStart && s.StartTime <= overlapEnd).ToList();
+            var overlapFromCurr = currentChunk.Where(s => s.EndTime >= overlapStart && s.StartTime <= overlapEnd).ToList();
+
+            if (overlapFromPrev.Any() && overlapFromCurr.Any())
+            {
+                var mergedOverlap = await MergeOverlappingSubtitlesAsync(overlapFromPrev, overlapFromCurr, overlapStart, overlapEnd);
+                
+                previousChunk.RemoveAll(s => overlapFromPrev.Contains(s));
+                currentChunk.RemoveAll(s => overlapFromCurr.Contains(s));
+
+                mergedSubtitles.AddRange(mergedOverlap);
+            }
+
+            mergedSubtitles.AddRange(currentChunk);
+        }
+
+        mergedSubtitles = mergedSubtitles.OrderBy(s => s.StartTime).ToList();
+        for (int i = 0; i < mergedSubtitles.Count; i++)
+        {
+            mergedSubtitles[i].Index = i + 1;
+        }
+
+        return mergedSubtitles;
+    }
+
+    public async Task<List<Subtitle>> MergeOverlappingSubtitlesAsync(List<Subtitle> firstPart, List<Subtitle> secondPart, TimeSpan overlapStart, TimeSpan overlapEnd)
+    {
+        if (!firstPart.Any() && !secondPart.Any()) return new List<Subtitle>();
+
+        var firstJson = JsonSerializer.Serialize(firstPart.Select(s => new { StartTime = s.StartTime.ToString(@"hh\:mm\:ss\.fff"), EndTime = s.EndTime.ToString(@"hh\:mm\:ss\.fff"), s.Text }));
+        var secondJson = JsonSerializer.Serialize(secondPart.Select(s => new { StartTime = s.StartTime.ToString(@"hh\:mm\:ss\.fff"), EndTime = s.EndTime.ToString(@"hh\:mm\:ss\.fff"), s.Text }));
+
+        var prompt = $@"You are a subtitle synchronization expert. I have two sets of overlapping subtitles for the same timeframe ({overlapStart} to {overlapEnd}). 
+They may contain duplicate sentences or slight misalignments. 
+Merge them into a single, coherent, perfectly synchronized timeline. Remove duplicates and fix broken sentences.
+
+Set 1 (from previous chunk):
+{firstJson}
+
+Set 2 (from current chunk):
+{secondJson}
+
+Return ONLY a JSON array of objects. Each object must have: 'StartTime' (string format 'hh:mm:ss.fff'), 'EndTime' (string format 'hh:mm:ss.fff'), and 'Text'. No markdown, no extra text.";
+
+        var requestBody = new
+        {
+            contents = new[] { new { parts = new[] { new { text = prompt } } } },
             generationConfig = new { temperature = 0.1 }
         };
+        
+        var generateUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync(generateUrl, content);
-        if (!response.IsSuccessStatusCode)
-        {
-            var err = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"Gemini Transcription Error: {err}");
-            return subtitles;
-        }
-        var responseJson = await response.Content.ReadAsStringAsync();
-        var jsonDoc = JsonDocument.Parse(responseJson);
-        var textResult = jsonDoc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text").GetString();
-        if (string.IsNullOrWhiteSpace(textResult)) return subtitles;
-        var cleanJson = textResult.Trim();
-        if (cleanJson.StartsWith("```json"))
-        {
-            cleanJson = cleanJson.Substring(7);
-            if (cleanJson.EndsWith("```")) cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
-        }
-        else if (cleanJson.StartsWith("```"))
-        {
-            cleanJson = cleanJson.Substring(3);
-            if (cleanJson.EndsWith("```")) cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
-        }
+        
         try
         {
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var dtoList = JsonSerializer.Deserialize<List<GeminiSubtitleDto>>(cleanJson.Trim(), options);
-            if (dtoList != null)
+            var response = await _httpClient.PostAsync(generateUrl, content);
+            if (response.IsSuccessStatusCode)
             {
-                foreach (var dto in dtoList)
+                var responseJson = await response.Content.ReadAsStringAsync();
+                var jsonDoc = JsonDocument.Parse(responseJson);
+                var textResult = jsonDoc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString();
+                
+                if (!string.IsNullOrWhiteSpace(textResult))
                 {
-                    TimeSpan.TryParse(dto.StartTime?.Replace(',', '.'), out var st);
-                    TimeSpan.TryParse(dto.EndTime?.Replace(',', '.'), out var et);
-                    subtitles.Add(new Subtitle
+                    var cleanJson = textResult.Trim();
+                    if (cleanJson.StartsWith("```json")) cleanJson = cleanJson.Substring(7);
+                    else if (cleanJson.StartsWith("```")) cleanJson = cleanJson.Substring(3);
+                    if (cleanJson.EndsWith("```")) cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
+                    
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var dtoList = JsonSerializer.Deserialize<List<GeminiSubtitleDto>>(cleanJson.Trim(), options);
+                    
+                    if (dtoList != null)
                     {
-                        MediaId = mediaId,
-                        Index = dto.Index,
-                        StartTime = st,
-                        EndTime = et,
-                        Text = dto.Text ?? ""
-                    });
+                        var merged = new List<Subtitle>();
+                        foreach (var dto in dtoList)
+                        {
+                            TimeSpan.TryParse(dto.StartTime?.Replace(',', '.'), out var st);
+                            TimeSpan.TryParse(dto.EndTime?.Replace(',', '.'), out var et);
+                            merged.Add(new Subtitle { StartTime = st, EndTime = et, Text = dto.Text ?? "", MediaId = firstPart.FirstOrDefault()?.MediaId ?? 0 });
+                        }
+                        return merged;
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error parsing Gemini transcription: {ex.Message}");
+            Console.WriteLine($"Error merging subtitles: {ex.Message}");
         }
-        return subtitles;
+
+        return firstPart;
     }
 
-    public async Task<GeminiAnalysisResult?> AnalyzeGrammarAsync(string subtitleText, List<GrammarContext> existingContexts)
+    public async Task<List<SentenceAnalysisResult>?> AnalyzeGrammarAsync(string subtitlesJson, string targetLanguage = "Ingliz")
     {
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
             return null;
-        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={_apiKey}";
-        var existingRulesContext = JsonSerializer.Serialize(existingContexts.Select(c => new { c.Id, c.Name, c.Description }));
-        var prompt = $@"You are an expert English linguist. Analyze this sentence: ""{subtitleText}""\n\nExisting grammar rules (JSON format):\n{existingRulesContext}\n\nTASK:\n1. Identify the most important grammar rule or idiom in the sentence.\n2. If it matches an existing rule, set 'isNewRule' to false and provide 'matchedRuleId'.\n3. If it's a new rule, set 'isNewRule' to true and provide 'newRuleName', 'newRuleDescription', and 'newRuleContent'.\n4. 'gapWord' must be the exact substring from the sentence.\n\nCRITICAL: If 'isNewRule' is true, you MUST write 'newRuleName', 'newRuleDescription', and 'newRuleContent' in UZBEK language (O'zbek tilida). Explain simply for beginners.\n\nThe output MUST be a valid JSON object matching the requested structure.";
+            
+        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        var prompt = $@"Siz {targetLanguage} tilini o'rgatuvchi tajribali ustozsiz. Quyida sizga JSON array ko'rinishida subtitrlar ro'yxati (ID va Text) beriladi:
+{subtitlesJson}
+
+VAZIFA:
+1. Ushbu matnni to'liq o'qing va uni mantiqiy tugallangan gaplarga ajrating (bir nechta subtitr bitta gap bo'lishi mumkin).
+2. Har bir ajratilgan to'liq gap qaysi Subtitle ID'ga eng ko'p mos kelsa, o'sha Subtitle ID ni ko'rsating.
+3. Har bir gap uchun uning ma'nosini va eng muhim grammatik qoidasini sodda, tushunarli qilib O'ZBEK tilida Markdown formatida yozing.
+4. Har bir gapdan asosiy o'zak so'zlarni (Root words) va ularning o'zbek tilidagi aniq tarjimasini ajratib oling.
+
+Natija FAKAT JSON array formatida bo'lishi shart. Har bir obyekt quyidagi formatda bo'lsin:
+- ""subtitleId"": (raqam) Ushbu gap qaysi subtitrga tegishli ekanligi.
+- ""sentenceText"": (string) Ajratib olingan inglizcha gap.
+- ""aiAnalysis"": (string) Shu gapning tarjimasi va grammatik tahlili (Markdown formatida, misollar bilan).
+- ""rootWords"": (array) Obyektlar ro'yxati, har bir obyektda ""word"" (inglizcha o'zak so'z) va ""translation"" (o'zbekcha tarjimasi).
+
+Hech qanday qo'shimcha matn qo'shmang, faqat toza JSON array qaytaring.";
+
         var requestBody = new
         {
             contents = new[] {
@@ -154,8 +299,15 @@ public class GeminiAiService : IGeminiAiService
                         .GetProperty("parts")[0]
                         .GetProperty("text").GetString();
                     if (string.IsNullOrEmpty(textResult)) return null;
+                    
+                    var cleanJson = textResult.Trim();
+                    if (cleanJson.StartsWith("```json")) cleanJson = cleanJson.Substring(7);
+                    else if (cleanJson.StartsWith("```")) cleanJson = cleanJson.Substring(3);
+                    if (cleanJson.EndsWith("```")) cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
+                    cleanJson = cleanJson.Trim();
+
                     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                    return JsonSerializer.Deserialize<GeminiAnalysisResult>(textResult, options);
+                    return JsonSerializer.Deserialize<List<SentenceAnalysisResult>>(cleanJson, options);
                 }
                 if ((int)response.StatusCode == 429 || (int)response.StatusCode == 503)
                 {
@@ -175,5 +327,147 @@ public class GeminiAiService : IGeminiAiService
             }
         }
         return null;
+    }
+
+    public async Task<float[]> GenerateEmbeddingAsync(string text)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(text))
+            return Array.Empty<float>();
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={_apiKey}";
+        var requestBody = new
+        {
+            model = "models/text-embedding-004",
+            content = new
+            {
+                parts = new[] { new { text = text } }
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var values = jsonDoc.RootElement
+                .GetProperty("embedding")
+                .GetProperty("values");
+            
+            var result = new float[values.GetArrayLength()];
+            int index = 0;
+            foreach (var val in values.EnumerateArray())
+            {
+                result[index++] = (float)val.GetDouble();
+            }
+            return result;
+        }
+        return Array.Empty<float>();
+    }
+
+    public async Task<string> ChatWithContextAsync(string userMessage, List<EpisodeChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz")
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+            return "Gemini API kaliti kiritilmagan.";
+
+        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        
+        var contents = new List<object>();
+        
+        // System context + Subtitles
+        var sb = new StringBuilder();
+        sb.AppendLine($"Siz foydalanuvchiga videodagi iboralar va grammatikani tushunishga yordam beradigan ustozsiz. Foydalanuvchi {targetLanguage} tilini o'rganmoqda.");
+        sb.AppendLine("Quyida foydalanuvchi tanlagan va undan oldingi subtitrlar konteksti keltirilgan:");
+        foreach (var sub in contextSubtitles)
+        {
+            if (currentSubtitleId.HasValue && sub.Id == currentSubtitleId.Value)
+            {
+                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}] (BU HOZIRGI TANLANGAN SUBTITR): {sub.Text}");
+            }
+            else
+            {
+                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}]: {sub.Text}");
+            }
+        }
+        sb.AppendLine("\nUshbu kontekst asosida foydalanuvchining savoliga Markdown formatida, juda qisqa (maksimal 2-3 ta gap), aniq va lo'nda javob bering. Javobingiz faqat 'HOZIRGI TANLANGAN SUBTITR' dagi ma'noga qaratilsin, ortiqcha ma'lumot yozmang.");
+        
+        contents.Add(new {
+            role = "user",
+            parts = new[] { new { text = sb.ToString() } }
+        });
+        contents.Add(new {
+            role = "model",
+            parts = new[] { new { text = "Tushundim, tayyorman!" } }
+        });
+
+        // Chat History
+        foreach (var msg in history)
+        {
+            contents.Add(new {
+                role = msg.Role == "User" ? "user" : "model",
+                parts = new[] { new { text = msg.Content } }
+            });
+        }
+        
+        // Current Message
+        contents.Add(new {
+            role = "user",
+            parts = new[] { new { text = userMessage } }
+        });
+
+        var requestBody = new { contents = contents };
+        var requestContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync(url, requestContent);
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+                
+            return textResult ?? "Kechirasiz, javobni shakllantirib bo'lmadi.";
+        }
+        
+        var error = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"Chat API Error: {error}");
+        return "Xatolik yuz berdi, iltimos qayta urinib ko'ring.";
+    }
+
+    public async Task<string> TranslateWordAsync(string word)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(word))
+            return word;
+
+        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        
+        var requestBody = new
+        {
+            contents = new[] {
+                new { parts = new[] { new { text = $"Faqatgina ushbu inglizcha so'zning o'zbekcha tarjimasini qaytaring. Ortiqcha gap, belgi va tushuntirish kerak emas. So'z: {word}" } } }
+            },
+            generationConfig = new { temperature = 0.1 }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+
+            return textResult?.Trim() ?? word;
+        }
+
+        return word;
     }
 }

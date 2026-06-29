@@ -40,7 +40,7 @@ public class AuthController : ControllerBase
     public IActionResult RedirectToFrontend([FromQuery] string token)
     {
         // Telegram bot localhost ssilkalarni qabul qilmaydi, shuning uchun API orqali redirect qilamiz
-        return Redirect($"http://localhost:3000/auth/login?token={token}");
+        return Redirect($"https://lanswitch.developerlogic.uz/auth/login?token={token}");
     }
 
     [HttpPost("magic-login")]
@@ -60,7 +60,6 @@ public class AuthController : ControllerBase
         user.LoginTokenExpiry = null;
         _userRepository.Update(user);
 
-        var accessToken = _authService.GenerateJwtToken(user);
         var refreshToken = _authService.GenerateRefreshToken();
         var refreshTokenHash = _authService.HashRefreshToken(refreshToken);
 
@@ -79,6 +78,8 @@ public class AuthController : ControllerBase
         };
 
         await _sessionRepository.AddAsync(userSession);
+
+        var accessToken = _authService.GenerateJwtToken(user, userSession.Id);
 
         SetTokensInCookies(accessToken, refreshToken, expiryTime);
 

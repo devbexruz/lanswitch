@@ -22,6 +22,63 @@ namespace Lanswitch.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CategoryMedia", b =>
+                {
+                    b.Property<long>("CategoriesId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("MediasId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("CategoriesId", "MediasId");
+
+                    b.HasIndex("MediasId");
+
+                    b.ToTable("CategoryMedia");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AppNotification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Link")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AppNotifications");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Category", b =>
                 {
                     b.Property<long>("Id")
@@ -43,6 +100,73 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Categories");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Comment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("MediaId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ParentCommentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MediaId");
+
+                    b.HasIndex("ParentCommentId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Comments");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.CommentLike", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("CommentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CommentLikes");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Episode", b =>
@@ -70,7 +194,7 @@ namespace Lanswitch.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long>("SeasonId")
+                    b.Property<long>("MediaId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("ThumbnailUrl")
@@ -90,12 +214,49 @@ namespace Lanswitch.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SeasonId");
+                    b.HasIndex("MediaId");
 
                     b.ToTable("Episodes");
                 });
 
-            modelBuilder.Entity("Lanswitch.Domain.Entities.Gap", b =>
+            modelBuilder.Entity("Lanswitch.Domain.Entities.EpisodeChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("ContextSubtitleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("SessionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContextSubtitleId");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("EpisodeChatMessages");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.EpisodeChatSession", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -106,8 +267,37 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("GrammarContextId")
+                    b.Property<long>("EpisodeId")
                         .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EpisodeId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EpisodeChatSessions");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Gap", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AiAnalysis")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Index")
                         .HasColumnType("integer");
@@ -123,8 +313,6 @@ namespace Lanswitch.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("GrammarContextId");
 
                     b.HasIndex("SubtitleId");
 
@@ -231,9 +419,6 @@ namespace Lanswitch.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("CategoryId")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -266,53 +451,13 @@ namespace Lanswitch.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("VideoUrl")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CategoryId");
 
                     b.HasIndex("LanguageId");
 
                     b.ToTable("Medias");
-                });
-
-            modelBuilder.Entity("Lanswitch.Domain.Entities.Season", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("About")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("MediaId")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("SeasonNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ThumbnailUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Title")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MediaId");
-
-                    b.ToTable("Seasons");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Subtitle", b =>
@@ -325,6 +470,9 @@ namespace Lanswitch.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<float[]>("Embedding")
+                        .HasColumnType("real[]");
 
                     b.Property<TimeSpan>("EndTime")
                         .HasColumnType("interval");
@@ -355,6 +503,35 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.HasIndex("MediaId");
 
                     b.ToTable("Subtitles");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.SubtitleWord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("SubtitleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("WordId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubtitleId");
+
+                    b.HasIndex("WordId");
+
+                    b.ToTable("SubtitleWords");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.User", b =>
@@ -523,6 +700,49 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.ToTable("UserWords");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.WatchHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CurrentTimeSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("EpisodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastWatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("MediaId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EpisodeId");
+
+                    b.HasIndex("MediaId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("WatchHistories");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Word", b =>
                 {
                     b.Property<long>("Id")
@@ -584,32 +804,128 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.ToTable("WordTranslates");
                 });
 
-            modelBuilder.Entity("Lanswitch.Domain.Entities.Episode", b =>
+            modelBuilder.Entity("CategoryMedia", b =>
                 {
-                    b.HasOne("Lanswitch.Domain.Entities.Season", "Season")
-                        .WithMany("Episodes")
-                        .HasForeignKey("SeasonId")
+                    b.HasOne("Lanswitch.Domain.Entities.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoriesId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Season");
+                    b.HasOne("Lanswitch.Domain.Entities.Media", null)
+                        .WithMany()
+                        .HasForeignKey("MediasId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AppNotification", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Comment", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Media", "Media")
+                        .WithMany()
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.Comment", "ParentComment")
+                        .WithMany("Replies")
+                        .HasForeignKey("ParentCommentId");
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Media");
+
+                    b.Navigation("ParentComment");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.CommentLike", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Comment", "Comment")
+                        .WithMany("Likes")
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Comment");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Episode", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Media", "Media")
+                        .WithMany("Episodes")
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Media");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.EpisodeChatMessage", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Subtitle", "ContextSubtitle")
+                        .WithMany()
+                        .HasForeignKey("ContextSubtitleId");
+
+                    b.HasOne("Lanswitch.Domain.Entities.EpisodeChatSession", "Session")
+                        .WithMany("Messages")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ContextSubtitle");
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.EpisodeChatSession", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Episode", "Episode")
+                        .WithMany()
+                        .HasForeignKey("EpisodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("Episode");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Gap", b =>
                 {
-                    b.HasOne("Lanswitch.Domain.Entities.GrammarContext", "GrammarContext")
-                        .WithMany("Gaps")
-                        .HasForeignKey("GrammarContextId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Lanswitch.Domain.Entities.Subtitle", "Subtitle")
                         .WithMany("Gaps")
                         .HasForeignKey("SubtitleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("GrammarContext");
 
                     b.Navigation("Subtitle");
                 });
@@ -646,32 +962,13 @@ namespace Lanswitch.Infrastructure.Migrations
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Media", b =>
                 {
-                    b.HasOne("Lanswitch.Domain.Entities.Category", "Category")
-                        .WithMany("Medias")
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Lanswitch.Domain.Entities.Language", "Language")
                         .WithMany("Medias")
                         .HasForeignKey("LanguageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Category");
-
                     b.Navigation("Language");
-                });
-
-            modelBuilder.Entity("Lanswitch.Domain.Entities.Season", b =>
-                {
-                    b.HasOne("Lanswitch.Domain.Entities.Media", "Media")
-                        .WithMany("Seasons")
-                        .HasForeignKey("MediaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Media");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Subtitle", b =>
@@ -689,6 +986,25 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Episode");
 
                     b.Navigation("Media");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.SubtitleWord", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Subtitle", "Subtitle")
+                        .WithMany("SubtitleWords")
+                        .HasForeignKey("SubtitleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.Word", "Word")
+                        .WithMany()
+                        .HasForeignKey("WordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subtitle");
+
+                    b.Navigation("Word");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.User", b =>
@@ -751,6 +1067,31 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Word");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.WatchHistory", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Episode", "Episode")
+                        .WithMany()
+                        .HasForeignKey("EpisodeId");
+
+                    b.HasOne("Lanswitch.Domain.Entities.Media", "Media")
+                        .WithMany()
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Episode");
+
+                    b.Navigation("Media");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Word", b =>
                 {
                     b.HasOne("Lanswitch.Domain.Entities.Language", "Language")
@@ -781,9 +1122,11 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Word");
                 });
 
-            modelBuilder.Entity("Lanswitch.Domain.Entities.Category", b =>
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Comment", b =>
                 {
-                    b.Navigation("Medias");
+                    b.Navigation("Likes");
+
+                    b.Navigation("Replies");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Episode", b =>
@@ -791,10 +1134,13 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Subtitles");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.EpisodeChatSession", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.GrammarContext", b =>
                 {
-                    b.Navigation("Gaps");
-
                     b.Navigation("UserGrammars");
                 });
 
@@ -815,19 +1161,16 @@ namespace Lanswitch.Infrastructure.Migrations
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Media", b =>
                 {
-                    b.Navigation("Seasons");
+                    b.Navigation("Episodes");
 
                     b.Navigation("Subtitles");
-                });
-
-            modelBuilder.Entity("Lanswitch.Domain.Entities.Season", b =>
-                {
-                    b.Navigation("Episodes");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.Subtitle", b =>
                 {
                     b.Navigation("Gaps");
+
+                    b.Navigation("SubtitleWords");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.User", b =>

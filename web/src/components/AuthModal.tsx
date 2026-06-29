@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import './AuthModal.css';
+import settings from '../settings.json';
 
 const AuthModal: React.FC = () => {
   const { showAuthModal, setShowAuthModal } = useAuth();
@@ -8,7 +9,7 @@ const AuthModal: React.FC = () => {
   if (!showAuthModal) return null;
 
   // Bot username: @LanswitchBot (O'zingizning botingizni yozishingiz mumkin)
-  const botUrl = "https://t.me/lanswitchbot?start=login";
+  const botUrl = `https://t.me/${settings.botUsername}?start=login`;
 
   return (
     <div className="auth-modal-overlay" onClick={() => setShowAuthModal(false)}>

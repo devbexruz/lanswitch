@@ -1,0 +1,22 @@
+[6/29/2026 18:12:02] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\Татьяна Куртукова - Матушка_full.mp3, langCode: en
+[6/29/2026 18:12:02] File exists and API key is present. Sending request to Deepgram...
+[6/29/2026 18:12:26] Received 200 OK from Deepgram
+[6/29/2026 18:12:26] Found 0 utterances in Deepgram response
+[6/29/2026 18:28:57] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\media_BAACAgUAAxkBAAIC92pCtdxr6GHG9WpN1Bos9H2H8eyTAAJqDAACyDYZVDnuM_AZ1ZbmPAQ_full.mp3, langCode: en
+[6/29/2026 18:28:57] File exists and API key is present. Sending request to Deepgram...
+[6/29/2026 18:29:30] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\media_BAACAgUAAxkBAAIC_2pCtiRjV5BOgU4v38ZtZYN7Nl2eAAJpDAACyDYZVI1D-d4eBEtgPAQ_full.mp3, langCode: en
+[6/29/2026 18:29:30] File exists and API key is present. Sending request to Deepgram...
+[6/29/2026 18:30:21] Received 200 OK from Deepgram
+[6/29/2026 18:30:21] Found 186 utterances in Deepgram response
+[6/29/2026 18:51:18] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\Татьяна Куртукова - Матушка_full.mp3, langCode: en
+[6/29/2026 18:51:18] File exists and API key is present. Sending request to Deepgram...
+[6/29/2026 18:51:34] Received 200 OK from Deepgram
+[6/29/2026 18:51:34] Found 0 utterances in Deepgram response
+[6/29/2026 18:54:46] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\Татьяна Куртукова - Матушка_full.mp3, langCode: en
+[6/29/2026 18:54:46] File exists and API key is present. Sending request to Deepgram...
+[6/29/2026 18:55:02] Received 200 OK from Deepgram
+[6/29/2026 18:55:02] Found 0 utterances in Deepgram response
+[6/29/2026 19:03:11] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\Татьяна Куртукова - Матушка_full.mp3, langCode: ru
+[6/29/2026 19:03:11] File exists and API key is present. Sending request to Deepgram...
+[6/29/2026 19:03:16] Received 200 OK from Deepgram
+[6/29/2026 19:03:16] Found 56 utterances in Deepgram response

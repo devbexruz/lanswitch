@@ -4,6 +4,7 @@ using Lanswitch.Domain.Interfaces;
 using Lanswitch.Infrastructure.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Lanswitch.Infrastructure.Services;
 
 namespace Lanswitch.Infrastructure;
 
@@ -21,9 +22,13 @@ public static class ServiceCollectionExtensions
 
         // ==== Application Services ====
         services.AddScoped<ICloudStorageService, CloudStorageService>(); // Scoped
+        services.AddScoped<IFileStorageService, LocalFileStorageService>(); // Scoped
         services.AddScoped<IVideoProcessor, VideoProcessor>();          // Scoped
         services.AddScoped<ISubtitleParserService, SubtitleParserService>();
+        Deepgram.Library.Initialize();
+        services.AddScoped<IDeepgramService, DeepgramService>();
         services.AddHttpClient<IGeminiAiService, GeminiAiService>();
+        services.AddHttpClient<IWhisperLocalService, WhisperLocalService>();
         services.AddScoped<IAuthAppService, AuthAppService>();
         services.AddScoped<IUserAppService, UserAppService>();
         services.AddScoped<ITelegramBotAppService, TelegramBotAppService>();

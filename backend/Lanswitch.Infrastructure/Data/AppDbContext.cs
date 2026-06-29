@@ -13,7 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<LearningLanguage> LearningLanguages { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<Media> Medias { get; set; }
-    public DbSet<Season> Seasons { get; set; }
+
     public DbSet<Episode> Episodes { get; set; }
     public DbSet<Subtitle> Subtitles { get; set; }
     public DbSet<GrammarContext> GrammarContexts { get; set; }
@@ -23,4 +23,16 @@ public class AppDbContext : DbContext
     public DbSet<UserWord> UserWords { get; set; }
     public DbSet<UserGrammar> UserGrammars { get; set; }
     public DbSet<UserSession> UserSessions { get; set; }
+    public DbSet<SubtitleWord> SubtitleWords { get; set; }
+    public DbSet<Comment> Comments { get; set; }
+    public DbSet<CommentLike> CommentLikes { get; set; }
+    public DbSet<WatchHistory> WatchHistories { get; set; }
+    public DbSet<AppNotification> AppNotifications { get; set; }
+    public DbSet<EpisodeChatSession> EpisodeChatSessions { get; set; }
+    public DbSet<EpisodeChatMessage> EpisodeChatMessages { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+    }
 }

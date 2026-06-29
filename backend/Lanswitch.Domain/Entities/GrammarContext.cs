@@ -12,7 +12,5 @@ public class GrammarContext : BaseEntity
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Language? Language { get; set; }
     [System.Text.Json.Serialization.JsonIgnore]
-    public virtual ICollection<Gap> Gaps { get; set; } = new List<Gap>();
-    [System.Text.Json.Serialization.JsonIgnore]
     public virtual ICollection<UserGrammar> UserGrammars { get; set; } = new List<UserGrammar>();
 }

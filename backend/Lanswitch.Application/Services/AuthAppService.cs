@@ -18,7 +18,7 @@ public class AuthAppService : IAuthAppService
         _configuration = configuration;
     }
 
-    public string GenerateJwtToken(User user)
+    public string GenerateJwtToken(User user, long? sessionId = null)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
         var secretKey = jwtSettings["SecretKey"];
@@ -35,6 +35,16 @@ public class AuthAppService : IAuthAppService
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim("telegram_id", user.TelegramId)
         };
+
+        if (sessionId.HasValue)
+        {
+            claims.Add(new Claim("session_id", sessionId.Value.ToString()));
+        }
+
+        if (user.IsAdmin)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, "Admin"));
+        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,

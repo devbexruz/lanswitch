@@ -9,6 +9,7 @@ using System.Text;
 using Scalar.AspNetCore;
 using Lanswitch.Domain.Interfaces;
 using Lanswitch.Infrastructure;
+using Lanswitch.Api.Extensions;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +47,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = context.Request.Cookies["AccessToken"];
                 }
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var sessionIdClaim = context.Principal?.FindFirst("session_id")?.Value;
+                if (!string.IsNullOrEmpty(sessionIdClaim) && long.TryParse(sessionIdClaim, out var sessionId))
+                {
+                    var dbContext = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                    var session = await dbContext.UserSessions.FindAsync(sessionId);
+                    if (session == null || !session.IsActive)
+                    {
+                        context.Fail("Session is revoked or invalid.");
+                    }
+                }
             }
         };
     });
@@ -70,7 +84,9 @@ if (string.IsNullOrEmpty(botToken))
 {
     throw new ArgumentNullException("BotToken", "Bot tokeni appsettings.json faylida topilmadi!");
 }
+
 builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(botToken));
+
 
 // WTelegramClient (MTProto) ni Singleton sifatida sozlash
 builder.Services.AddSingleton<WTelegram.Client>(provider => {

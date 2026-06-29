@@ -36,9 +36,8 @@ public class TestController : ControllerBase
     public async Task<IActionResult> AiGrammar([FromBody] AiGrammarRequest request)
     {
         if (string.IsNullOrEmpty(request.Text)) return BadRequest(new { message = "Text kerak" });
-        var result = await _geminiAiService.GenerateAiGrammar(request.Text);
+        var result = await _geminiAiService.AnalyzeGrammarAsync(request.Text);
 
         return Ok(result);
     }
-
 }

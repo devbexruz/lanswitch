@@ -1,0 +1,82 @@
+.admin-page {
+  padding: 40px;
+  min-height: calc(100vh - 80px);
+}
+
+.admin-content {
+  padding: 20px;
+  border-radius: 16px;
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 15px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  vertical-align: middle;
+}
+
+.admin-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.admin-table tr:hover td {
+  background: rgba(255,255,255,0.05);
+}
+
+.admin-thumb {
+  width: 60px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.kino-badge {
+  background-color: var(--accent-primary) !important;
+}
+
+.serial-badge {
+  background-color: #8b5cf6 !important;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+  transform: translateY(-1px);
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+
+@media (min-width: 768px) {
+  .modal-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .modal-grid-full {
+    grid-column: span 2;
+  }
+}

@@ -4,44 +4,60 @@ import './NotificationsModal.css';
 interface NotificationsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  notifications: any[];
+  onMarkAsRead: (id: number) => void;
+  onMarkAllAsRead: () => void;
 }
 
-const mockNotifications = [
-  { id: 1, type: 'success', title: "Yangi So'zlar Yodlandi", text: "Siz bugun 5 ta yangi so'z o'rgandingiz. Ajoyib!", time: "10 daqiqa oldin", unread: true },
-  { id: 2, type: 'warning', title: "Takrorlash Vaqti", text: "2 ta grammatika qoidasi esdan chiqishni boshladi. Takrorlashni unutmang.", time: "1 soat oldin", unread: true },
-  { id: 3, type: 'info', title: "Yangi Kino", text: "Rus tilida 'Брат' kinosi qo'shildi. Hoziroq ko'ring!", time: "Kechasi", unread: false }
-];
+const formatTimeAgo = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'Hozirgina';
+  if (minutes < 60) return `${minutes} daqiqa oldin`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} soat oldin`;
+  const days = Math.floor(hours / 24);
+  return `${days} kun oldin`;
+};
 
-const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, onClose }) => {
+const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, onClose, notifications, onMarkAsRead, onMarkAllAsRead }) => {
   if (!isOpen) return null;
 
   return (
     <>
-      {/* Invisible overlay to close dropdown when clicked outside */}
       <div className="dropdown-overlay" onClick={onClose}></div>
       
       <div className="notifications-dropdown animate-slide-down">
         <div className="notifications-header">
           <h3>Bildirishnomalar</h3>
-          <button className="mark-read-btn">Barchasini o'qildi qilish</button>
+          <button className="mark-read-btn" onClick={onMarkAllAsRead}>Barchasini o'qildi qilish</button>
         </div>
         
         <div className="notifications-list">
-          {mockNotifications.map(notification => (
-            <div key={notification.id} className={`notification-item ${notification.unread ? 'unread' : ''}`}>
-              <div className={`notification-icon bg-${notification.type}`}>
-                {notification.type === 'success' && '✨'}
-                {notification.type === 'warning' && '⚠️'}
-                {notification.type === 'info' && '🎬'}
+          {notifications.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Bildirishnomalar yo'q</div>
+          ) : (
+            notifications.map(notification => (
+              <div 
+                key={notification.id} 
+                className={`notification-item ${!notification.isRead ? 'unread' : ''}`}
+                onClick={() => !notification.isRead && onMarkAsRead(notification.id)}
+                style={{ cursor: !notification.isRead ? 'pointer' : 'default' }}
+              >
+                <div className={`notification-icon bg-${notification.type || 'info'}`}>
+                  {notification.type === 'success' && '✨'}
+                  {notification.type === 'warning' && '⚠️'}
+                  {(notification.type === 'info' || !notification.type) && '🔔'}
+                </div>
+                <div className="notification-content">
+                  <h4>{notification.title}</h4>
+                  <p>{notification.message}</p>
+                  <span className="notification-time">{formatTimeAgo(notification.createdAt)}</span>
+                </div>
+                {!notification.isRead && <div className="unread-dot"></div>}
               </div>
-              <div className="notification-content">
-                <h4>{notification.title}</h4>
-                <p>{notification.text}</p>
-                <span className="notification-time">{notification.time}</span>
-              </div>
-              {notification.unread && <div className="unread-dot"></div>}
-            </div>
-          ))}
+            ))
+          )}
         </div>
         
         <div className="notifications-footer">

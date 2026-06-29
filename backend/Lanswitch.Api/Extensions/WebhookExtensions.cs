@@ -1,6 +1,7 @@
-using Lanswitch.Api.Middlewares;
 using Lanswitch.Domain.Entities;
+using Lanswitch.Infrastructure.Data;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Lanswitch.Infrastructure
+namespace Lanswitch.Api.Extensions
 {
     public static class WebhookExtensions
     {
@@ -22,7 +23,8 @@ namespace Lanswitch.Infrastructure
             using var scope = app.Services.CreateScope();
             var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<WebhookExtensions>>();
+            var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("WebhookExtensions");
             var webhookUrl = configuration["BotConfiguration:WebhookUrl"];
 
             // -----------------------  DB migration & seed  -----------------------
@@ -40,6 +42,15 @@ namespace Lanswitch.Infrastructure
                     );
                     dbContext.SaveChanges();
                     logger.LogInformation("✅ Default languages added.");
+                }
+
+                // Fix corrupted Russian language title if exists
+                var russianLang = dbContext.Languages.FirstOrDefault(l => l.Id == 3 || l.Title.Contains("Ð"));
+                if (russianLang != null && (russianLang.Title != "Русский"))
+                {
+                    russianLang.Title = "Русский";
+                    dbContext.SaveChanges();
+                    logger.LogInformation("✅ Russian language title fixed.");
                 }
 
                 // Categories
@@ -94,7 +105,7 @@ namespace Lanswitch.Infrastructure
             {
                 try
                 {
-                    await botClient.SetWebhookAsync(url: webhookUrl, dropPendingUpdates: true);
+                    await botClient.SetWebhook(url: webhookUrl, dropPendingUpdates: true);
                     logger.LogInformation("✅ Webhook configured successfully!");
                 }
                 catch (Exception ex)

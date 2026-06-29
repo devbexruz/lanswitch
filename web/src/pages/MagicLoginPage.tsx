@@ -39,7 +39,7 @@ export default function MagicLoginPage() {
         if (response.ok) {
           setStatus('success');
           setMessage('Muvaffaqiyatli kirdingiz! Sahifaga yo\'naltirilmoqdasiz...');
-          login({ id: data.userId });
+          login();
           
           setTimeout(() => {
             navigate('/');

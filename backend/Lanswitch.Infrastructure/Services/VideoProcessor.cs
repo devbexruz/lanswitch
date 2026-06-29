@@ -5,18 +5,18 @@ namespace Lanswitch.Infrastructure.Services;
 
 public class VideoProcessor : IVideoProcessor
 {
-    public async Task<string> ExtractAudioAsync(string videoFilePath)
+    public async Task<List<string>> ExtractAudioSegmentsAsync(string videoFilePath, int segmentTimeSeconds = 900)
     {
         var tempDir = Path.GetDirectoryName(videoFilePath) ?? Path.GetTempPath();
         var baseName = Path.GetFileNameWithoutExtension(videoFilePath);
-        var audioPath = Path.Combine(tempDir, baseName + ".mp3");
+        var outputPattern = Path.Combine(tempDir, baseName + "_chunk_%03d.wav");
 
         try
         {
             var processInfo = new ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-y -i \"{videoFilePath}\" -vn -acodec libmp3lame -b:a 32k -ac 1 \"{audioPath}\"",
+                Arguments = $"-y -i \"{videoFilePath}\" -vn -acodec pcm_s16le -ar 16000 -ac 1 -f segment -segment_time {segmentTimeSeconds} \"{outputPattern}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -26,7 +26,9 @@ public class VideoProcessor : IVideoProcessor
             using var process = Process.Start(processInfo);
             if (process != null)
             {
-                await process.WaitForExitAsync();
+                var outTask = process.StandardOutput.ReadToEndAsync();
+                var errTask = process.StandardError.ReadToEndAsync();
+                await Task.WhenAll(process.WaitForExitAsync(), outTask, errTask);
             }
         }
         catch (Exception e)
@@ -34,6 +36,43 @@ public class VideoProcessor : IVideoProcessor
             Console.WriteLine($"FFmpeg xatosi: {e.Message}");
         }
 
-        return audioPath;
+        var segments = System.IO.Directory.GetFiles(tempDir, baseName + "_chunk_*.wav")
+                                          .OrderBy(f => f)
+                                          .ToList();
+        return segments;
+    }
+
+    public async Task<string> ExtractFullAudioAsync(string videoFilePath)
+    {
+        var tempDir = Path.GetDirectoryName(videoFilePath) ?? Path.GetTempPath();
+        var baseName = Path.GetFileNameWithoutExtension(videoFilePath);
+        var outputPath = Path.Combine(tempDir, baseName + "_full.mp3");
+
+        try
+        {
+            var processInfo = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = $"-y -i \"{videoFilePath}\" -vn -c:a libmp3lame -q:a 4 \"{outputPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            
+            using var process = Process.Start(processInfo);
+            if (process != null)
+            {
+                var outTask = process.StandardOutput.ReadToEndAsync();
+                var errTask = process.StandardError.ReadToEndAsync();
+                await Task.WhenAll(process.WaitForExitAsync(), outTask, errTask);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"FFmpeg xatosi (Full Audio): {e.Message}");
+        }
+
+        return System.IO.File.Exists(outputPath) ? outputPath : string.Empty;
     }
 }

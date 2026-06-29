@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import './GrammarPage.css';
 import { useLanguage } from '../context/LanguageContext';
 import ReactMarkdown from 'react-markdown';
@@ -150,9 +151,9 @@ Bu grammatik qoida asosan **muhim va kundalik suhbatlarda** ko'p qo'llaniladi.
       </div>
 
       {/* Review Modal */}
-      {reviewFormula && (
+      {reviewFormula && ReactDOM.createPortal(
         <div className="modal-overlay" onClick={() => setReviewFormula(null)}>
-          <div className="modal-content glass-panel animate-fade-in" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content animate-fade-in" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{reviewFormula.formula}</h2>
               <button className="close-btn" onClick={() => setReviewFormula(null)}>
@@ -163,10 +164,11 @@ Bu grammatik qoida asosan **muhim va kundalik suhbatlarda** ko'p qo'llaniladi.
               <ReactMarkdown>{mockMarkdownContent}</ReactMarkdown>
             </div>
             <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={() => setReviewFormula(null)}>Tushundim, yopish</button>
+              <button className="btn btn-primary" onClick={() => setReviewFormula(null)}>Tushundim</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

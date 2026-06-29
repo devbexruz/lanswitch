@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Lanswitch.Application\Lanswitch.Application.csproj" />
@@ -6,11 +6,15 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.25.2" />
+    <PackageReference Include="Deepgram" Version="6.8.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
     <PackageReference Include="Telegram.Bot" Version="22.10.1" />
+    <PackageReference Include="Whisper.net" Version="1.5.0" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.5.0" />
     <PackageReference Include="WTelegramClient" Version="4.4.6" />
   </ItemGroup>
 

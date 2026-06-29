@@ -28,4 +28,10 @@ public class UserAppService : IUserAppService
     {
         return await _userRepository.GetAllAsync();
     }
+
+    public Task UpdateUserAsync(User user)
+    {
+        _userRepository.Update(user);
+        return Task.CompletedTask;
+    }
 }

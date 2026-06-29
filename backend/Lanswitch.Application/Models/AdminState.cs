@@ -14,15 +14,17 @@ public enum AdminStep
     // Series states
     AddSeries_Title,
     AddSeries_Description,
-    AddSeries_SeasonNum,
     AddSeries_EpisodeNum,
     AddSeries_EpisodeTitle,
     AddSeries_EpisodeLevel,
+    AddSeries_Language,
     AddSeries_Video,
 
     // Existing Series states
     SelectSeries,
-    AddEpisodeToSeason_SeasonNum,
+
+    UploadFilmVideo,
+    UploadEpisodeVideo,
     AddEpisodeToSeason_EpisodeNum,
     AddEpisodeToSeason_EpisodeTitle,
     AddEpisodeToSeason_EpisodeLevel,
