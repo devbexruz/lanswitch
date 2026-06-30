@@ -17,7 +17,8 @@ public class CloudStorageService : ICloudStorageService
         var s3Config = new AmazonS3Config 
         { 
             ServiceURL = $"https://{accountId}.r2.cloudflarestorage.com",
-            ForcePathStyle = true
+            ForcePathStyle = true,
+            AuthenticationRegion = "auto"
         };
         
         _s3Client = new AmazonS3Client(
