@@ -40,7 +40,7 @@ public class AuthController : ControllerBase
     public IActionResult RedirectToFrontend([FromQuery] string token)
     {
         // Telegram bot localhost ssilkalarni qabul qilmaydi, shuning uchun API orqali redirect qilamiz
-        return Redirect($"https://demoweb.developerlogic.uz/auth/login?token={token}");
+        return Redirect($"https://lanswitch.developerlogic.uz/auth/login?token={token}");
     }
 
     [HttpPost("magic-login")]
