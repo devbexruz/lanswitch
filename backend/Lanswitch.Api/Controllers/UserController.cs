@@ -1,6 +1,7 @@
 using Lanswitch.Application.Interfaces;
 using Lanswitch.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Lanswitch.Api.Controllers;
 
@@ -30,7 +31,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("me")]
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    [Authorize]
     public async Task<IActionResult> GetMe()
     {
         var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -57,7 +58,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPut("me")]
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    [Authorize]
     public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequest req)
     {
         var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;

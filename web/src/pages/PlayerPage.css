@@ -50,6 +50,10 @@
     text-align: left;
 }
 
+.subtitleWord:hover {
+    color: #bc51e7;
+}
+
 .player-back-btn {
     background: var(--bg-secondary, rgba(255, 255, 255, 0.2));
     border: none;

@@ -36,7 +36,7 @@ public class SubtitleController : ControllerBase
             .Include(s => s.Gaps)
             .Include(s => s.SubtitleWords)
                 .ThenInclude(sw => sw.Word)
-                    .ThenInclude(w => w.Translates);
+                    .ThenInclude(w => w!.Translates);
         
         if (episodeId.HasValue)
         {
@@ -81,7 +81,7 @@ public class SubtitleController : ControllerBase
     {
         var subtitle = await _context.Subtitles
             .Include(s => s.Gaps)
-            .Include(s => s.SubtitleWords).ThenInclude(sw => sw.Word).ThenInclude(w => w.Translates)
+            .Include(s => s.SubtitleWords).ThenInclude(sw => sw.Word).ThenInclude(w => w!.Translates)
             .FirstOrDefaultAsync(s => s.Id == id);
 
         if (subtitle == null) return NotFound("Subtitle not found");
@@ -118,11 +118,11 @@ public class SubtitleController : ControllerBase
         // Fetch again to get updated relationships
         var updatedSubtitle = await _context.Subtitles
             .Include(s => s.Gaps)
-            .Include(s => s.SubtitleWords).ThenInclude(sw => sw.Word).ThenInclude(w => w.Translates)
+            .Include(s => s.SubtitleWords).ThenInclude(sw => sw!.Word).ThenInclude(w => w!.Translates)
             .FirstOrDefaultAsync(s => s.Id == id);
 
         var projectedResult = new {
-            updatedSubtitle.Id,
+            updatedSubtitle!.Id,
             updatedSubtitle.MediaId,
             updatedSubtitle.EpisodeId,
             updatedSubtitle.Index,

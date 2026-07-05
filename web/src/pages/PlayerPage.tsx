@@ -51,11 +51,15 @@ const PlayerPage: React.FC = () => {
 
   const [currentEpisodeId, setCurrentEpisodeId] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
+  const [mediaType, setMediaType] = useState<'film' | 'serial'>('film');
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
 
   const [contextMenu, setContextMenu] = useState<{ visible: boolean, x: number, y: number, text: string, meaning: string | null }>({ visible: false, x: 0, y: 0, text: '', meaning: null });
 
   const lastHeartbeatTimeRef = useRef<number>(0);
   const hasCompletedRef = useRef<boolean>(false);
+
+  const timeoutRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,6 +68,7 @@ const PlayerPage: React.FC = () => {
         if (mediaRes.ok) {
           const found = await mediaRes.json();
           setMedia(found);
+          setMediaType(found.isFilm ? 'film' : 'serial');
 
           let targetEpisodeId: number | null = null;
 
@@ -116,6 +121,21 @@ const PlayerPage: React.FC = () => {
             }));
             setSubtitles(formattedSubs);
           }
+
+          // Get Chat Session for Episode
+          if (!targetEpisodeId) {
+            const chatRes = await fetch(`/api/MediaChat/media/${mediaId}`);
+            if (chatRes.ok) {
+              const chatData = await chatRes.json();
+              setChatMessages(chatData);
+            }
+          } else {
+            const chatRes = await fetch(`/api/EpisodeChat/episode/${targetEpisodeId}`);
+            if (chatRes.ok) {
+              const chatData = await chatRes.json();
+              setChatMessages(chatData);
+            }
+          }
         }
       } catch (err) {
         console.error(err);
@@ -167,9 +187,7 @@ const PlayerPage: React.FC = () => {
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<'qoidalar' | 'sozlar' | 'ai'>('qoidalar');
 
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [chatSessionId, setChatSessionId] = useState<number | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -182,20 +200,25 @@ const PlayerPage: React.FC = () => {
     setIsChatLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      let endpoint = "/api";
+      if (mediaType === "film") {
+        endpoint += "/MediaChat";
+      } else {
+        endpoint += "/EpisodeChat";
+      }
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           episodeId: currentEpisodeId || (media.episodes && media.episodes.length > 0 ? media.episodes[0].id : 0),
           subtitleId: subtitles[selectedSubtitleIndex]?.id,
-          message: message,
-          sessionId: chatSessionId
+          mediaId: media.id,
+          message: message
         })
       });
 
       if (res.ok) {
         const data = await res.json();
-        setChatSessionId(data.sessionId);
         setChatMessages(prev => [...prev, { role: 'AI', content: data.response }]);
       }
     } catch (e) {
@@ -242,25 +265,36 @@ const PlayerPage: React.FC = () => {
     setSelectedSubtitleIndex(targetIndex);
     setIsModalOpen(true);
   };
-
   const handleWordRightClick = async (e: React.MouseEvent, word: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const cleanWord = word.replace(/[^a-zA-Z']/g, '');
+
+    const cleanWord = word.replace(/[^a-zA-Zа-яА-ЯёЁ']/g, '');
     if (!cleanWord) return;
+
+    // 1. Agar oldingi taymer bo'lsa, uni tozalaymiz (menyuni vaqtidan oldin yopilib ketmasligi uchun)
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
 
     setContextMenu({ visible: true, x: e.clientX, y: e.clientY - 40, text: cleanWord, meaning: null });
 
     try {
-      const res = await fetch(`/api/word/translate?text=${cleanWord}`);
+      const res = await fetch(`/api/word/translate?text=${encodeURIComponent(cleanWord)}`); // encodeURIComponent qo'shildi
+
       if (res.ok) {
         const data = await res.json();
         setContextMenu(prev => ({ ...prev, meaning: data.translation }));
       } else {
         setContextMenu(prev => ({ ...prev, meaning: "Topilmadi" }));
       }
-    } catch {
+    } catch (error) {
       setContextMenu(prev => ({ ...prev, meaning: "Xatolik yuz berdi" }));
+    } finally {
+      // 2. try yoki catch tugaganidan qat'i nazar, bitta umumiy taymer ishga tushadi
+      timeoutRef.current = setTimeout(() => {
+        setContextMenu(prev => ({ ...prev, visible: false }));
+      }, 3000);
     }
   };
 
@@ -391,6 +425,7 @@ const PlayerPage: React.FC = () => {
                         {activeSub.text.split(' ').map((w, i) => (
                           <span
                             key={i}
+                            className='subtitleWord'
                             onContextMenu={(e) => handleWordRightClick(e, w)}
                             style={{ cursor: 'context-menu', marginRight: '5px' }}
                             title="Tarjimasi uchun o'ng tugmani bosing"
@@ -415,7 +450,7 @@ const PlayerPage: React.FC = () => {
                     color: '#fff',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    zIndex: 9999,
+                    zIndex: 10000,
                     pointerEvents: 'none',
                     backdropFilter: 'blur(10px)',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.5)',

@@ -14,7 +14,17 @@ using Lanswitch.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
+// CORS siyosatini ro'yxatdan o'tkazish
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+    {
+        policy.WithOrigins("https://demoweb.developerlogic.uz") // Frontend manzilingiz
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials(); // Agar cookie yoki auth header bo'lsa shart
+    });
+});
 
 // SQL BAZANI ULASH
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -108,6 +118,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+app.UseCors("FrontendPolicy");
 
 if (app.Environment.IsDevelopment())
 {

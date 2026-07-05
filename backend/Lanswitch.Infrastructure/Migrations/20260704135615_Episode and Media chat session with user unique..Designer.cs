@@ -3,6 +3,7 @@ using System;
 using Lanswitch.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Lanswitch.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260704135615_Episode and Media chat session with user unique.")]
+    partial class EpisodeandMediachatsessionwithuserunique
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -231,7 +234,7 @@ namespace Lanswitch.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long?>("ContextSubtitleId")
+                    b.Property<long>("ContextSubtitleId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
@@ -443,7 +446,7 @@ namespace Lanswitch.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long?>("ContextSubtitleId")
+                    b.Property<long>("ContextSubtitleId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
@@ -897,7 +900,9 @@ namespace Lanswitch.Infrastructure.Migrations
                 {
                     b.HasOne("Lanswitch.Domain.Entities.Subtitle", "ContextSubtitle")
                         .WithMany()
-                        .HasForeignKey("ContextSubtitleId");
+                        .HasForeignKey("ContextSubtitleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Lanswitch.Domain.Entities.Episode", "ChatEpisode")
                         .WithMany()
@@ -966,7 +971,9 @@ namespace Lanswitch.Infrastructure.Migrations
                 {
                     b.HasOne("Lanswitch.Domain.Entities.Subtitle", "ContextSubtitle")
                         .WithMany()
-                        .HasForeignKey("ContextSubtitleId");
+                        .HasForeignKey("ContextSubtitleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Lanswitch.Domain.Entities.Media", "ChatMedia")
                         .WithMany()

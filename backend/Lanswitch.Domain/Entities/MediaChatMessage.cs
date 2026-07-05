@@ -1,8 +1,7 @@
 namespace Lanswitch.Domain.Entities;
 
-public class EpisodeChatMessage : BaseEntity
+public class MediaChatMessage : BaseEntity
 {
-    
     // "User" or "AI"
     public string Role { get; set; } = null!;
     
@@ -11,10 +10,10 @@ public class EpisodeChatMessage : BaseEntity
     // The specific subtitle the user asked about (optional)
     public long? ContextSubtitleId { get; set; }
 
-    public long EpisodeId { get; set; }
-
+    public long MediaId { get; set; }
+    
     [System.Text.Json.Serialization.JsonIgnore]
-    public virtual Episode ChatEpisode { get; set; } = null!;
+    public virtual Media ChatMedia { get; set; } = null!;
     
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Subtitle? ContextSubtitle { get; set; } = null!;

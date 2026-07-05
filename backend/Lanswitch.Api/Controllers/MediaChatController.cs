@@ -7,33 +7,35 @@ using Microsoft.EntityFrameworkCore;
 using Lanswitch.Infrastructure.Data;
 using Lanswitch.Domain.Entities;
 using Lanswitch.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Lanswitch.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ChatController : ControllerBase
+public class MediaChatController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IGeminiAiService _geminiService;
 
-    public ChatController(AppDbContext context, IGeminiAiService geminiService)
+    public MediaChatController(AppDbContext context, IGeminiAiService geminiService)
     {
         _context = context;
         _geminiService = geminiService;
     }
 
-    public class ChatRequest
+    public class MediaChatRequest
     {
-        public long EpisodeId { get; set; }
+        public long MediaId { get; set; }
         public long? SubtitleId { get; set; }
         public string Message { get; set; } = null!;
         // Optional session ID if they want to continue an existing chat
-        public long? SessionId { get; set; } 
+        public long SessionId { get; set; }
     }
 
     [HttpPost]
-    public async Task<IActionResult> SendMessage([FromBody] ChatRequest request)
+    [Authorize]
+    public async Task<IActionResult> SendMessage([FromBody] MediaChatRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
             return BadRequest("Message cannot be empty.");
@@ -47,54 +49,31 @@ public class ChatController : ControllerBase
             userId = userSession?.UserId;
         }
 
-        // Get or Create Chat Session
-        EpisodeChatSession session;
-        if (request.SessionId.HasValue)
-        {
-            session = await _context.EpisodeChatSessions
-                .Include(s => s.Messages)
-                .FirstOrDefaultAsync(s => s.Id == request.SessionId.Value);
-            
-            if (session == null) return NotFound("Session not found.");
-        }
-        else
-        {
-            session = new EpisodeChatSession
-            {
-                EpisodeId = request.EpisodeId,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.EpisodeChatSessions.Add(session);
-            await _context.SaveChangesAsync();
-        }
-
         // Add user message to history
-        var userMsg = new EpisodeChatMessage
+        var userMsg = new MediaChatMessage
         {
-            SessionId = session.Id,
+            MediaId = request.MediaId,
             Role = "User",
             Content = request.Message,
             ContextSubtitleId = request.SubtitleId,
             CreatedAt = DateTime.UtcNow
         };
-        _context.EpisodeChatMessages.Add(userMsg);
+        _context.MediaChatMessages.Add(userMsg);
         await _context.SaveChangesAsync();
 
         // 1. Get exact context (current subtitle + 2 previous) if SubtitleId is provided
         var contextSubtitles = new List<Subtitle>();
-        var episodeSubtitles = await _context.Subtitles
-            .Where(s => s.EpisodeId == request.EpisodeId)
+        var MediaSubtitles = await _context.Subtitles
+            .Where(s => s.MediaId == request.MediaId)
             .OrderBy(s => s.Index)
             .ToListAsync();
 
-        if (request.SubtitleId.HasValue)
+        if (request.SubtitleId != 0)
         {
-            var targetSub = episodeSubtitles.FirstOrDefault(s => s.Id == request.SubtitleId.Value);
-            if (targetSub != null)
-            {
+            var targetSub = MediaSubtitles.FirstOrDefault(s => s.Id == request.SubtitleId)!;
+            
                 // Take up to 2 previous subtitles + the current one
-                var relevantSubs = episodeSubtitles
+                var relevantSubs = MediaSubtitles
                     .Where(s => s.Index <= targetSub.Index)
                     .OrderByDescending(s => s.Index)
                     .Take(3)
@@ -102,17 +81,16 @@ public class ChatController : ControllerBase
                     .ToList();
                     
                 contextSubtitles.AddRange(relevantSubs);
-            }
         }
 
         // 2. Vector Search (In-memory C# Cosine Similarity)
         // Since we dropped PgVector, we load embeddings into memory and compute cosine distance.
-        // Usually, an episode has 500-1500 subtitles, computing this in C# is instantaneous.
+        // Usually, an Media has 500-1500 subtitles, computing this in C# is instantaneous.
         var messageEmbedding = await _geminiService.GenerateEmbeddingAsync(request.Message);
         
         if (messageEmbedding != null && messageEmbedding.Length > 0)
         {
-            var subtitlesWithEmbeddings = episodeSubtitles.Where(s => s.Embedding != null).ToList();
+            var subtitlesWithEmbeddings = MediaSubtitles.Where(s => s.Embedding != null).ToList();
             if (subtitlesWithEmbeddings.Count > 0)
             {
                 // Find top 3 most relevant subtitles using Cosine Similarity
@@ -138,45 +116,51 @@ public class ChatController : ControllerBase
         contextSubtitles = contextSubtitles.OrderBy(s => s.Index).ToList();
 
         // Get past chat history for LangChain-style context injection
-        var chatHistory = await _context.EpisodeChatMessages
-            .Where(m => m.SessionId == session.Id)
+        var chatHistory = await _context.MediaChatMessages
+            .Where(m => m.MediaId == request.MediaId)
             .OrderBy(m => m.CreatedAt)
             .Take(20) // Last 20 messages
             .ToListAsync();
 
         // Fetch language title for AI context
-        var episode = await _context.Episodes
-            .Include(e => e.Media)
-            .ThenInclude(m => m.Language)
-            .FirstOrDefaultAsync(e => e.Id == request.EpisodeId);
-        string langTitle = episode?.Media?.Language?.Title ?? "Ingliz";
+        var media = await _context.Medias
+            .Include(m => m.Language)
+            .FirstOrDefaultAsync(m => m.Id == request.MediaId);
+        string langTitle = media?.Language?.Title ?? "Ingliz";
 
         // Send to Gemini
-        var aiResponseText = await _geminiService.ChatWithContextAsync(request.Message, chatHistory, contextSubtitles, request.SubtitleId, langTitle);
+        var aiResponseText = await _geminiService.ChatWithContextAsync(
+            request.Message,
+            chatHistory,
+            contextSubtitles,
+            request.SubtitleId,
+            langTitle
+        );
 
         // Save AI response
-        var aiMsg = new EpisodeChatMessage
+        var aiMsg = new MediaChatMessage
         {
-            SessionId = session.Id,
+            MediaId = request.MediaId,
             Role = "AI",
             Content = aiResponseText,
             CreatedAt = DateTime.UtcNow
         };
-        _context.EpisodeChatMessages.Add(aiMsg);
+        _context.MediaChatMessages.Add(aiMsg);
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            sessionId = session.Id,
+            mediaId = request.MediaId,
             response = aiResponseText
         });
     }
 
-    [HttpGet("session/{sessionId}")]
-    public async Task<IActionResult> GetChatHistory(long sessionId)
+    [HttpGet("media/{mediaId}")]
+    [Authorize]
+    public async Task<IActionResult> GetChatHistory(long mediaId)
     {
-        var messages = await _context.EpisodeChatMessages
-            .Where(m => m.SessionId == sessionId)
+        var messages = await _context.MediaChatMessages
+            .Where(m => m.MediaId == mediaId)
             .OrderBy(m => m.CreatedAt)
             .Select(m => new {
                 m.Id,

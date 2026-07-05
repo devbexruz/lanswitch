@@ -8,6 +8,7 @@ export default defineConfig({
     port: 3000,
     allowedHosts: [
       'lanswitch.developerlogic.uz',
+      'demoweb.developerlogic.uz',
       'localhost'
     ],
     proxy: {

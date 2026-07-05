@@ -28,8 +28,10 @@ public class AppDbContext : DbContext
     public DbSet<CommentLike> CommentLikes { get; set; }
     public DbSet<WatchHistory> WatchHistories { get; set; }
     public DbSet<AppNotification> AppNotifications { get; set; }
-    public DbSet<EpisodeChatSession> EpisodeChatSessions { get; set; }
+    // public DbSet<EpisodeChatSession> EpisodeChatSessions { get; set; }
     public DbSet<EpisodeChatMessage> EpisodeChatMessages { get; set; }
+    // public DbSet<MediaChatSession> MediaChatSessions { get; set; }
+    public DbSet<MediaChatMessage> MediaChatMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

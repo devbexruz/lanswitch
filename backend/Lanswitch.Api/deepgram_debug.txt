@@ -20,3 +20,11 @@
 [6/29/2026 19:03:11] File exists and API key is present. Sending request to Deepgram...
 [6/29/2026 19:03:16] Received 200 OK from Deepgram
 [6/29/2026 19:03:16] Found 56 utterances in Deepgram response
+[7/4/2026 09:54:46] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/4/2026 09:54:46] File exists and API key is present. Sending request to Deepgram...
+[7/4/2026 09:55:09] Received 200 OK from Deepgram
+[7/4/2026 09:55:09] Found 2 utterances in Deepgram response
+[7/4/2026 10:10:51] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/4/2026 10:10:51] File exists and API key is present. Sending request to Deepgram...
+[7/4/2026 10:11:00] Received 200 OK from Deepgram
+[7/4/2026 10:11:00] Found 2 utterances in Deepgram response

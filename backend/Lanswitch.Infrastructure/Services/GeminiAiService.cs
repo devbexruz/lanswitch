@@ -436,6 +436,77 @@ Hech qanday qo'shimcha matn qo'shmang, faqat toza JSON array qaytaring.";
         Console.WriteLine($"Chat API Error: {error}");
         return "Xatolik yuz berdi, iltimos qayta urinib ko'ring.";
     }
+    public async Task<string> ChatWithContextAsync(string userMessage, List<MediaChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz")
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+            return "Gemini API kaliti kiritilmagan.";
+
+        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        
+        var contents = new List<object>();
+        
+        // System context + Subtitles
+        var sb = new StringBuilder();
+        sb.AppendLine($"Siz foydalanuvchiga videodagi iboralar va grammatikani tushunishga yordam beradigan ustozsiz. Foydalanuvchi {targetLanguage} tilini o'rganmoqda.");
+        sb.AppendLine("Quyida foydalanuvchi tanlagan va undan oldingi subtitrlar konteksti keltirilgan:");
+        foreach (var sub in contextSubtitles)
+        {
+            if (currentSubtitleId.HasValue && sub.Id == currentSubtitleId.Value)
+            {
+                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}] (BU HOZIRGI TANLANGAN SUBTITR): {sub.Text}");
+            }
+            else
+            {
+                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}]: {sub.Text}");
+            }
+        }
+        sb.AppendLine("\nUshbu kontekst asosida foydalanuvchining savoliga Markdown formatida, juda qisqa (maksimal 2-3 ta gap), aniq va lo'nda javob bering. Javobingiz faqat 'HOZIRGI TANLANGAN SUBTITR' dagi ma'noga qaratilsin, ortiqcha ma'lumot yozmang.");
+        
+        contents.Add(new {
+            role = "user",
+            parts = new[] { new { text = sb.ToString() } }
+        });
+        contents.Add(new {
+            role = "model",
+            parts = new[] { new { text = "Tushundim, tayyorman!" } }
+        });
+
+        // Chat History
+        foreach (var msg in history)
+        {
+            contents.Add(new {
+                role = msg.Role == "User" ? "user" : "model",
+                parts = new[] { new { text = msg.Content } }
+            });
+        }
+        
+        // Current Message
+        contents.Add(new {
+            role = "user",
+            parts = new[] { new { text = userMessage } }
+        });
+
+        var requestBody = new { contents = contents };
+        var requestContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync(url, requestContent);
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+                
+            return textResult ?? "Kechirasiz, javobni shakllantirib bo'lmadi.";
+        }
+        
+        var error = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"Chat API Error: {error}");
+        return "Xatolik yuz berdi, iltimos qayta urinib ko'ring.";
+    }
 
     public async Task<string> TranslateWordAsync(string word)
     {
