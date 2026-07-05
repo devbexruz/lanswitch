@@ -127,7 +127,7 @@ const MoviesPage: React.FC = () => {
           <div className="filter-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <h4 style={{ margin: 0 }}>Janrlar</h4>
-              <button
+              {/* <button
                 onClick={() => setShowCategoryModal(true)}
                 style={{
                   background: 'rgba(99,102,241,0.2)',
@@ -141,7 +141,7 @@ const MoviesPage: React.FC = () => {
                 }}
               >
                 + Boshqarish
-              </button>
+              </button> */}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {categories.length === 0 && (
@@ -172,7 +172,7 @@ const MoviesPage: React.FC = () => {
 
           <div className="movies-grid">
             {currentMovies.map((movie: any) => (
-              <div key={movie.id} className="movie-card-vertical" onClick={() => navigate(`/player/${movie.id}`)} style={{cursor: 'pointer'}}>
+              <div key={movie.id} className="movie-card-vertical" onClick={() => navigate(`/player/${movie.id}`)} style={{ cursor: 'pointer' }}>
                 <div className="movie-poster">
                   <img src={movie.thumbnailUrl || "https://ui-avatars.com/api/?name=Movie"} alt={movie.title} />
                   <div className="movie-badges">
