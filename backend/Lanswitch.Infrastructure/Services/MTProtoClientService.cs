@@ -13,6 +13,11 @@ public class MTProtoClientService : IMTProtoClient
     {
         _client = client;
         _botToken = config["BotConfiguration:BotToken"] ?? throw new Exception("BotToken missing");
+
+        // 🔥 MANA SHU QATORNI QO'SHING: 
+        // Linux tizimida vaqtinchalik papkani RAM dan asosiy diskdagi /home papkasiga ko'chiradi
+        Environment.SetEnvironmentVariable("TMPDIR", "/home/ubuntu/mytemp");
+        Directory.CreateDirectory("/home/ubuntu/mytemp"); // Papka mavjud bo'lmasa, yaratadi
     }
 
     public async Task LoginBotIfNeededAsync()
