@@ -10,6 +10,7 @@ using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using Microsoft.Extensions.Configuration;
 using System.Linq;
 using System;
 
@@ -28,6 +29,7 @@ public class TelegramBotAppService : ITelegramBotAppService
     private readonly IServiceScopeFactory _scopeFactory;
 
     private readonly IGenericRepository<Language> _languageRepository;
+    private readonly IConfiguration _configuration;
 
     public TelegramBotAppService(
         ITelegramBotClient botClient,
@@ -39,7 +41,8 @@ public class TelegramBotAppService : ITelegramBotAppService
         IGenericRepository<Episode> episodeRepository,
         IGenericRepository<Language> languageRepository,
         IBotStateManager stateManager,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        IConfiguration configuration)
     {
         _botClient = botClient;
         _mtClient = mtClient;
@@ -51,6 +54,7 @@ public class TelegramBotAppService : ITelegramBotAppService
         _languageRepository = languageRepository;
         _stateManager = stateManager;
         _scopeFactory = scopeFactory;
+        _configuration = configuration;
     }
 
     private async Task<Lanswitch.Domain.Entities.User> GetOrCreateUserAsync(Telegram.Bot.Types.User? fromUser)
@@ -149,8 +153,8 @@ public class TelegramBotAppService : ITelegramBotAppService
         user.LoginToken = Guid.NewGuid().ToString("N");
         user.LoginTokenExpiry = DateTime.UtcNow.AddMinutes(10);
         _userRepository.Update(user);
-
-        var loginUrl = $"https://lanswitch.developerlogic.uz/api/auth/redirect?token={user.LoginToken}";
+        string frontend_host = _configuration.GetValue<string>("Frontend:Host", "example.uz");
+        var loginUrl = $"https://{frontend_host}/api/auth/redirect?token={user.LoginToken}";
         var keyboard = new InlineKeyboardMarkup(
             InlineKeyboardButton.WithUrl("Tizimga kirish 🚀", loginUrl)
         );
@@ -702,30 +706,73 @@ public class TelegramBotAppService : ITelegramBotAppService
             // Mahalliy xotirada kesh (Bazaga qayta-qayta murojaat qilmaslik uchun)
             var existingWords = (await wordRepo.GetAllAsync()).ToDictionary(w => w.Text.ToLower(), w => w.Id);
             
-            int batchSize = 20;
-            var regex = new System.Text.RegularExpressions.Regex(@"\b[\p{L}\']+\b");
-            for (int i = 0; i < subtitles.Count; i += batchSize)
+            // --- Aqlli guruhlash funksiyasi (Subtitrlarni mantiqiy bloklarga ajratadi) ---
+            var smartBatches = new List<List<Subtitle>>();
+            var currentGroup = new List<Subtitle>();
+
+            double maxTimeGapSeconds = 2.0; // Subtitrlar orasidagi maksimal vaqt (2 soniya)
+
+            for (int index = 0; index < subtitles.Count; index++)
             {
-                var batch = subtitles.Skip(i).Take(batchSize).ToList();
+                var currentSub = subtitles[index];
+                currentGroup.Add(currentSub);
+
+                bool isLastElement = (index == subtitles.Count - 1);
+                
+                if (!isLastElement)
+                {
+                    var nextSub = subtitles[index + 1];
+                    
+                    // 1-Qoida: Oradagi vaqt tahlili (Masalan: StartTime "00:01:20" formatda bo'lsa, TimeSpanga o'giramiz)
+                    var currentEndTime = TimeSpan.Parse(currentSub.EndTime);
+                    var nextStartTime = TimeSpan.Parse(nextSub.StartTime);
+                    double gap = (nextStartTime - currentEndTime).TotalSeconds;
+
+                    // 2-Qoida: Matn nuqta, so'roq yoki undov bilan tugaganmi?
+                    string trimmedText = currentSub.Text.Trim();
+                    bool isSentenceEnd = trimmedText.EndsWith(".") || trimmedText.EndsWith("!") || trimmedText.EndsWith("?");
+
+                    // Agar oradagi vaqt katta bo'lsa, gap tugagan bo'lsa YOKI guruh sig'imi 20 tadan oshsa
+                    if (gap > maxTimeGapSeconds || isSentenceEnd || currentGroup.Count >= 20)
+                    {
+                        smartBatches.Add(currentGroup);
+                        currentGroup = new List<Subtitle>(); // Yangi guruh ochamiz
+                    }
+                }
+                else
+                {
+                    // Oxirgi qolib ketgan guruhni qo'shamiz
+                    smartBatches.Add(currentGroup);
+                }
+            }
+
+            // --- 2-QADAM: GEMINI AI ORQALI TAHLIL (Endi smartBatches ustida aylanadi) ---
+            await botClient.SendMessage(chatId, "🤖 Gemini AI orqali aqlli guruhlangan subtitrlarni tahlil qilish boshlandi... ⏳");
+
+            int indexOffset = 1;
+
+            foreach (var batch in smartBatches)
+            {
                 var batchJsonData = batch.Select(s => new { id = s.Id, text = s.Text }).ToList();
                 var subtitlesJson = System.Text.Json.JsonSerializer.Serialize(batchJsonData);
+                
                 var aiAnalyses = await geminiService.AnalyzeGrammarAsync(subtitlesJson, langTitle);
                 
                 if (aiAnalyses != null && aiAnalyses.Count > 0)
                 {
-                    int indexOffset = i + 1;
                     foreach (var analysis in aiAnalyses)
                     {
                         var gap = new Gap
                         {
                             Text = analysis.SentenceText,
                             AiAnalysis = analysis.AiAnalysis,
-                            SubtitleId = analysis.SubtitleId, // Gemini dan kelgan aniq ID
-                            Index = indexOffset++
+                            SubtitleId = analysis.SubtitleId, 
+                            Index = indexOffset++,
+                            AiGrammarContextIds = analysis.GrammarContextIds
                         };
                         await gapRepo.AddAsync(gap);
                         
-                        // O'zak so'zlarni saqlash
+                        // O'zak so'zlarni saqlash mantiqi (O'zgarishsiz qoladi)
                         if (analysis.RootWords != null)
                         {
                             foreach (var rw in analysis.RootWords)
@@ -750,14 +797,13 @@ public class TelegramBotAppService : ITelegramBotAppService
                                     var newWord = new Word { Text = wordText, LanguageId = langId };
                                     await wordRepo.AddAsync(newWord);
                                     
-                                    var newTranslate = new WordTranslate { WordId = newWord.Id, LanguageId = 1 /* Uzbek */, TranslateText = rw.Translation.Trim() };
+                                    var newTranslate = new WordTranslate { WordId = newWord.Id, LanguageId = 1, TranslateText = rw.Translation.Trim() };
                                     await wordTranslateRepo.AddAsync(newTranslate);
                                     
                                     wordId = newWord.Id;
                                     existingWords[wordText] = wordId;
                                 }
                                 
-                                // Many-to-Many
                                 await subtitleWordRepo.AddAsync(new SubtitleWord
                                 {
                                     SubtitleId = analysis.SubtitleId,
@@ -767,46 +813,6 @@ public class TelegramBotAppService : ITelegramBotAppService
                         }
                     }
                 }
-                
-                // Extract ALL words from subtitles in this batch and add to SubtitleWord
-                foreach (var sub in batch)
-                {
-                    var matches = regex.Matches(sub.Text);
-                    var uniqueWordsInSub = new HashSet<string>();
-                    foreach (System.Text.RegularExpressions.Match match in matches)
-                    {
-                        var wordText = match.Value.ToLower();
-                        if (wordText.Length > 1 || wordText == "i" || wordText == "a")
-                            uniqueWordsInSub.Add(wordText);
-                    }
-
-                    foreach (var wordText in uniqueWordsInSub)
-                    {
-                        long wordId = 0;
-                        if (existingWords.TryGetValue(wordText, out var existingId))
-                        {
-                            wordId = existingId;
-                        }
-                        else
-                        {
-                            var newWord = new Word { Text = wordText, LanguageId = 2 /* English */ };
-                            await wordRepo.AddAsync(newWord);
-                            wordId = newWord.Id;
-                            existingWords[wordText] = wordId;
-                        }
-
-                        // Check if SubtitleWord already exists to avoid duplicates
-                        // Simplified: assume we just add it (this can potentially fail if DB has strict unique constraint, 
-                        // but SubtitleWord doesn't seem to have one based on previous logic).
-                        await subtitleWordRepo.AddAsync(new SubtitleWord
-                        {
-                            SubtitleId = sub.Id,
-                            WordId = wordId
-                        });
-                    }
-                }
-                
-                await Task.Delay(2000);
             }
 
             await botClient.SendMessage(chatId, $"✅ Barcha subtitrlar tahlil qilindi (Grammatika, O'zak so'zlar va Vektorlar) hamda bazaga saqlandi! Tabriklaymiz 🎉");

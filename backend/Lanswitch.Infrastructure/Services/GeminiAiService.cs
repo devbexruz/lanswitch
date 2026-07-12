@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Lanswitch.Application.Interfaces;
 using Lanswitch.Domain.Entities;
+using Lanswitch.Infrastructure.Data;
+using Lanswitch.Domain.Interfaces;
 
 namespace Lanswitch.Infrastructure.Services;
 
@@ -16,13 +18,20 @@ public class GeminiAiService : IGeminiAiService
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
     private readonly IFileStorageService _fileStorage;
+    
+    private readonly IGenericRepository<GrammarContext> _grammarContextRepo;
 
-    public GeminiAiService(HttpClient httpClient, IConfiguration configuration, IFileStorageService fileStorage)
+    public GeminiAiService(
+        HttpClient httpClient, 
+        IConfiguration configuration, 
+        IFileStorageService fileStorage,
+        IGenericRepository<GrammarContext> grammarContextRepo)
     {
         _httpClient = httpClient;
         _apiKey = configuration["Gemini:ApiKey"] ?? throw new ArgumentNullException("Gemini ApiKey is missing");
         _fileStorage = fileStorage;
         _httpClient.Timeout = TimeSpan.FromMinutes(10);
+        _grammarContextRepo = grammarContextRepo;
     }
 
     private class GeminiSubtitleDto
@@ -208,7 +217,7 @@ Return ONLY a JSON array of objects. Each object must have: 'StartTime' (string 
             generationConfig = new { temperature = 0.1 }
         };
         
-        var generateUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        var generateUrl = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={_apiKey}";
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         
         try
@@ -254,35 +263,66 @@ Return ONLY a JSON array of objects. Each object must have: 'StartTime' (string 
 
     public async Task<List<SentenceAnalysisResult>?> AnalyzeGrammarAsync(string subtitlesJson, string targetLanguage = "Ingliz")
     {
+        var grammatik_qoidalar = "";
+        var grammarContexts = await _grammarContextRepo.GetAllAsync();
+        foreach (var grammarContext in grammarContexts)
+        {
+            grammatik_qoidalar += "Qoida - (ID:" + grammarContext.Id + "): "+ grammarContext.Name + " -> " + grammarContext.Content + "\n";
+        }
+
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
             return null;
             
-        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        // REAL ISHLAB TURGAN V1 ENDPOINT VA 1.5-FLASH MODELI
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
         var prompt = $@"Siz {targetLanguage} tilini o'rgatuvchi tajribali ustozsiz. Quyida sizga JSON array ko'rinishida subtitrlar ro'yxati (ID va Text) beriladi:
-{subtitlesJson}
+    {subtitlesJson}
 
-VAZIFA:
-1. Ushbu matnni to'liq o'qing va uni mantiqiy tugallangan gaplarga ajrating (bir nechta subtitr bitta gap bo'lishi mumkin).
-2. Har bir ajratilgan to'liq gap qaysi Subtitle ID'ga eng ko'p mos kelsa, o'sha Subtitle ID ni ko'rsating.
-3. Har bir gap uchun uning ma'nosini va eng muhim grammatik qoidasini sodda, tushunarli qilib O'ZBEK tilida Markdown formatida yozing.
-4. Har bir gapdan asosiy o'zak so'zlarni (Root words) va ularning o'zbek tilidagi aniq tarjimasini ajratib oling.
+    GRAMMATIK QOIDALAR:
+    {grammatik_qoidalar}
 
-Natija FAKAT JSON array formatida bo'lishi shart. Har bir obyekt quyidagi formatda bo'lsin:
-- ""subtitleId"": (raqam) Ushbu gap qaysi subtitrga tegishli ekanligi.
-- ""sentenceText"": (string) Ajratib olingan inglizcha gap.
-- ""aiAnalysis"": (string) Shu gapning tarjimasi va grammatik tahlili (Markdown formatida, misollar bilan).
-- ""rootWords"": (array) Obyektlar ro'yxati, har bir obyektda ""word"" (inglizcha o'zak so'z) va ""translation"" (o'zbekcha tarjimasi).
+    VAZIFA:
+    1. Ushbu matnni to'liq o'qing va uni mantiqiy tugallangan gaplarga ajrating (bir nechta subtitr bitta gap bo'lishi mumkin, bitta subtitleda bir nechta gap bo'lishi mumkin).
+    2. Har bir ajratilgan to'liq gap qaysi Subtitle ID'ga eng ko'p mos kelsa, o'sha Subtitle ID ni ko'rsating.
+    3. Har bir gap uchun uning ma'nosini va eng muhim grammatik qoidasini sodda, tushunarli qilib O'ZBEK tilida Markdown formatida yozing.
+    4. Har bir gapdan asosiy o'zak so'zlarni (Root words) va ularning o'zbek tilidagi aniq tarjimasini ajratib oling.
+    5. GRAMMATIK QOIDALAR da berilgan qoidalardan tashqari boshqa qoidalarni ishlating shart emas, faqat berilgan qoidalardan foydalaning.
+    6. Har bir gap Aynan qaysi qoidaga mos kelsa yoki bir nechtasining aralashmasiga mos kelsa, o'sha qoidalarning ID'larini [1,2..] ko'rsating. Odatda eng mos bittasi bo'ladi. agar biror bir qoidaga mos kelmasa, [] deb ko'rsating.
+    7. Har bir gap analiz resultda grammatik qoida nomi ishlatilishi mumkin ammo uning id si ishlatilmasligi lozim.
+    Natijalar FAKAT JSON array formatida bo'lishi shart. Har bir obyekt quyidagi formatda bo'lsin:
+    - ""subtitleId"": (raqam) Ushbu gap qaysi subtitrga tegishli ekanligi.
+    - ""sentenceText"": (string) Ajratib olingan inglizcha gap.
+    - ""aiAnalysis"": (string) Shu gapning tarjimasi va grammatik tahlili (Markdown formatida, misollar bilan).
+    - ""rootWords"": (array) Obyektlar ro'yxati, har bir obyektda ""word"" (inglizcha o'zak so'z) va ""translation"" (o'zbekcha tarjimasi).
+    - ""grammarContextIds"": (array of integers) Obyektlar ro'yxati, har bir obyektda ""grammarContextId"" (inglizcha grammatik qoida ID'si) va ""translation"" (o'zbekcha tarjimasi).
+    - ""grammarContextIds"": (array of integers) Gap mos keladigan qoidalarning faqat ID raqamlari massivi. Masalan: [1, 2]. Agar to'g'ri kelmasa [] yozing. Ichiga string yoki obyekt yozmang!
+    Hech qanday qo'shimcha matn qo'shmang, faqat toza JSON array qaytaring.";
 
-Hech qanday qo'shimcha matn qo'shmang, faqat toza JSON array qaytaring.";
-
+            // v1 endpointi uchun camelCase formatidagi toza JSON konfiguratsiyasi
         var requestBody = new
         {
             contents = new[] {
                 new { parts = new[] { new { text = prompt } } }
             },
-            generationConfig = new { temperature = 0.2, response_mime_type = "application/json" }
+            generationConfig = new { 
+                temperature = 0.2,
+                responseMimeType = "application/json" // gemini-1.5-flash buni v1 da qo'llab-quvvatlaydi
+            }
         };
-        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+        // System.Text.Json so'rovni camelCase formatida yuborishi uchun sozlama
+        var serializeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        
+        Console.WriteLine("Grammar Promt Payload: "+JsonSerializer.Serialize(requestBody, serializeOptions));
+
+        var content = new StringContent(
+            JsonSerializer.Serialize(requestBody, serializeOptions), 
+            Encoding.UTF8, 
+            "application/json"
+        );
         int maxRetries = 5;
         for (int i = 0; i < maxRetries; i++)
         {
@@ -329,41 +369,73 @@ Hech qanday qo'shimcha matn qo'shmang, faqat toza JSON array qaytaring.";
         return null;
     }
 
-    public async Task<float[]> GenerateEmbeddingAsync(string text)
+public async Task<float[]> GenerateEmbeddingAsync(string text)
+{
+    // 1. API kalit va matnni tekshirish
+    if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey.Contains("YOUR_GEMINI") || string.IsNullOrWhiteSpace(text))
     {
-        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(text))
-            return Array.Empty<float>();
+        return Array.Empty<float>();
+    }
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={_apiKey}";
-        var requestBody = new
+    // 2. Model nomini eng oxirgi v1 versiyasiga moslashtiramiz
+    var modelName = "gemini-embedding-2"; 
+    var url = $"https://generativelanguage.googleapis.com/v1/models/{modelName}:embedContent?key={_apiKey}";
+
+    // Request body
+    var requestBody = new
+    {
+        // Google v1/v1beta API ba'zan model nomini tananing ichida ham to'liq so'raydi
+        model = $"models/{modelName}", 
+        content = new
         {
-            model = "models/text-embedding-004",
-            content = new
-            {
-                parts = new[] { new { text = text } }
-            }
-        };
+            parts = new[] { new { text = text } }
+        }
+    };
 
-        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+    // JSON serializer sozlamalari (PascalCase -> camelCase o'girish uchun)
+    var options = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    try
+    {
+        var jsonPayload = JsonSerializer.Serialize(requestBody, options);
+        var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
         var response = await _httpClient.PostAsync(url, content);
+        
         if (response.IsSuccessStatusCode)
         {
             var responseJson = await response.Content.ReadAsStringAsync();
             using var jsonDoc = JsonDocument.Parse(responseJson);
-            var values = jsonDoc.RootElement
-                .GetProperty("embedding")
-                .GetProperty("values");
             
-            var result = new float[values.GetArrayLength()];
-            int index = 0;
-            foreach (var val in values.EnumerateArray())
+            // Google API javobida "embedding" -> "values" ichida float massiv keladi
+            if (jsonDoc.RootElement.TryGetProperty("embedding", out var embedding) &&
+                embedding.TryGetProperty("values", out var values))
             {
-                result[index++] = (float)val.GetDouble();
+                var result = new float[values.GetArrayLength()];
+                int index = 0;
+                foreach (var val in values.EnumerateArray())
+                {
+                    result[index++] = (float)val.GetDouble();
+                }
+                return result;
             }
-            return result;
         }
-        return Array.Empty<float>();
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"Embedding API Error: {response.StatusCode} - {error}");
+        }
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Xatolik yuz berdi: {ex.Message}");
+    }
+
+    return Array.Empty<float>();
+}
 
     public async Task<string> ChatWithContextAsync(string userMessage, List<EpisodeChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz")
     {

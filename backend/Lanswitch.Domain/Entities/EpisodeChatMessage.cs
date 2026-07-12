@@ -12,6 +12,11 @@ public class EpisodeChatMessage : BaseEntity
     public long? ContextSubtitleId { get; set; }
 
     public long EpisodeId { get; set; }
+    
+    public long UserId { get; set; }
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public virtual User User { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Episode ChatEpisode { get; set; } = null!;

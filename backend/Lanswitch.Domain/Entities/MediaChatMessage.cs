@@ -12,6 +12,11 @@ public class MediaChatMessage : BaseEntity
 
     public long MediaId { get; set; }
     
+    public long UserId { get; set; }
+    
+    [System.Text.Json.Serialization.JsonIgnore]
+    public virtual User User { get; set; } = null!;
+    
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Media ChatMedia { get; set; } = null!;
     

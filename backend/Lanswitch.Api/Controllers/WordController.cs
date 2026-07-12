@@ -46,6 +46,7 @@ public class WordController : ControllerBase
 
         // 2. Agar bazada yo'q bo'lsa yoki tarjimasi bo'lmasa, AI dan so'rash
         var aiTranslation = await _geminiService.TranslateWordAsync(wordText);
+
         
         // 3. Bazaga saqlash
         long wordId = 0;

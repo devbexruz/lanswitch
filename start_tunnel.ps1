@@ -5,7 +5,7 @@ $ServerUser = "ubuntu"
 $PemFilePath = "C:\Users\bexru\.ssh\lanswitch.pem"
 
 # Portlar sozlamasi
-$RemoteApiPort = 8080
+$RemoteApiPort = 8081
 $LocalApiPort = 5273
 $RemoteFrontendPort = 5050
 $LocalFrontendPort = 3000
@@ -41,4 +41,4 @@ ssh -i "$PemFilePath" `
     ${ServerUser}@${ServerIP} -N -o ServerAliveInterval=60 -o ExitOnForwardFailure=yes
 
 Write-Host "Tunel yopildi." -ForegroundColor Red
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 3

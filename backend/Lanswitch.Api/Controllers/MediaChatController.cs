@@ -41,18 +41,23 @@ public class MediaChatController : ControllerBase
             return BadRequest("Message cannot be empty.");
 
         // Identify User if authenticated (otherwise use null for anonymous)
-        long? userId = null;
+        long userId;
         var sessionIdClaim = User.FindFirst("session_id")?.Value;
-        if (!string.IsNullOrEmpty(sessionIdClaim) && long.TryParse(sessionIdClaim, out var sId))
+        if (string.IsNullOrEmpty(sessionIdClaim) || !long.TryParse(sessionIdClaim, out var sId))
         {
-            var userSession = await _context.UserSessions.FindAsync(sId);
-            userId = userSession?.UserId;
+            return Unauthorized(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
         }
+        var userSession = await _context.UserSessions.FindAsync(sId);
+        if (userSession == null){
+            return Unauthorized(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
+        }
+        userId = userSession.UserId;
 
         // Add user message to history
         var userMsg = new MediaChatMessage
         {
             MediaId = request.MediaId,
+            UserId = userId,
             Role = "User",
             Content = request.Message,
             ContextSubtitleId = request.SubtitleId,
@@ -117,7 +122,7 @@ public class MediaChatController : ControllerBase
 
         // Get past chat history for LangChain-style context injection
         var chatHistory = await _context.MediaChatMessages
-            .Where(m => m.MediaId == request.MediaId)
+            .Where(m => m.MediaId == request.MediaId && m.UserId == userId)
             .OrderBy(m => m.CreatedAt)
             .Take(20) // Last 20 messages
             .ToListAsync();
@@ -141,6 +146,7 @@ public class MediaChatController : ControllerBase
         var aiMsg = new MediaChatMessage
         {
             MediaId = request.MediaId,
+            UserId = userId,
             Role = "AI",
             Content = aiResponseText,
             CreatedAt = DateTime.UtcNow
@@ -159,8 +165,21 @@ public class MediaChatController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetChatHistory(long mediaId)
     {
+        // Check User auth
+        long userId;
+        var sessionIdClaim = User.FindFirst("session_id")?.Value;
+        if (string.IsNullOrEmpty(sessionIdClaim) || !long.TryParse(sessionIdClaim, out var sId))
+        {
+            return Unauthorized();
+        }
+        var userSession = await _context.UserSessions.FindAsync(sId);
+        if (userSession == null){
+            return Unauthorized(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
+        }
+        userId = userSession.UserId!;
+
         var messages = await _context.MediaChatMessages
-            .Where(m => m.MediaId == mediaId)
+            .Where(m => m.MediaId == mediaId && m.UserId == userId)
             .OrderBy(m => m.CreatedAt)
             .Select(m => new {
                 m.Id,

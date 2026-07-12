@@ -103,14 +103,17 @@ namespace Lanswitch.Api.Extensions
 
             if (!string.IsNullOrWhiteSpace(webhookUrl))
             {
-                try
-                {
-                    await botClient.SetWebhook(url: webhookUrl, dropPendingUpdates: true);
-                    logger.LogInformation("✅ Webhook configured successfully!");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "❌ Webhook configuration failed");
+                while(true){
+                    try
+                    {
+                        await botClient.SetWebhook(url: webhookUrl, dropPendingUpdates: true);
+                        logger.LogInformation("✅ Webhook configured successfully!");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "❌ Webhook configuration failed");
+                    }
                 }
             }
             else

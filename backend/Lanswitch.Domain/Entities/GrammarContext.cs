@@ -8,6 +8,7 @@ public class GrammarContext : BaseEntity
     public string Name { get; set; } = null!;
     public string Description { get; set; } = null!;
     public string Content { get; set; } = null!;
+    public string? VideoUrl { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Language? Language { get; set; }

@@ -106,8 +106,10 @@ public class SubtitleController : ControllerBase
                         SubtitleId = subtitle.Id,
                         Text = sentence.SentenceText,
                         AiAnalysis = sentence.AiAnalysis,
-                        Index = sentenceIndex++
+                        Index = sentenceIndex++,
+                        AiGrammarContextIds = sentence.GrammarContextIds
                     };
+
                     _context.Gaps.Add(gap);
                 }
             }

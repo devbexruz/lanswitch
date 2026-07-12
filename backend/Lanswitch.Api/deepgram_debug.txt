@@ -28,3 +28,130 @@
 [7/4/2026 10:10:51] File exists and API key is present. Sending request to Deepgram...
 [7/4/2026 10:11:00] Received 200 OK from Deepgram
 [7/4/2026 10:11:00] Found 2 utterances in Deepgram response
+[7/10/2026 1:40:21 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 1:40:21 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 1:40:29 PM] Received 200 OK from Deepgram
+[7/10/2026 1:40:29 PM] Found 2 utterances in Deepgram response
+[7/10/2026 1:45:26 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 1:45:26 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 1:45:34 PM] Received 200 OK from Deepgram
+[7/10/2026 1:45:34 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:04:24 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:04:24 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:04:33 PM] Received 200 OK from Deepgram
+[7/10/2026 2:04:33 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:23:12 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:23:12 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:23:23 PM] Received 200 OK from Deepgram
+[7/10/2026 2:23:23 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:31:50 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:31:50 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:31:57 PM] Received 200 OK from Deepgram
+[7/10/2026 2:31:57 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:36:51 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:36:51 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:37:04 PM] Received 200 OK from Deepgram
+[7/10/2026 2:37:04 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:41:41 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:41:41 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:41:55 PM] Received 200 OK from Deepgram
+[7/10/2026 2:41:55 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:46:08 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:46:08 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:46:19 PM] Received 200 OK from Deepgram
+[7/10/2026 2:46:19 PM] Found 2 utterances in Deepgram response
+[7/10/2026 2:59:00 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 2:59:00 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 2:59:12 PM] Received 200 OK from Deepgram
+[7/10/2026 2:59:12 PM] Found 2 utterances in Deepgram response
+[7/10/2026 3:12:56 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 3:12:56 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 3:13:05 PM] Received 200 OK from Deepgram
+[7/10/2026 3:13:05 PM] Found 2 utterances in Deepgram response
+[7/10/2026 4:04:13 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 4:04:13 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 4:04:27 PM] Received 200 OK from Deepgram
+[7/10/2026 4:04:27 PM] Found 2 utterances in Deepgram response
+[7/10/2026 4:29:31 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/10/2026 4:29:31 PM] File exists and API key is present. Sending request to Deepgram...
+[7/10/2026 4:29:42 PM] Received 200 OK from Deepgram
+[7/10/2026 4:29:42 PM] Found 2 utterances in Deepgram response
+[7/11/2026 11:01:53 AM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 11:01:53 AM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 11:02:11 AM] Received 200 OK from Deepgram
+[7/11/2026 11:02:11 AM] Found 2 utterances in Deepgram response
+[7/11/2026 11:07:34 AM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 11:07:34 AM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 11:07:45 AM] Received 200 OK from Deepgram
+[7/11/2026 11:07:45 AM] Found 2 utterances in Deepgram response
+[7/11/2026 11:13:05 AM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 11:13:05 AM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 11:13:21 AM] Received 200 OK from Deepgram
+[7/11/2026 11:13:21 AM] Found 2 utterances in Deepgram response
+[7/11/2026 11:20:50 AM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 11:20:50 AM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 11:21:04 AM] Received 200 OK from Deepgram
+[7/11/2026 11:21:04 AM] Found 2 utterances in Deepgram response
+[7/11/2026 12:18:26 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 12:18:26 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 12:18:32 PM] Received 200 OK from Deepgram
+[7/11/2026 12:18:32 PM] Found 2 utterances in Deepgram response
+[7/11/2026 12:49:38 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 12:49:38 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 12:50:39 PM] Deepgram Error RequestTimeout: {"err_code":"SLOW_UPLOAD","err_msg":"Request upload timeout.","request_id":"019f5139-ffc9-7b73-8f0c-58ff45971761"}
+[7/11/2026 12:50:39 PM] Deepgram Exception: Deepgram status xatosi: RequestTimeout, Detal: {"err_code":"SLOW_UPLOAD","err_msg":"Request upload timeout.","request_id":"019f5139-ffc9-7b73-8f0c-58ff45971761"}
+   at Lanswitch.Infrastructure.Services.DeepgramService.TranscribeAudioAsync(String fullAudioPath, Int64 mediaId, String langCode) in S:\MyProjects\lanswitch\backend\Lanswitch.Infrastructure\Services\DeepgramService.cs:line 62
+[7/11/2026 12:58:27 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 12:58:27 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 12:59:05 PM] Received 200 OK from Deepgram
+[7/11/2026 12:59:05 PM] Found 2 utterances in Deepgram response
+[7/11/2026 1:25:11 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 1:25:11 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 1:25:35 PM] Received 200 OK from Deepgram
+[7/11/2026 1:25:35 PM] Found 2 utterances in Deepgram response
+[7/11/2026 1:56:33 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 1:56:33 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 1:56:55 PM] Received 200 OK from Deepgram
+[7/11/2026 1:56:55 PM] Found 2 utterances in Deepgram response
+[7/11/2026 2:02:49 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 2:02:49 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 2:03:16 PM] Received 200 OK from Deepgram
+[7/11/2026 2:03:16 PM] Found 2 utterances in Deepgram response
+[7/11/2026 2:19:35 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 2:19:35 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 2:20:10 PM] Received 200 OK from Deepgram
+[7/11/2026 2:20:10 PM] Found 2 utterances in Deepgram response
+[7/11/2026 2:38:09 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 2:38:09 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 2:38:29 PM] Received 200 OK from Deepgram
+[7/11/2026 2:38:29 PM] Found 2 utterances in Deepgram response
+[7/11/2026 3:08:04 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 3:08:04 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 3:08:38 PM] Deepgram Error RequestTimeout: {"err_code":"SLOW_UPLOAD","err_msg":"Request upload timeout.","request_id":"019f51b8-c073-7872-b931-58625c248774"}
+[7/11/2026 3:08:38 PM] Deepgram Exception: Deepgram status xatosi: RequestTimeout, Detal: {"err_code":"SLOW_UPLOAD","err_msg":"Request upload timeout.","request_id":"019f51b8-c073-7872-b931-58625c248774"}
+   at Lanswitch.Infrastructure.Services.DeepgramService.TranscribeAudioAsync(String fullAudioPath, Int64 mediaId, String langCode) in S:\MyProjects\lanswitch\backend\Lanswitch.Infrastructure\Services\DeepgramService.cs:line 62
+[7/11/2026 3:16:17 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 3:16:17 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 3:17:15 PM] Received 200 OK from Deepgram
+[7/11/2026 3:17:15 PM] Found 2 utterances in Deepgram response
+[7/11/2026 3:29:30 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 3:29:30 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 3:30:01 PM] Received 200 OK from Deepgram
+[7/11/2026 3:30:01 PM] Found 2 utterances in Deepgram response
+[7/11/2026 4:04:18 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 4:04:18 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 4:04:25 PM] Received 200 OK from Deepgram
+[7/11/2026 4:04:25 PM] Found 2 utterances in Deepgram response
+[7/11/2026 4:47:55 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 4:47:55 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 4:48:07 PM] Received 200 OK from Deepgram
+[7/11/2026 4:48:07 PM] Found 2 utterances in Deepgram response
+[7/11/2026 5:03:27 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 5:03:27 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 5:04:07 PM] Deepgram Error RequestTimeout: {"err_code":"SLOW_UPLOAD","err_msg":"Request upload timeout.","request_id":"019f5222-59a3-7130-a822-e27dafb008b2"}
+[7/11/2026 5:04:07 PM] Deepgram Exception: Deepgram status xatosi: RequestTimeout, Detal: {"err_code":"SLOW_UPLOAD","err_msg":"Request upload timeout.","request_id":"019f5222-59a3-7130-a822-e27dafb008b2"}
+   at Lanswitch.Infrastructure.Services.DeepgramService.TranscribeAudioAsync(String fullAudioPath, Int64 mediaId, String langCode) in S:\MyProjects\lanswitch\backend\Lanswitch.Infrastructure\Services\DeepgramService.cs:line 62
+[7/11/2026 5:16:13 PM] TranscribeAudioAsync called for C:\Users\bexru\AppData\Local\Temp\SaveVid_Net_AQNZYBWD_O376r0SnAQHYXFbhvg5NbE1oTWwAYpa51bS5EQ1EhXYoSkJ58NclT_full.mp3, langCode: en
+[7/11/2026 5:16:13 PM] File exists and API key is present. Sending request to Deepgram...
+[7/11/2026 5:16:22 PM] Received 200 OK from Deepgram
+[7/11/2026 5:16:22 PM] Found 2 utterances in Deepgram response

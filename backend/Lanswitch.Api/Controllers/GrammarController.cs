@@ -27,6 +27,14 @@ public class GrammarController : ControllerBase
         return Ok(grammars.ToList());
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetGrammarById(long id)
+    {
+        var grammar = await _grammarRepository.GetByIdAsync(id);
+        if (grammar == null) return NotFound("Grammar rule not found.");
+        return Ok(grammar);
+    }
+
     [HttpPost]
     public async Task<IActionResult> AddGrammar([FromBody] GrammarContext grammar)
     {

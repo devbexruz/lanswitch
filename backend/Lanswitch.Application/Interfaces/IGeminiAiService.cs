@@ -16,6 +16,7 @@ public class SentenceAnalysisResult
     public string SentenceText { get; set; } = null!;
     public string AiAnalysis { get; set; } = null!;
     public List<RootWordDto> RootWords { get; set; } = new List<RootWordDto>();
+    public List<long> GrammarContextIds { get; set; } = new List<long>();
 }
 
 public interface IGeminiAiService

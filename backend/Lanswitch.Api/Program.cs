@@ -19,7 +19,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins("https://demoweb.developerlogic.uz") // Frontend manzilingiz
+        policy.WithOrigins(builder.Configuration["Frontend:Host"]!) // Frontend manzilingiz
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials(); // Agar cookie yoki auth header bo'lsa shart
