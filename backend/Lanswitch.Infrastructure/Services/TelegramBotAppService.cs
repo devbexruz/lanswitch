@@ -711,19 +711,22 @@ public class TelegramBotAppService : ITelegramBotAppService
             var currentGroup = new List<Subtitle>();
 
             double maxTimeGapSeconds = 2.0; // Subtitrlar orasidagi maksimal vaqt (2 soniya)
+            int currentGroupLength = 0;
 
             for (int index = 0; index < subtitles.Count; index++)
             {
                 var currentSub = subtitles[index];
                 currentGroup.Add(currentSub);
+                currentGroupLength += currentSub.Text.Length;
 
                 bool isLastElement = (index == subtitles.Count - 1);
-                
+                bool shouldSplit = false;
+
                 if (!isLastElement)
                 {
                     var nextSub = subtitles[index + 1];
                     
-                    // 1-Qoida: Oradagi vaqt tahlili (Masalan: StartTime "00:01:20" formatda bo'lsa, TimeSpanga o'giramiz)
+                    // 1-Qoida: Oradagi vaqt tahlili
                     var currentEndTime = currentSub.EndTime;
                     var nextStartTime = nextSub.StartTime;
                     double gap = (nextStartTime - currentEndTime).TotalSeconds;
@@ -732,17 +735,37 @@ public class TelegramBotAppService : ITelegramBotAppService
                     string trimmedText = currentSub.Text.Trim();
                     bool isSentenceEnd = trimmedText.EndsWith(".") || trimmedText.EndsWith("!") || trimmedText.EndsWith("?");
 
-                    // Agar oradagi vaqt katta bo'lsa, gap tugagan bo'lsa YOKI guruh sig'imi 20 tadan oshsa
-                    if (gap > maxTimeGapSeconds || isSentenceEnd || currentGroup.Count >= 20)
+                    // Guruhni bo'lish kerakmi yoki yo'qligini aniqlaymiz
+                    if (gap > maxTimeGapSeconds || isSentenceEnd || currentGroup.Count >= 20 || currentGroupLength + nextSub.Text.Length >= 1000)
                     {
-                        smartBatches.Add(currentGroup);
-                        currentGroup = new List<Subtitle>(); // Yangi guruh ochamiz
+                        shouldSplit = true;
                     }
                 }
                 else
                 {
-                    // Oxirgi qolib ketgan guruhni qo'shamiz
-                    smartBatches.Add(currentGroup);
+                    // Agar eng oxirgi element bo'lsa, baribir guruhni yopish (bo'lish) kerak
+                    shouldSplit = true;
+                }
+
+                // Guruhni asosiy ro'yxatga qo'shish mantiqi
+                if (shouldSplit)
+                {
+                    // Agar oldingi guruh mavjud bo'lsa va u bilan birlashtirganda ham 1000 dan oshmasa
+                    if (smartBatches.Count > 0 && 
+                        (smartBatches[^1].Sum(s => s.Text.Length) + currentGroupLength) <= 1000)
+                    {
+                        // Oldingi guruhning o'ziga qo'shib yuboramiz
+                        smartBatches[^1].AddRange(currentGroup);
+                    }
+                    else
+                    {
+                        // Aks holda yangi guruh sifatida qo'shamiz
+                        smartBatches.Add(currentGroup);
+                    }
+
+                    // Guruhni nollashtiramiz
+                    currentGroupLength = 0;
+                    currentGroup = new List<Subtitle>(); 
                 }
             }
 
