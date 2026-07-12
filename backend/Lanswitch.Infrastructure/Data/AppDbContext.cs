@@ -36,5 +36,8 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<Word>()
+            .HasIndex(w => new { w.LanguageId, w.Text }) // Ikkalasini bitta guruhga birlashtirdik
+            .IsUnique();
     }
 }

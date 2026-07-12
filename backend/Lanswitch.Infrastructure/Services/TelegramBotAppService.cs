@@ -724,8 +724,8 @@ public class TelegramBotAppService : ITelegramBotAppService
                     var nextSub = subtitles[index + 1];
                     
                     // 1-Qoida: Oradagi vaqt tahlili (Masalan: StartTime "00:01:20" formatda bo'lsa, TimeSpanga o'giramiz)
-                    var currentEndTime = TimeSpan.Parse(currentSub.EndTime);
-                    var nextStartTime = TimeSpan.Parse(nextSub.StartTime);
+                    var currentEndTime = currentSub.EndTime;
+                    var nextStartTime = nextSub.StartTime;
                     double gap = (nextStartTime - currentEndTime).TotalSeconds;
 
                     // 2-Qoida: Matn nuqta, so'roq yoki undov bilan tugaganmi?

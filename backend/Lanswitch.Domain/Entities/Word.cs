@@ -5,6 +5,7 @@ namespace Lanswitch.Domain.Entities;
 public class Word : BaseEntity
 {
     public long LanguageId { get; set; }
+    
     public string Text { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

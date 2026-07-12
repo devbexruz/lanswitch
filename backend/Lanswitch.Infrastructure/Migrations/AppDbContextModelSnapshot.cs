@@ -795,7 +795,8 @@ namespace Lanswitch.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LanguageId");
+                    b.HasIndex("LanguageId", "Text")
+                        .IsUnique();
 
                     b.ToTable("Words");
                 });
