@@ -35,20 +35,17 @@ public class EpisodeChatController : ControllerBase
     [Authorize]
     public async Task<IActionResult> SendMessage([FromBody] EpisodeChatRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Message))
-            return BadRequest("Message cannot be empty.");
-
-        long userId;
-        var sessionIdClaim = User.FindFirst("session_id")?.Value;
-        if (string.IsNullOrEmpty(sessionIdClaim) || !long.TryParse(sessionIdClaim, out var sId))
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdString) || !long.TryParse(userIdString, out var userId))
         {
             return Unauthorized(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
         }
-        var userSession = await _context.UserSessions.FindAsync(sId);
-        if (userSession == null){
-            return Unauthorized(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
+
+        var user = await _userService.GetUserByIdAsync(userId);
+        if (user == null)
+        {
+            return NotFound(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
         }
-        userId = userSession.UserId;
 
         // Add user message to history
         var userMsg = new EpisodeChatMessage
@@ -164,7 +161,7 @@ public class EpisodeChatController : ControllerBase
         // Check User auth
         long userId;
         var sessionIdClaim = User.FindFirst("session_id")?.Value;
-        if (string.IsNullOrEmpty(sessionIdClaim) || !long.TryParse(sessionIdClaim, out var sId))
+        if (string.IsNullOrEmpty(sessionIdClaim) || !long.TryParse(sessionIdClaim, out long sId))
         {
             return Unauthorized();
         }
