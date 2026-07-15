@@ -1,170 +1,181 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import './GrammarPage.css';
 import { useLanguage } from '../context/LanguageContext';
 import ReactMarkdown from 'react-markdown';
 
-// Mock data
-const mockGrammar: Record<'en' | 'ru', any[]> = {
-  en: [
-    { id: 1, formula: "Present Perfect + just/already", context: "O'tmishda tugagan, lekin natijasi hozirga ta'sir qiladigan harakatlar", status: "active", timesUsed: 24 },
-    { id: 2, formula: "If + Past Simple, ... would + V1", context: "Second Conditional (Hozirgi vaqtdagi haqiqatga zid shartlar)", status: "inactive", timesUsed: 5 },
-    { id: 3, formula: "Be used to + V-ing", context: "Biror narsaga o'rganib qolganlikni ifodalash", status: "new", timesUsed: 0 },
-    { id: 4, formula: "Had better + V1", context: "Kimgadir maslahat berganda 'yaxshisi... qilsang bo'lardi'", status: "active", timesUsed: 12 },
-  ],
-  ru: [
-    { id: 101, formula: "Творительный падеж (Кем? Чем?)", context: "Harakatning qanday qurol/vosita yordamida bajarilishini bildiradi", status: "new", timesUsed: 0 },
-    { id: 102, formula: "Совершенный вид глагола", context: "Tugallangan va natijaga ega harakatlar", status: "active", timesUsed: 15 },
-    { id: 103, formula: "Дательный падеж (Кому? Чему?)", context: "Harakat yo'naltirilgan ob'ektni ifodalash", status: "inactive", timesUsed: 3 },
-  ]
-};
-
 const GrammarPage: React.FC = () => {
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [reviewFormula, setReviewFormula] = useState<any | null>(null);
+  const [grammarList, setGrammarList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedGrammar, setSelectedGrammar] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { learningLanguage } = useLanguage();
-  
-  const currentGrammar = mockGrammar[learningLanguage];
-  const filteredGrammar = filterStatus === 'all' ? currentGrammar : currentGrammar.filter(g => g.status === filterStatus);
 
-  const mockMarkdownContent = `
-### Tushuntirish
-Bu grammatik qoida asosan **muhim va kundalik suhbatlarda** ko'p qo'llaniladi.
+  // Map language code to languageId (Number() conversion to avoid type mismatch from API)
+  const langIdMap: Record<string, number> = { en: 1, ru: 2 };
+  const currentLangId = langIdMap[learningLanguage] ?? 1;
 
-**Qanday yasaladi:**
-> Asosiy qoida bu yerda joylashadi...
+  useEffect(() => {
+    fetchGrammar();
+  }, []);
 
-**Misollar:**
-- Birinchi misol *(tarjimasi)*
-- Ikkinchi misol *(tarjimasi)*
+  const fetchGrammar = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/grammar');
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[GrammarPage] fetched:', data);
+        setGrammarList(data);
+      } else {
+        console.warn('[GrammarPage] fetch failed:', res.status);
+      }
+    } catch (e) {
+      console.error('[GrammarPage] fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-**Muhim:** Xatoga yo'l qo'ymaslik uchun maxsus istisnolarga e'tibor bering.
-  `;
+  const filteredGrammar = grammarList.filter(g => {
+    // Use Number() to avoid string/number type mismatch from API response
+    const matchesLang = Number(g.languageId) === currentLangId;
+    const matchesSearch =
+      !searchQuery.trim() ||
+      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesLang && matchesSearch;
+  });
+
+  const totalCount = grammarList.filter(g => Number(g.languageId) === currentLangId).length;
 
   return (
     <div className="grammar-page animate-fade-in">
       <div className="page-header flex-between">
         <div>
-          <h1 className="page-title">Grammatika va Kontekst</h1>
-          <p className="page-subtitle">O'rganilgan sintaksis va formulalar to'plami</p>
+          <h1 className="page-title">Grammatika</h1>
+          <p className="page-subtitle">Grammatik qoidalar to'plami</p>
         </div>
-        <div className="header-actions-group">
-          <button className="btn btn-primary">Kashf etish</button>
-        </div>
-      </div>
-
-      {/* Stats Header */}
-      <div className="stats-grid">
-        <div className="stat-card glass-panel">
-          <div className="stat-icon" style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-value">45</span>
-            <span className="stat-label">Jami formulalar</span>
-          </div>
-        </div>
-        
-        <div className="stat-card glass-panel" style={{ borderColor: 'rgba(102, 155, 188, 0.3)' }}>
-          <div className="stat-icon" style={{ background: 'rgba(102, 155, 188, 0.2)', color: 'var(--color-steel-blue)' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-value" style={{ color: 'var(--color-steel-blue)' }}>30</span>
-            <span className="stat-label">Faol (Active)</span>
-          </div>
-        </div>
-
-        <div className="stat-card glass-panel" style={{ borderColor: 'rgba(244, 211, 94, 0.3)' }}>
-          <div className="stat-icon" style={{ background: 'rgba(244, 211, 94, 0.2)', color: 'var(--color-papaya-whip)' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-value" style={{ color: 'var(--color-papaya-whip)' }}>10</span>
-            <span className="stat-label">Unutilayotgan (Inactive)</span>
-          </div>
-        </div>
-
-        <div className="stat-card glass-panel" style={{ borderColor: 'rgba(193, 18, 31, 0.3)' }}>
-          <div className="stat-icon" style={{ background: 'rgba(193, 18, 31, 0.2)', color: 'var(--color-flag-red)' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-value" style={{ color: 'var(--color-flag-red)' }}>5</span>
-            <span className="stat-label">Yangi o'rganilmagan (New)</span>
-          </div>
+        <div className="grammar-stat-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span>{totalCount} ta qoida</span>
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="filter-tabs" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-        <button 
-          className={`btn ${filterStatus === 'all' ? 'btn-primary' : 'btn-outline-light'}`}
-          onClick={() => setFilterStatus('all')}
-          style={{ padding: '0.5rem 1.5rem', borderRadius: '20px' }}
-        >Barchasi</button>
-        <button 
-          className={`btn ${filterStatus === 'active' ? 'btn-primary' : 'btn-outline-light'}`}
-          onClick={() => setFilterStatus('active')}
-          style={{ padding: '0.5rem 1.5rem', borderRadius: '20px' }}
-        >Faol</button>
-        <button 
-          className={`btn ${filterStatus === 'inactive' ? 'btn-primary' : 'btn-outline-light'}`}
-          onClick={() => setFilterStatus('inactive')}
-          style={{ padding: '0.5rem 1.5rem', borderRadius: '20px' }}
-        >Takrorlang</button>
-        <button 
-          className={`btn ${filterStatus === 'new' ? 'btn-primary' : 'btn-outline-light'}`}
-          onClick={() => setFilterStatus('new')}
-          style={{ padding: '0.5rem 1.5rem', borderRadius: '20px' }}
-        >Yangi</button>
+      {/* Search */}
+      <div className="grammar-search-wrapper">
+        <svg className="grammar-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="text"
+          className="grammar-search-input"
+          placeholder="Qoida yoki tavsif bo'yicha qidirish..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button className="grammar-search-clear" onClick={() => setSearchQuery('')}>✕</button>
+        )}
       </div>
 
-      {/* Grammar Context List */}
-      <div className="grammar-list glass-panel">
-         {filteredGrammar.map((item: any) => (
-           <div key={item.id} className={`grammar-card status-${item.status}`}>
-             <div className="grammar-card-header">
-               <h3 className="grammar-formula">{item.formula}</h3>
-               <span className={`status-pill ${item.status}`}>
-                 {item.status === 'active' && 'Faol'}
-                 {item.status === 'inactive' && 'Takrorlang'}
-                 {item.status === 'new' && 'Yangi'}
-               </span>
-             </div>
-             <p className="grammar-context">{item.context}</p>
-             <div className="grammar-footer" style={{ flexWrap: 'wrap', gap: '10px' }}>
-               <span className="times-used">Kinoda {item.timesUsed} marta ishlatingiz</span>
-               <div style={{ display: 'flex', gap: '10px' }}>
-                 {item.status === 'inactive' && (
-                   <button className="btn btn-primary small-btn" onClick={() => setReviewFormula(item)}>
-                     Takrorlash
-                   </button>
-                 )}
-                 <button className="btn btn-outline-light small-btn" style={{ color: 'var(--color-royal-gold)', borderColor: 'rgba(244, 211, 94, 0.3)' }} onClick={() => alert('Bu funksiya tez orada ishga tushadi va u PRO tarifiga kiradi!')}>
-                   ✨ AI Bilan Suhbat (PRO)
-                 </button>
-               </div>
-             </div>
-           </div>
-         ))}
-      </div>
+      {/* Grammar List */}
+      {loading ? (
+        <div className="grammar-loading">
+          <div className="grammar-loading-spinner"></div>
+          <p>Yuklanmoqda...</p>
+        </div>
+      ) : filteredGrammar.length === 0 ? (
+        <div className="grammar-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <p>{searchQuery ? 'Qidiruvga mos qoida topilmadi' : 'Hali grammatik qoidalar qo\'shilmagan'}</p>
+        </div>
+      ) : (
+        <div className="grammar-grid">
+          {filteredGrammar.map((item: any) => (
+            <div
+              key={item.id}
+              className="grammar-card-new"
+              onClick={() => setSelectedGrammar(item)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => e.key === 'Enter' && setSelectedGrammar(item)}
+            >
+              <div className="grammar-card-new-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </div>
+              <div className="grammar-card-new-body">
+                <h3 className="grammar-card-new-name">{item.name}</h3>
+                <p className="grammar-card-new-desc">{item.description}</p>
+              </div>
+              <div className="grammar-card-new-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Review Modal */}
-      {reviewFormula && ReactDOM.createPortal(
-        <div className="modal-overlay" onClick={() => setReviewFormula(null)}>
-          <div className="modal-content animate-fade-in" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+      {/* Grammar Detail Modal */}
+      {selectedGrammar && ReactDOM.createPortal(
+        <div className="modal-overlay" onClick={() => setSelectedGrammar(null)}>
+          <div
+            className="modal-content grammar-detail-modal animate-fade-in"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h2>{reviewFormula.formula}</h2>
-              <button className="close-btn" onClick={() => setReviewFormula(null)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <div className="grammar-detail-header-info">
+                <span className="grammar-detail-tag">
+                  {selectedGrammar.languageId === 1 ? '🇬🇧 English' : '🇷🇺 Russian'}
+                </span>
+                <h2 className="grammar-detail-title">{selectedGrammar.name}</h2>
+                <p className="grammar-detail-subtitle">{selectedGrammar.description}</p>
+              </div>
+              <button className="close-btn" onClick={() => setSelectedGrammar(null)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
-            <div className="modal-body markdown-body" style={{ color: 'var(--text-primary)', lineHeight: '1.6' }}>
-              <ReactMarkdown>{mockMarkdownContent}</ReactMarkdown>
+
+            <div className="modal-body grammar-detail-body">
+              <div className="grammar-markdown-content markdown-body">
+                <ReactMarkdown>{selectedGrammar.content}</ReactMarkdown>
+              </div>
+
+              {selectedGrammar.videoUrl && (
+                <div className="grammar-video-link">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                  <a href={selectedGrammar.videoUrl} target="_blank" rel="noopener noreferrer">
+                    Video darslikni ko'rish
+                  </a>
+                </div>
+              )}
             </div>
+
             <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={() => setReviewFormula(null)}>Tushundim</button>
+              <button className="btn btn-primary" onClick={() => setSelectedGrammar(null)}>
+                Yopish
+              </button>
             </div>
           </div>
         </div>,

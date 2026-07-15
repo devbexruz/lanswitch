@@ -17,11 +17,13 @@ public class MediaChatController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IGeminiAiService _geminiService;
+    private readonly IUserAppService _userService;
 
-    public MediaChatController(AppDbContext context, IGeminiAiService geminiService)
+    public MediaChatController(AppDbContext context, IGeminiAiService geminiService, IUserAppService userService)
     {
         _context = context;
         _geminiService = geminiService;
+        _userService = userService;
     }
 
     public class MediaChatRequest

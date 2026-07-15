@@ -80,3 +80,50 @@
     grid-column: span 2;
   }
 }
+
+/* ===== Grammar Admin Styles ===== */
+.grammar-lang-badge {
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.grammar-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grammar-form-group label {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.grammar-content-textarea {
+  resize: vertical;
+  min-height: 200px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.form-control select,
+select.form-control {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-glass);
+  color: white;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  font-family: var(--font-main);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+select.form-control option {
+  background: #1a1a2e;
+  color: white;
+}

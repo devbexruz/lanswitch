@@ -9,6 +9,7 @@ using Lanswitch.Domain.Entities;
 using Lanswitch.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 
+
 namespace Lanswitch.Api.Controllers;
 
 [ApiController]
@@ -17,11 +18,13 @@ public class EpisodeChatController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IGeminiAiService _geminiService;
+    private readonly IUserAppService _userService;
 
-    public EpisodeChatController(AppDbContext context, IGeminiAiService geminiService)
+    public EpisodeChatController(AppDbContext context, IGeminiAiService geminiService, IUserAppService userService)
     {
         _context = context;
         _geminiService = geminiService;
+        _userService = userService;
     }
 
     public class EpisodeChatRequest

@@ -10,7 +10,6 @@ namespace Lanswitch.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[ApiKey]
 public class GrammarController : ControllerBase
 {
     private readonly IGenericRepository<GrammarContext> _grammarRepository;
@@ -21,6 +20,7 @@ public class GrammarController : ControllerBase
     }
 
     [HttpGet]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
     public async Task<IActionResult> GetAllGrammars()
     {
         var grammars = await _grammarRepository.GetAllAsync();
@@ -28,6 +28,7 @@ public class GrammarController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
     public async Task<IActionResult> GetGrammarById(long id)
     {
         var grammar = await _grammarRepository.GetByIdAsync(id);
@@ -36,11 +37,42 @@ public class GrammarController : ControllerBase
     }
 
     [HttpPost]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddGrammar([FromBody] GrammarContext grammar)
     {
         if (grammar == null) return BadRequest("Grammar cannot be null");
-        
+
         await _grammarRepository.AddAsync(grammar);
         return Ok(grammar);
+    }
+
+    [HttpPut("{id}")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateGrammar(long id, [FromBody] GrammarContext grammar)
+    {
+        if (grammar == null) return BadRequest("Grammar cannot be null");
+
+        var existing = await _grammarRepository.GetByIdAsync(id);
+        if (existing == null) return NotFound("Grammar rule not found.");
+
+        existing.Name = grammar.Name;
+        existing.Description = grammar.Description;
+        existing.Content = grammar.Content;
+        existing.VideoUrl = grammar.VideoUrl;
+        existing.LanguageId = grammar.LanguageId;
+
+        _grammarRepository.Update(existing);
+        return Ok(existing);
+    }
+
+    [HttpDelete("{id}")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteGrammar(long id)
+    {
+        var existing = await _grammarRepository.GetByIdAsync(id);
+        if (existing == null) return NotFound("Grammar rule not found.");
+
+        _grammarRepository.Remove(existing);
+        return NoContent();
     }
 }
