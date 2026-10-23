@@ -1056,6 +1056,109 @@ public class AssignmentService : IAssignmentService
         return true;
     }
 
+    public async Task<bool> GradeStudentItemAsync(long assignmentId, long itemId, long studentId, int status, long teacherId, string? comment = null)
+    {
+        var assignment = await _db.Assignments
+            .Include(a => a.Group).ThenInclude(g => g.Admins)
+            .Include(a => a.Items)
+            .FirstOrDefaultAsync(a => a.Id == assignmentId);
+
+        if (assignment == null) return false;
+
+        var group = assignment.Group;
+        bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
+        if (!canReview) return false;
+
+        var item = assignment.Items.FirstOrDefault(i => i.Id == itemId);
+        if (item == null) return false;
+
+        if (status == 0 && string.IsNullOrWhiteSpace(comment))
+        {
+            throw new InvalidOperationException("Punishment (Jarima) qo'llash uchun jazo izohi kiritilishi shart!");
+        }
+
+        var sub = await _db.AssignmentItemSubmissions
+            .FirstOrDefaultAsync(s => s.AssignmentItemId == itemId && s.StudentId == studentId);
+
+        if (sub == null)
+        {
+            if (status == -1) return true; // Already unreviewed
+
+            string finalComment = !string.IsNullOrWhiteSpace(comment)
+                ? comment.Trim()
+                : (status == 1 ? "Bajarildi deb baholandi" : status == 0 ? "Jarima deb baholandi" : "Jarima bajardi deb baholandi");
+
+            sub = new AssignmentItemSubmission
+            {
+                AssignmentId = assignmentId,
+                AssignmentItemId = itemId,
+                StudentId = studentId,
+                Status = status,
+                Comment = finalComment,
+                ReviewedById = teacherId,
+                ReviewedAt = DateTime.UtcNow,
+                SubmittedAt = DateTime.UtcNow
+            };
+            await _db.AssignmentItemSubmissions.AddAsync(sub);
+        }
+        else
+        {
+            if (status == -1)
+            {
+                _db.AssignmentItemSubmissions.Remove(sub);
+            }
+            else
+            {
+                string finalComment = !string.IsNullOrWhiteSpace(comment)
+                    ? comment.Trim()
+                    : (status == 1 ? "Bajarildi deb baholandi" : status == 0 ? "Jarima deb baholandi" : "Jarima bajardi deb baholandi");
+
+                sub.Status = status;
+                sub.Comment = finalComment;
+                sub.ReviewedById = teacherId;
+                sub.ReviewedAt = DateTime.UtcNow;
+                _db.AssignmentItemSubmissions.Update(sub);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        // O'quvchiga Telegram bot orqali xabar yuborish
+        try
+        {
+            var student = await _db.Users.FindAsync(studentId);
+            if (student != null && long.TryParse(student.TelegramId, out long studentTelegramId))
+            {
+                string statusIcon = status switch
+                {
+                    1 => "✅ Bajarildi (1)",
+                    0 => "❌ Jarima (0)",
+                    2 => "⚠️ Jarima Bajarildi (2)",
+                    _ => "Status bekor qilindi"
+                };
+
+                var notifyText = $"📢 <b>TOPSHIRIQ QISMI TEKSHIRILDI!</b>\n\n" +
+                                 $"📌 <b>Dars:</b> {assignment.Title}\n" +
+                                 $"📝 <b>Qism:</b> {item.Title}\n" +
+                                 $"📊 <b>Holat:</b> {statusIcon}\n";
+
+                if (!string.IsNullOrWhiteSpace(comment))
+                {
+                    notifyText += $"💬 <b>O'qituvchi izohi / Jazo:</b> {comment.Trim()}\n";
+                }
+
+                await _botClient.SendMessage(
+                    chatId: studentTelegramId,
+                    text: notifyText,
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Html
+                );
+            }
+        }
+        catch { }
+
+        return true;
+    }
+
     public async Task<bool> DeleteAttachmentAsync(long attachmentId, long studentOrTeacherId)
     {
         var att = await _db.ItemSubmissionAttachments

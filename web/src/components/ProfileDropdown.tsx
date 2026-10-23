@@ -34,17 +34,19 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
   }, []);
 
   const handleSwitchRole = async (targetRole: 'Student' | 'Teacher') => {
-    if (targetRole === currentRole) return;
     setIsSwitching(true);
     try {
-      await setRole(targetRole);
+      if (user?.role !== targetRole) {
+        await setRole(targetRole);
+      }
       setIsOpen(false);
+      const search = window.location.search || '';
       if (targetRole === 'Teacher') {
         localStorage.setItem('lanswitch_last_route', '/teacher');
-        navigate('/teacher');
+        navigate(`/teacher${search}`);
       } else {
         localStorage.setItem('lanswitch_last_route', '/student');
-        navigate('/student');
+        navigate(`/student${search}`);
       }
     } catch (e) {
       console.error(e);

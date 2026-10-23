@@ -237,6 +237,39 @@ public class AssignmentsController : ControllerBase
     }
 
     /// <summary>
+    /// O'qituvchi tomonidan ma'lum bir topshiriq qismiga (AssignmentItem) alohida status belgilash
+    /// status: 1 = Bajarildi, 0 = Jarima, 2 = Jarima Bajardi, -1 = Bekor qilish
+    /// </summary>
+    [HttpPost("{id}/items/{itemId}/students/{studentId}/grade")]
+    public async Task<IActionResult> GradeStudentItem(
+        long id,
+        long itemId,
+        long studentId,
+        [FromQuery] int status,
+        [FromQuery] string? comment = null,
+        [FromQuery] long? teacherId = null)
+    {
+        var tId = teacherId ?? GetUserId();
+        if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
+
+        if (status == 0 && string.IsNullOrWhiteSpace(comment))
+        {
+            return BadRequest(new { message = "Jarima (punishment) holatiga o'tkazish uchun jazo izohi kiritilishi shart!" });
+        }
+
+        try
+        {
+            var success = await _assignmentService.GradeStudentItemAsync(id, itemId, studentId, status, tId, comment);
+            if (!success) return BadRequest(new { message = "Failed to update item status" });
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Biriktirilgan faylni o'chirish
     /// </summary>
     [HttpDelete("attachments/{id}")]

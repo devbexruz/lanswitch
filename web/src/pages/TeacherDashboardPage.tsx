@@ -57,7 +57,13 @@ export default function TeacherDashboardPage() {
   const [remindSuccess, setRemindSuccess] = useState<string | null>(null);
 
   // Punishment Comment Modal State
-  const [penaltyModal, setPenaltyModal] = useState<{ assignmentId: number; studentId: number; studentName: string } | null>(null);
+  const [penaltyModal, setPenaltyModal] = useState<{
+    assignmentId: number;
+    studentId: number;
+    studentName: string;
+    itemId?: number;
+    itemTitle?: string;
+  } | null>(null);
   const [penaltyComment, setPenaltyComment] = useState('');
   const [penaltyError, setPenaltyError] = useState<string | null>(null);
   const [isSubmittingPenalty, setIsSubmittingPenalty] = useState(false);
@@ -132,8 +138,13 @@ export default function TeacherDashboardPage() {
   }, [tab, user?.id]);
 
   useEffect(() => {
+    if (user?.role === 'Student') {
+      const search = window.location.search || '';
+      navigate(`/student${search}`, { replace: true });
+      return;
+    }
     localStorage.setItem('lanswitch_last_route', '/teacher');
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     localStorage.setItem('lanswitch_teacher_main_tab', mainTab);
@@ -330,6 +341,45 @@ export default function TeacherDashboardPage() {
     }
   };
 
+  const handleSetItemStatus = async (
+    assignmentId: number,
+    itemId: number,
+    studentId: number,
+    status: number,
+    itemTitle?: string,
+    studentName?: string,
+    comment?: string
+  ) => {
+    if (status === 0 && !comment) {
+      setPenaltyModal({
+        assignmentId,
+        studentId,
+        studentName: studentName || 'Talaba',
+        itemId,
+        itemTitle: itemTitle || 'Topshiriq qismi'
+      });
+      setPenaltyComment('');
+      setPenaltyError(null);
+      return;
+    }
+
+    const res = await api.setStudentItemStatus(assignmentId, itemId, studentId, status, user?.id, comment);
+    if (res.success) {
+      const rep = await api.getAssignmentReport(assignmentId, user?.id);
+      if (rep) {
+        setSelectedReport(rep);
+        if (detailReviewStudent && detailReviewStudent.studentId === studentId) {
+          const updated = rep.submittedStudents.find(s => s.studentId === studentId) ||
+                          rep.missingStudents.find(s => s.studentId === studentId);
+          if (updated) setDetailReviewStudent(updated);
+        }
+      }
+      if (selectedGroup) loadGroupAssignments(selectedGroup.id);
+    } else {
+      alert(res.message || 'Xatolik yuz berdi');
+    }
+  };
+
   const handleConfirmPenalty = async () => {
     if (!penaltyModal) return;
     if (!penaltyComment.trim()) {
@@ -340,13 +390,23 @@ export default function TeacherDashboardPage() {
     setIsSubmittingPenalty(true);
     setPenaltyError(null);
     try {
-      const res = await api.setStudentAssignmentStatus(
-        penaltyModal.assignmentId,
-        penaltyModal.studentId,
-        0,
-        user?.id,
-        penaltyComment.trim()
-      );
+      const res = penaltyModal.itemId
+        ? await api.setStudentItemStatus(
+            penaltyModal.assignmentId,
+            penaltyModal.itemId,
+            penaltyModal.studentId,
+            0,
+            user?.id,
+            penaltyComment.trim()
+          )
+        : await api.setStudentAssignmentStatus(
+            penaltyModal.assignmentId,
+            penaltyModal.studentId,
+            0,
+            user?.id,
+            penaltyComment.trim()
+          );
+
       if (res.success) {
         const rep = await api.getAssignmentReport(penaltyModal.assignmentId, user?.id);
         if (rep) {
@@ -1737,9 +1797,9 @@ export default function TeacherDashboardPage() {
                             </div>
                           )}
 
-                          {/* Items Rows (Clean rows, item title + status only, NO media players here) */}
+                          {/* Items Rows (Clean rows, item title + status + individual actions) */}
                           {st.items && st.items.length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: '#F8FAFC', borderRadius: '12px', padding: '10px', border: '1px solid var(--sky-border)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#F8FAFC', borderRadius: '12px', padding: '10px', border: '1px solid var(--sky-border)' }}>
                               {st.items.map((item: any) => (
                                 <div
                                   key={item.id}
@@ -1748,26 +1808,103 @@ export default function TeacherDashboardPage() {
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
                                     fontSize: '13px',
-                                    padding: '4px 6px'
+                                    padding: '6px 10px',
+                                    borderRadius: '10px',
+                                    background: item.mySubmissionStatus === 0 ? '#FEF2F2' : item.mySubmissionStatus === 1 ? '#F0FDF4' : item.mySubmissionStatus === 2 ? '#FFFBEB' : '#fff',
+                                    border: item.mySubmissionStatus === 0 ? '1px solid #FECACA' : item.mySubmissionStatus === 1 ? '1px solid #BBF7D0' : item.mySubmissionStatus === 2 ? '1px solid #FDE68A' : '1px solid var(--sky-border)',
+                                    flexWrap: 'wrap',
+                                    gap: '8px'
                                   }}
                                 >
-                                  <span style={{ fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span>{item.itemType === 'video' || item.itemType === 'MediaSubmission' ? '🎬' : item.itemType === 'audio' ? '🎙️' : item.itemType === 'vocab' || item.itemType === 'Vocabulary' ? '📚' : item.itemType === 'test' ? '📝' : '📄'}</span>
                                     <span>{item.title}</span>
                                   </span>
-                                  <span>
-                                    {item.mySubmissionStatus === 1 ? (
-                                      <span style={{ color: '#15803D', fontWeight: 700, fontSize: '12px' }}>✅ Bajarildi</span>
-                                    ) : item.mySubmissionStatus === 0 ? (
-                                      <span style={{ color: '#B91C1C', fontWeight: 700, fontSize: '12px' }}>❌ Jarima</span>
-                                    ) : item.mySubmissionStatus === 2 ? (
-                                      <span style={{ color: '#B45309', fontWeight: 700, fontSize: '12px' }}>⚠️ Jarima bajardi</span>
-                                    ) : item.attachments?.length ? (
-                                      <span style={{ color: '#0369A1', fontWeight: 700, fontSize: '12px' }}>⏳ Tekshirilmoqda</span>
-                                    ) : (
-                                      <span style={{ color: '#94A3B8', fontWeight: 600, fontSize: '12px' }}>— Topshirilmagan</span>
-                                    )}
-                                  </span>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span>
+                                      {item.mySubmissionStatus === 1 ? (
+                                        <span style={{ color: '#15803D', fontWeight: 800, fontSize: '11px', background: '#DCFCE7', padding: '3px 8px', borderRadius: '6px' }}>✅ Bajarildi</span>
+                                      ) : item.mySubmissionStatus === 0 ? (
+                                        <span style={{ color: '#B91C1C', fontWeight: 800, fontSize: '11px', background: '#FEE2E2', padding: '3px 8px', borderRadius: '6px' }}>❌ Jarima</span>
+                                      ) : item.mySubmissionStatus === 2 ? (
+                                        <span style={{ color: '#B45309', fontWeight: 800, fontSize: '11px', background: '#FEF3C7', padding: '3px 8px', borderRadius: '6px' }}>⚠️ Jarima bajardi</span>
+                                      ) : item.attachments?.length ? (
+                                        <span style={{ color: '#0369A1', fontWeight: 800, fontSize: '11px', background: '#E0F2FE', padding: '3px 8px', borderRadius: '6px' }}>⏳ Tekshirilmoqda</span>
+                                      ) : (
+                                        <span style={{ color: '#94A3B8', fontWeight: 600, fontSize: '11px' }}>— Topshirilmagan</span>
+                                      )}
+                                    </span>
+
+                                    {/* Quick Item Action Buttons */}
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                      <button
+                                        title="Bajarildi deb belgilash"
+                                        onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, st.studentId, 1, item.title, st.fullName)}
+                                        style={{
+                                          border: item.mySubmissionStatus === 1 ? '1.5px solid #16A34A' : '1px solid #BBF7D0',
+                                          background: item.mySubmissionStatus === 1 ? '#16A34A' : '#DCFCE7',
+                                          color: item.mySubmissionStatus === 1 ? '#fff' : '#15803D',
+                                          borderRadius: '6px',
+                                          padding: '3px 7px',
+                                          fontSize: '11px',
+                                          fontWeight: 800,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        ✓
+                                      </button>
+                                      <button
+                                        title="Jarima qo'llash"
+                                        onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, st.studentId, 0, item.title, st.fullName)}
+                                        style={{
+                                          border: item.mySubmissionStatus === 0 ? '1.5px solid #DC2626' : '1px solid #FECACA',
+                                          background: item.mySubmissionStatus === 0 ? '#DC2626' : '#FEE2E2',
+                                          color: item.mySubmissionStatus === 0 ? '#fff' : '#B91C1C',
+                                          borderRadius: '6px',
+                                          padding: '3px 7px',
+                                          fontSize: '11px',
+                                          fontWeight: 800,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        ✕
+                                      </button>
+                                      <button
+                                        title="Jarima bajarildi deb belgilash"
+                                        onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, st.studentId, 2, item.title, st.fullName)}
+                                        style={{
+                                          border: item.mySubmissionStatus === 2 ? '1.5px solid #D97706' : '1px solid #FDE68A',
+                                          background: item.mySubmissionStatus === 2 ? '#D97706' : '#FEF3C7',
+                                          color: item.mySubmissionStatus === 2 ? '#fff' : '#B45309',
+                                          borderRadius: '6px',
+                                          padding: '3px 7px',
+                                          fontSize: '11px',
+                                          fontWeight: 800,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        ⚠️
+                                      </button>
+                                      {item.mySubmissionStatus !== null && item.mySubmissionStatus !== undefined && (
+                                        <button
+                                          title="Bekor qilish"
+                                          onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, st.studentId, -1, item.title, st.fullName)}
+                                          style={{
+                                            border: '1px solid #CBD5E1',
+                                            background: '#fff',
+                                            color: '#64748B',
+                                            borderRadius: '6px',
+                                            padding: '3px 6px',
+                                            fontSize: '11px',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          ↺
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -2024,6 +2161,86 @@ export default function TeacherDashboardPage() {
                         ))}
                       </div>
                     )}
+
+                    {/* Individual Item Status Control in Modal */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      paddingTop: '10px',
+                      borderTop: '1px solid rgba(226, 232, 240, 0.8)',
+                      marginTop: '6px'
+                    }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                        Qism statusini belgilash:
+                      </span>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, detailReviewStudent.studentId, 1, item.title, detailReviewStudent.fullName)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: item.mySubmissionStatus === 1 ? '2px solid #16A34A' : '1px solid #BBF7D0',
+                            background: item.mySubmissionStatus === 1 ? '#16A34A' : '#DCFCE7',
+                            color: item.mySubmissionStatus === 1 ? '#fff' : '#15803D',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✅ Bajarildi
+                        </button>
+                        <button
+                          onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, detailReviewStudent.studentId, 0, item.title, detailReviewStudent.fullName)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: item.mySubmissionStatus === 0 ? '2px solid #DC2626' : '1px solid #FECACA',
+                            background: item.mySubmissionStatus === 0 ? '#DC2626' : '#FEE2E2',
+                            color: item.mySubmissionStatus === 0 ? '#fff' : '#B91C1C',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ❌ Jarima
+                        </button>
+                        <button
+                          onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, detailReviewStudent.studentId, 2, item.title, detailReviewStudent.fullName)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: item.mySubmissionStatus === 2 ? '2px solid #D97706' : '1px solid #FDE68A',
+                            background: item.mySubmissionStatus === 2 ? '#D97706' : '#FEF3C7',
+                            color: item.mySubmissionStatus === 2 ? '#fff' : '#B45309',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ⚠️ Jarima Bajardi
+                        </button>
+                        {item.mySubmissionStatus !== null && item.mySubmissionStatus !== undefined && (
+                          <button
+                            onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, detailReviewStudent.studentId, -1, item.title, detailReviewStudent.fullName)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--sky-border)',
+                              background: '#fff',
+                              color: 'var(--text-muted)',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ↺ Bekor
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -2136,6 +2353,12 @@ export default function TeacherDashboardPage() {
 
             <div style={{ fontSize: '14px', color: '#334155', lineHeight: 1.5 }}>
               Talaba: <b>{penaltyModal.studentName}</b>
+              {penaltyModal.itemTitle && (
+                <>
+                  <br />
+                  Qism: <b style={{ color: 'var(--primary-blue)' }}>{penaltyModal.itemTitle}</b>
+                </>
+              )}
               <br />
               Iltimos, ushbu o'quvchiga qo'llaniladigan jazo va vazifani batafsil yozing:
             </div>

@@ -96,8 +96,13 @@ export default function StudentMiniAppPage() {
   }, [authUser?.id]);
 
   useEffect(() => {
+    if (authUser?.role === 'Teacher') {
+      const search = window.location.search || '';
+      navigate(`/teacher${search}`, { replace: true });
+      return;
+    }
     localStorage.setItem('lanswitch_last_route', '/student');
-  }, []);
+  }, [authUser?.role]);
 
   useEffect(() => {
     localStorage.setItem('lanswitch_student_main_tab', mainTab);
@@ -145,6 +150,11 @@ export default function StudentMiniAppPage() {
         if (autoLoginRes?.user) {
           resolvedId = autoLoginRes.user.id;
           localStorage.setItem('lanswitch_user', JSON.stringify(autoLoginRes.user));
+          if (autoLoginRes.user.role === 'Teacher') {
+            const search = window.location.search || '';
+            navigate(`/teacher${search}`, { replace: true });
+            return;
+          }
         }
       }
     } catch (e) {

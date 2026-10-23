@@ -598,6 +598,22 @@ export const api = {
     }
   },
 
+  async setStudentItemStatus(assignmentId: number, itemId: number, studentId: number, status: number, teacherId?: number, comment?: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      let url = `${API_BASE}/assignments/${assignmentId}/items/${itemId}/students/${studentId}/grade?status=${status}`;
+      if (teacherId) url += `&teacherId=${teacherId}`;
+      if (comment) url += `&comment=${encodeURIComponent(comment)}`;
+      const res = await fetch(url, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        return { success: false, message: err?.message || 'Qism statusini yangilashda xatolik yuz berdi' };
+      }
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Server bilan aloqa xatosi' };
+    }
+  },
+
   // Delete attachment
   async deleteAttachment(attachmentId: number, userId?: number): Promise<boolean> {
     try {

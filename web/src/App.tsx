@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import LanswitchPortalPage from './pages/LanswitchPortalPage';
 import TeacherDashboardPage from './pages/TeacherDashboardPage';
 import StudentMiniAppPage from './pages/StudentMiniAppPage';
@@ -15,23 +16,34 @@ import MagicLoginPage from './pages/MagicLoginPage';
 import AuthModal from './components/AuthModal';
 import PlayerPage from './pages/PlayerPage';
 
-function RootRoute() {
-  const savedRoute = localStorage.getItem('lanswitch_last_route');
-  if (savedRoute && (savedRoute.startsWith('/teacher') || savedRoute.startsWith('/tma') || savedRoute.startsWith('/student'))) {
-    return <Navigate to={savedRoute} replace />;
+function SmartRoleRoute() {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const search = searchParams.toString() ? `?${searchParams.toString()}` : '';
+
+  let role = user?.role;
+  if (!role) {
+    try {
+      const savedUser = localStorage.getItem('lanswitch_user');
+      if (savedUser) {
+        role = JSON.parse(savedUser)?.role;
+      }
+    } catch {}
   }
 
-  try {
-    const savedUser = localStorage.getItem('lanswitch_user');
-    if (savedUser) {
-      const u = JSON.parse(savedUser);
-      if (u.role === 'Teacher') {
-        return <Navigate to="/teacher" replace />;
-      }
-    }
-  } catch {}
+  if (role === 'Teacher') {
+    return <Navigate to={`/teacher${search}`} replace />;
+  }
+  if (role === 'Student') {
+    return <Navigate to={`/student${search}`} replace />;
+  }
 
-  return <Navigate to="/student" replace />;
+  const savedRoute = localStorage.getItem('lanswitch_last_route');
+  if (savedRoute && savedRoute.startsWith('/teacher')) {
+    return <Navigate to={`/teacher${search}`} replace />;
+  }
+
+  return <Navigate to={`/student${search}`} replace />;
 }
 
 function App() {
@@ -39,10 +51,10 @@ function App() {
     <div className="app-container">
       <Routes>
         {/* Lanswitch New Platform Routes */}
-        <Route path="/" element={<RootRoute />} />
+        <Route path="/" element={<SmartRoleRoute />} />
+        <Route path="/tma" element={<SmartRoleRoute />} />
         <Route path="/portal" element={<LanswitchPortalPage />} />
         <Route path="/teacher" element={<TeacherDashboardPage />} />
-        <Route path="/tma" element={<StudentMiniAppPage />} />
         <Route path="/student" element={<StudentMiniAppPage />} />
 
         {/* Legacy Routes */}

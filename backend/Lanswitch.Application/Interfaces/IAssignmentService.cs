@@ -22,6 +22,7 @@ public interface IAssignmentService
     Task<List<StudentTimelineAssignmentDto>> GetStudentTimelineHistoryAsync(long groupId, long studentId);
     Task<bool> ToggleStudentAssignmentStatusAsync(long assignmentId, long studentId, bool isCompleted, long teacherId);
     Task<bool> SetStudentAssignmentStatusAsync(long assignmentId, long studentId, int status, long teacherId, string? comment = null);
+    Task<bool> GradeStudentItemAsync(long assignmentId, long itemId, long studentId, int status, long teacherId, string? comment = null);
     Task<bool> DeleteAttachmentAsync(long attachmentId, long studentOrTeacherId);
 }
 
