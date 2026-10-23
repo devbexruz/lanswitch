@@ -28,7 +28,8 @@ public enum AdminStep
     AddEpisodeToSeason_EpisodeNum,
     AddEpisodeToSeason_EpisodeTitle,
     AddEpisodeToSeason_EpisodeLevel,
-    AddEpisodeToSeason_Video
+    AddEpisodeToSeason_Video,
+    WaitingMediaSubmission
 }
 
 public class AdminState

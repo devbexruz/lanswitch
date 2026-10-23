@@ -36,6 +36,111 @@ public class AuthController : ControllerBase
         public string Token { get; set; } = null!;
     }
 
+    public class TelegramAutoLoginRequest
+    {
+        public string? TelegramId { get; set; }
+        public long? UserId { get; set; }
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Username { get; set; }
+        public string? PhotoUrl { get; set; }
+        public string? InitData { get; set; }
+    }
+
+    [HttpPost("telegram-auto-login")]
+    public async Task<IActionResult> TelegramAutoLogin([FromBody] TelegramAutoLoginRequest req)
+    {
+        if (string.IsNullOrEmpty(req.TelegramId) && (!req.UserId.HasValue || req.UserId <= 0))
+        {
+            return BadRequest(new { message = "TelegramId or UserId is required" });
+        }
+
+        User? user = null;
+        if (req.UserId.HasValue && req.UserId.Value > 0)
+        {
+            user = await _userRepository.GetByIdAsync(req.UserId.Value);
+        }
+
+        if (user == null && !string.IsNullOrEmpty(req.TelegramId))
+        {
+            user = await _userRepository.GetByTelegramIdAsync(req.TelegramId);
+        }
+
+        // Foydalanuvchi bazada bo'lmasa, uni avtomatik yaratamiz
+        if (user == null)
+        {
+            var fullName = $"{req.FirstName} {req.LastName}".Trim();
+            if (string.IsNullOrEmpty(fullName))
+            {
+                fullName = !string.IsNullOrEmpty(req.Username) ? req.Username : "Telegram User";
+            }
+
+            user = new User
+            {
+                TelegramId = req.TelegramId ?? "",
+                FullName = fullName,
+                ProfileImage = req.PhotoUrl,
+                NativeLanguageId = 1,
+                IsAdmin = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _userRepository.AddAsync(user);
+        }
+        else
+        {
+            bool updated = false;
+            if (!string.IsNullOrEmpty(req.PhotoUrl) && user.ProfileImage != req.PhotoUrl)
+            {
+                user.ProfileImage = req.PhotoUrl;
+                updated = true;
+            }
+            if (updated)
+            {
+                _userRepository.Update(user);
+            }
+        }
+
+        var refreshToken = _authService.GenerateRefreshToken();
+        var refreshTokenHash = _authService.HashRefreshToken(refreshToken);
+
+        var expiryHours = _configuration.GetValue<int>("JwtSettings:RefreshTokenExpiryInHours", 168);
+        var expiryTime = DateTime.UtcNow.AddHours(expiryHours);
+
+        var userSession = new UserSession
+        {
+            UserId = user.Id,
+            Agent = Request.Headers["User-Agent"].ToString(),
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            Device = "tma",
+            IsActive = true,
+            RefreshTokenHash = refreshTokenHash,
+            RefreshTokenExpiryTime = expiryTime
+        };
+
+        await _sessionRepository.AddAsync(userSession);
+
+        var accessToken = _authService.GenerateJwtToken(user, userSession.Id);
+        SetTokensInCookies(accessToken, refreshToken, expiryTime);
+
+        return Ok(new
+        {
+            message = "Auto login successful",
+            userId = user.Id,
+            accessToken = accessToken,
+            user = new
+            {
+                user.Id,
+                user.FullName,
+                user.TelegramId,
+                user.ProfileImage,
+                user.NativeLanguageId,
+                user.Role,
+                user.IsAdmin,
+                user.CreatedAt
+            }
+        });
+    }
+
     [HttpGet("redirect")]
     public IActionResult RedirectToFrontend([FromQuery] string token)
     {
@@ -84,7 +189,21 @@ public class AuthController : ControllerBase
 
         SetTokensInCookies(accessToken, refreshToken, expiryTime);
 
-        return Ok(new { message = "Muvaffaqiyatli login qildingiz", userId = user.Id });
+        return Ok(new { 
+            message = "Muvaffaqiyatli login qildingiz", 
+            userId = user.Id,
+            accessToken = accessToken,
+            user = new {
+                user.Id,
+                user.FullName,
+                user.TelegramId,
+                user.ProfileImage,
+                user.NativeLanguageId,
+                user.Role,
+                user.IsAdmin,
+                user.CreatedAt
+            }
+        });
     }
 
     [HttpPost("refresh")]

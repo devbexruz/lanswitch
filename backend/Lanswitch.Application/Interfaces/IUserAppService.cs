@@ -5,7 +5,9 @@ namespace Lanswitch.Application.Interfaces;
 public interface IUserAppService
 {
     Task<User?> GetUserByIdAsync(long id);
+    Task<User?> GetByTelegramIdAsync(string telegramId);
     Task<User> CreateUserAsync(User user);
     Task<IEnumerable<User>> GetAllUsersAsync();
     Task UpdateUserAsync(User user);
+    Task<User?> UpdateUserRoleAsync(long userId, string role);
 }

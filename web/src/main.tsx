@@ -9,9 +9,31 @@ import { AuthProvider } from './context/AuthContext'
 
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
-  const response = await originalFetch(...args);
+  let [resource, config] = args;
+
+  const token = localStorage.getItem('lanswitch_token');
+  let user: any = null;
+  try {
+    const saved = localStorage.getItem('lanswitch_user');
+    if (saved) user = JSON.parse(saved);
+  } catch {}
+
+  const headers = new Headers(config?.headers || {});
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (user?.id && !headers.has('X-User-Id')) {
+    headers.set('X-User-Id', user.id.toString());
+  }
+
+  const updatedConfig = {
+    ...config,
+    headers,
+  };
+
+  const response = await originalFetch(resource, updatedConfig);
   if (response.status === 401) {
-    const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request).url;
+    const url = typeof resource === 'string' ? resource : (resource as Request).url;
     if (url.includes('/api/auth/refresh') || url.includes('/api/auth/logout') || url.includes('/api/auth/magic-login')) {
        return response;
     }
@@ -19,10 +41,8 @@ window.fetch = async (...args) => {
     try {
       const refreshRes = await originalFetch('/api/auth/refresh', { method: 'POST' });
       if (refreshRes.ok) {
-        // Refresh succeeded, retry original request
-        return await originalFetch(...args);
+        return await originalFetch(resource, updatedConfig);
       } else {
-        // Refresh failed
         window.dispatchEvent(new Event('auth-failed'));
       }
     } catch (e) {

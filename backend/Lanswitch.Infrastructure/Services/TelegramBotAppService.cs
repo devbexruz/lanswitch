@@ -13,6 +13,8 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using System.Linq;
 using System;
+using Lanswitch.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lanswitch.Infrastructure.Services;
 
@@ -79,6 +81,12 @@ public class TelegramBotAppService : ITelegramBotAppService
 
     public async Task HandleUpdateAsync(Update update)
     {
+        if (update.Type == UpdateType.MyChatMember && update.MyChatMember != null)
+        {
+            await HandleMyChatMemberAsync(update.MyChatMember);
+            return;
+        }
+
         if (update.Type == UpdateType.CallbackQuery)
         {
             await HandleCallbackQueryAsync(update.CallbackQuery!);
@@ -91,11 +99,97 @@ public class TelegramBotAppService : ITelegramBotAppService
         var user = await GetOrCreateUserAsync(message.From);
         var state = _stateManager.GetState(chatId);
 
+        // O'quvchi 3-tur multimedia topshiriq yuborganda
+        if (state.CurrentStep == AdminStep.WaitingMediaSubmission && state.Data.TryGetValue("ItemId", out var rawItemId))
+        {
+            long submissionItemId = Convert.ToInt64(rawItemId);
+            string fileId = "";
+            string fileType = "";
+            long fileSize = 0;
+
+            if (message.Voice != null)
+            {
+                fileId = message.Voice.FileId;
+                fileType = "voice";
+                fileSize = message.Voice.FileSize ?? 0;
+            }
+            else if (message.Video != null)
+            {
+                fileId = message.Video.FileId;
+                fileType = "video";
+                fileSize = message.Video.FileSize ?? 0;
+            }
+            else if (message.Audio != null)
+            {
+                fileId = message.Audio.FileId;
+                fileType = "audio";
+                fileSize = message.Audio.FileSize ?? 0;
+            }
+            else if (message.Photo != null && message.Photo.Length > 0)
+            {
+                var largest = message.Photo.OrderByDescending(p => p.FileSize).First();
+                fileId = largest.FileId;
+                fileType = "photo";
+                fileSize = largest.FileSize ?? 0;
+            }
+
+            if (!string.IsNullOrEmpty(fileId))
+            {
+                // Vaqtincha holatda saqlash
+                state.Data["PendingFileId"] = fileId;
+                state.Data["PendingFileType"] = fileType;
+                state.Data["PendingFileSize"] = fileSize.ToString();
+                _stateManager.SetState(chatId, state);
+
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var item = await db.AssignmentItems.FindAsync(submissionItemId);
+                var itemTitle = item?.Title ?? "Topshiriq";
+
+                string typeIcon = fileType switch
+                {
+                    "video" => "🎬 Video",
+                    "voice" => "🎙️ Ovozli xabar",
+                    "audio" => "🎵 Audio fayl",
+                    _ => "🖼️ Fotosurat"
+                };
+
+                double sizeMb = fileSize / 1024.0 / 1024.0;
+                string sizeStr = sizeMb >= 1.0 ? $"{sizeMb:0.1} MB" : $"{fileSize / 1024} KB";
+
+                var confirmKeyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("🚀 Yuklash va topshirish", $"confirm_sub_{submissionItemId}"),
+                        InlineKeyboardButton.WithCallbackData("🗑️ O'chirish / Bekor qilish", $"cancel_sub_{submissionItemId}")
+                    }
+                });
+
+                await _botClient.SendMessage(
+                    chatId,
+                    $"📥 <b>Fayl qabul qilindi!</b>\n\n" +
+                    $"📌 <b>Topshiriq:</b> {itemTitle}\n" +
+                    $"📁 <b>Turi:</b> {typeIcon}\n" +
+                    $"📊 <b>Hajmi:</b> {sizeStr}\n\n" +
+                    $"<i>Topshiriqni o'qituvchiga tekshirish uchun yuklaysizmi?</i>",
+                    parseMode: ParseMode.Html,
+                    replyMarkup: confirmKeyboard);
+                return;
+            }
+        }
+
         if (message.Type == MessageType.Text && message.Text != null)
         {
             if (message.Text.StartsWith("/start"))
             {
-                await HandleStartAsync(chatId, user, message.Text);
+                if (message.Chat.Type == ChatType.Group || message.Chat.Type == ChatType.Supergroup)
+                {
+                    await HandleGroupStartAsync(chatId, message.Chat.Title ?? "Telegram Group", user, message.From);
+                    return;
+                }
+
+                await HandleStartAsync(chatId, user, message.Text, message.From);
                 return;
             }
             if (message.Text.StartsWith("/make_me_admin"))
@@ -120,48 +214,453 @@ public class TelegramBotAppService : ITelegramBotAppService
         }
     }
 
-    private async Task HandleStartAsync(long chatId, Lanswitch.Domain.Entities.User user, string messageText)
+    private async Task HandleStartAsync(long chatId, Lanswitch.Domain.Entities.User user, string messageText, Telegram.Bot.Types.User? fromUser)
     {
         var parts = messageText.Split(' ');
-        if (parts.Length > 1 && user.IsAdmin)
+        if (parts.Length > 1)
         {
             var payload = parts[1];
-            if (payload.StartsWith("upload_film_"))
+
+            // 3-tur: O'quvchi "Yuborish" tugmasini bosib kelganda
+            if (payload.StartsWith("item_"))
             {
-                if (long.TryParse(payload.Replace("upload_film_", ""), out var mediaId))
+                if (long.TryParse(payload.Replace("item_", ""), out var itemId))
                 {
-                    var state = new AdminState { CurrentStep = AdminStep.UploadFilmVideo };
-                    state.Data["TargetId"] = mediaId;
-                    _stateManager.SetState(chatId, state);
-                    await _botClient.SendMessage(chatId, $"🎬 Kino (ID: {mediaId}) uchun videoni yuboring:");
-                    return;
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var item = await db.AssignmentItems.Include(i => i.Assignment).FirstOrDefaultAsync(i => i.Id == itemId);
+                    if (item != null)
+                    {
+                        var state = new AdminState { CurrentStep = AdminStep.WaitingMediaSubmission };
+                        state.Data["ItemId"] = itemId;
+                        _stateManager.SetState(chatId, state);
+
+                        var text = $"📌 <b>Topshiriq:</b> {item.Title}\n" +
+                                   $"📝 <b>Yo'riqnoma:</b> {item.Instructions ?? "Javobingizni audio, video yoki rasm sifatida yuboring"}\n\n" +
+                                   $"👇 <i>Iltimos, ushbu topshiriq uchun javobingizni (voice, video yoki rasm) shu yerga yuboring:</i>";
+
+                        await _botClient.SendMessage(chatId, text, parseMode: ParseMode.Html);
+                        return;
+                    }
                 }
             }
-            else if (payload.StartsWith("upload_episode_"))
+
+            // Topshiriq media faylini botda ko'rish
+            if (payload.StartsWith("view_att_"))
             {
-                if (long.TryParse(payload.Replace("upload_episode_", ""), out var epId))
+                if (long.TryParse(payload.Replace("view_att_", ""), out var attId))
                 {
-                    var state = new AdminState { CurrentStep = AdminStep.UploadEpisodeVideo };
-                    state.Data["TargetId"] = epId;
-                    _stateManager.SetState(chatId, state);
-                    await _botClient.SendMessage(chatId, $"📂 Epizod (ID: {epId}) uchun videoni yuboring:");
-                    return;
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var att = await db.ItemSubmissionAttachments
+                        .Include(a => a.ItemSubmission).ThenInclude(s => s.AssignmentItem)
+                        .Include(a => a.ItemSubmission).ThenInclude(s => s.Student)
+                        .FirstOrDefaultAsync(a => a.Id == attId);
+
+                    if (att != null)
+                    {
+                        var sub = att.ItemSubmission;
+                        var item = sub.AssignmentItem;
+                        var caption = $"📌 <b>Topshiriq:</b> {item.Title}\n👤 <b>Talaba:</b> {sub.Student.FullName}";
+
+                        var keyboardList = new List<InlineKeyboardButton[]>();
+                        if (user.IsAdmin)
+                        {
+                            keyboardList.Add(new[]
+                            {
+                                InlineKeyboardButton.WithCallbackData("✅ 1 Bajarildi", $"grade_sub_{sub.Id}_1"),
+                                InlineKeyboardButton.WithCallbackData("❌ 0 Jarima", $"grade_sub_{sub.Id}_0"),
+                                InlineKeyboardButton.WithCallbackData("⚠️ 2 Jarima", $"grade_sub_{sub.Id}_2")
+                            });
+                        }
+
+                        string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+                        var attTmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+                        keyboardList.Add(new[]
+                        {
+                            InlineKeyboardButton.WithWebApp("📱 Mini App da ochish", new WebAppInfo { Url = $"{attTmaUrl}?user_id={user.Id}" })
+                        });
+
+                        var replyKb = new InlineKeyboardMarkup(keyboardList);
+
+                        try
+                        {
+                            if (att.FileType == "video")
+                            {
+                                await _botClient.SendVideo(chatId, new InputFileId(att.TelegramFileId), caption: caption, parseMode: ParseMode.Html, replyMarkup: replyKb);
+                                return;
+                            }
+                            else if (att.FileType == "voice")
+                            {
+                                await _botClient.SendVoice(chatId, new InputFileId(att.TelegramFileId), caption: caption, parseMode: ParseMode.Html, replyMarkup: replyKb);
+                                return;
+                            }
+                            else if (att.FileType == "audio")
+                            {
+                                await _botClient.SendAudio(chatId, new InputFileId(att.TelegramFileId), caption: caption, parseMode: ParseMode.Html, replyMarkup: replyKb);
+                                return;
+                            }
+                            else if (att.FileType == "photo")
+                            {
+                                await _botClient.SendPhoto(chatId, new InputFileId(att.TelegramFileId), caption: caption, parseMode: ParseMode.Html, replyMarkup: replyKb);
+                                return;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            await _botClient.SendMessage(chatId, $"❌ Faylni yuborishda xatolik: {ex.Message}");
+                            return;
+                        }
+                    }
                 }
+            }
+
+            // Guruh havolasi orqali /start bosilganda (masalan: https://t.me/bot?start=group_12)
+            if (payload.StartsWith("group_"))
+            {
+                if (long.TryParse(payload.Replace("group_", ""), out var targetGroupId))
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var group = await db.TelegramGroups.FirstOrDefaultAsync(g => g.Id == targetGroupId && g.IsActive);
+                    if (group != null)
+                    {
+                        var exists = await db.GroupMembers.AnyAsync(gm => gm.GroupId == targetGroupId && gm.StudentId == user.Id);
+                        if (!exists)
+                        {
+                            db.GroupMembers.Add(new GroupMember
+                            {
+                                GroupId = targetGroupId,
+                                StudentId = user.Id,
+                                IsActive = true,
+                                JoinedAt = DateTime.UtcNow
+                            });
+                            await db.SaveChangesAsync();
+                        }
+                    }
+                }
+            }
+
+            if (user.IsAdmin)
+            {
+                if (payload.StartsWith("upload_film_"))
+                {
+                    if (long.TryParse(payload.Replace("upload_film_", ""), out var mediaId))
+                    {
+                        var state = new AdminState { CurrentStep = AdminStep.UploadFilmVideo };
+                        state.Data["TargetId"] = mediaId;
+                        _stateManager.SetState(chatId, state);
+                        await _botClient.SendMessage(chatId, $"🎬 Kino (ID: {mediaId}) uchun videoni yuboring:");
+                        return;
+                    }
+                }
+                else if (payload.StartsWith("upload_episode_"))
+                {
+                    if (long.TryParse(payload.Replace("upload_episode_", ""), out var epId))
+                    {
+                        var state = new AdminState { CurrentStep = AdminStep.UploadEpisodeVideo };
+                        state.Data["TargetId"] = epId;
+                        _stateManager.SetState(chatId, state);
+                        await _botClient.SendMessage(chatId, $"📂 Epizod (ID: {epId}) uchun videoni yuboring:");
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Foydalanuvchi avatar rasmini dinamik aniqlash
+        try
+        {
+            if (fromUser != null)
+            {
+                var photos = await _botClient.GetUserProfilePhotos(fromUser.Id, limit: 1);
+                if (photos.TotalCount > 0 && photos.Photos.Length > 0 && photos.Photos[0].Length > 0)
+                {
+                    var file = await _botClient.GetFile(photos.Photos[0][0].FileId);
+                    var botToken = _configuration["BotConfiguration:BotToken"];
+                    user.AvatarUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
+                    _userRepository.Update(user);
+                }
+            }
+        }
+        catch { }
+
+        // O'quvchini Telegram guruhlarga a'zoligini tekshirib sinxronlash
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            if (fromUser != null)
+            {
+                var activeGroups = await db.TelegramGroups.Where(g => g.IsActive).ToListAsync();
+                foreach (var g in activeGroups)
+                {
+                    try
+                    {
+                        var member = await _botClient.GetChatMember(g.TelegramChatId, fromUser.Id);
+                        if (member.Status == ChatMemberStatus.Member || member.Status == ChatMemberStatus.Administrator || member.Status == ChatMemberStatus.Creator)
+                        {
+                            var exists = await db.GroupMembers.AnyAsync(gm => gm.GroupId == g.Id && gm.StudentId == user.Id);
+                            if (!exists)
+                            {
+                                db.GroupMembers.Add(new GroupMember { GroupId = g.Id, StudentId = user.Id, IsActive = true, JoinedAt = DateTime.UtcNow });
+                            }
+                            // Agar a'zo oldin o'qituvchi tomonidan tizimdan o'chirilgan bo'lsa (IsActive == false), start bosganda avtomatik faollashtirilmaydi
+                        }
+                    }
+                    catch { }
+                }
+                await db.SaveChangesAsync();
             }
         }
 
         user.LoginToken = Guid.NewGuid().ToString("N");
         user.LoginTokenExpiry = DateTime.UtcNow.AddMinutes(10);
         _userRepository.Update(user);
-        string frontend_host = _configuration.GetValue<string>("Frontend:Host", "example.uz");
+
+        string frontend_host = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
         var loginUrl = $"https://{frontend_host}/api/auth/redirect?token={user.LoginToken}";
-        var keyboard = new InlineKeyboardMarkup(
-            InlineKeyboardButton.WithUrl("Tizimga kirish 🚀", loginUrl)
-        );
+        var tmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontend_host}/tma";
+        var fullTmaUrl = $"{tmaUrl}?user_id={user.Id}&telegram_id={user.TelegramId}";
+
+        var keyboard = new InlineKeyboardMarkup(new[]
+        {
+            new[] { InlineKeyboardButton.WithWebApp("📱 Lanswitch Mini App", new Telegram.Bot.Types.WebAppInfo { Url = fullTmaUrl }) },
+            new[] { InlineKeyboardButton.WithUrl("Tizimga kirish (Web) 🚀", loginUrl) }
+        });
 
         await _botClient.SendMessage(chatId, 
-            "Assalomu alaykum! LanSwitch tizimiga xush kelibsiz.\n\nSaytga kirish uchun quyidagi tugmani bosing (yoki havolaga kiring):", 
+            $"Assalomu alaykum, <b>{user.FullName}</b>!\n\nLanswitch ta'lim platformasiga xush kelibsiz.\nDarslar, so'zlar va uyga vazifalaringizni ko'rish uchun quyidagi tugmani bosing 👇", 
+            parseMode: ParseMode.Html,
             replyMarkup: keyboard);
+    }
+
+    private async Task HandleGroupStartAsync(long chatId, string title, Lanswitch.Domain.Entities.User user, Telegram.Bot.Types.User? fromUser)
+    {
+        if (fromUser == null) return;
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        try
+        {
+            var administrators = await _botClient.GetChatAdministrators(chatId);
+            var callerIsAdmin = administrators.Any(a => a.User.Id == fromUser.Id);
+
+            if (!callerIsAdmin)
+            {
+                await _botClient.SendMessage(
+                    chatId,
+                    "❌ <b>Botni faqat guruh egasi yoki administratorlari faollashtirishi mumkin.</b>",
+                    parseMode: ParseMode.Html);
+                return;
+            }
+
+            var creator = administrators.FirstOrDefault(a => a.Status == ChatMemberStatus.Creator) 
+                          ?? administrators.FirstOrDefault(a => a.User.Id == fromUser.Id);
+
+            if (creator == null) return;
+
+            var ownerTgId = creator.User.Id.ToString();
+            var ownerUser = await db.Users.FirstOrDefaultAsync(u => u.TelegramId == ownerTgId);
+            if (ownerUser == null)
+            {
+                ownerUser = new Lanswitch.Domain.Entities.User
+                {
+                    TelegramId = ownerTgId,
+                    FullName = $"{creator.User.FirstName} {creator.User.LastName}".Trim(),
+                    Username = creator.User.Username,
+                    Role = "Teacher",
+                    NativeLanguageId = 1
+                };
+                db.Users.Add(ownerUser);
+                await db.SaveChangesAsync();
+            }
+            else if (ownerUser.Role != "Teacher" && !ownerUser.IsAdmin)
+            {
+                ownerUser.Role = "Teacher";
+                await db.SaveChangesAsync();
+            }
+
+            var group = await db.TelegramGroups.FirstOrDefaultAsync(g => g.TelegramChatId == chatId);
+            if (group == null)
+            {
+                group = new TelegramGroup
+                {
+                    TelegramChatId = chatId,
+                    Title = title,
+                    OwnerId = ownerUser.Id,
+                    IsActive = true
+                };
+                db.TelegramGroups.Add(group);
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                group.Title = title;
+                group.OwnerId = ownerUser.Id;
+                group.IsActive = true;
+                await db.SaveChangesAsync();
+            }
+
+            foreach (var admin in administrators)
+            {
+                if (admin.Status == ChatMemberStatus.Creator) continue;
+                var adminTgId = admin.User.Id.ToString();
+                var adminUser = await db.Users.FirstOrDefaultAsync(u => u.TelegramId == adminTgId);
+                if (adminUser == null)
+                {
+                    adminUser = new Lanswitch.Domain.Entities.User
+                    {
+                        TelegramId = adminTgId,
+                        FullName = $"{admin.User.FirstName} {admin.User.LastName}".Trim(),
+                        Username = admin.User.Username,
+                        Role = "Teacher",
+                        NativeLanguageId = 1
+                    };
+                    db.Users.Add(adminUser);
+                    await db.SaveChangesAsync();
+                }
+
+                var groupAdmin = await db.GroupAdmins.FirstOrDefaultAsync(ga => ga.GroupId == group.Id && ga.UserId == adminUser.Id);
+                if (groupAdmin == null)
+                {
+                    db.GroupAdmins.Add(new GroupAdmin
+                    {
+                        GroupId = group.Id,
+                        UserId = adminUser.Id,
+                        IsOwner = false,
+                        CanCreateHomework = true,
+                        CanReviewHomework = true,
+                        CanManageMembers = true
+                    });
+                }
+            }
+            await db.SaveChangesAsync();
+
+            var me = await _botClient.GetMe();
+            var botUsername = me.Username ?? "lanswitchbot";
+            string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+            var webUrl = $"https://{frontendHost}/teacher";
+
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithUrl("🖥 O'qituvchi Web Paneli", webUrl) },
+                new[] { InlineKeyboardButton.WithUrl("📱 Botga /start bosish", $"https://t.me/{botUsername}?start=group_{group.Id}") }
+            });
+
+            var text = $"✅ <b>Guruh muvaffaqiyatli Lanswitch tizimiga ulandi!</b>\n\n" +
+                       $"📚 <b>Guruh:</b> {title}\n" +
+                       $"👑 <b>O'qituvchi:</b> {ownerUser.FullName}\n\n" +
+                       $"👥 <i>O'quvchilar darslar va uyga vazifalarni qabul qilish uchun quyidagi tugma orqali botga /start bosishlari lozim 👇</i>";
+
+            await _botClient.SendMessage(chatId, text, parseMode: ParseMode.Html, replyMarkup: keyboard);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Group start error: {ex.Message}");
+        }
+    }
+
+    private async Task HandleMyChatMemberAsync(ChatMemberUpdated myChatMember)
+    {
+        var chatId = myChatMember.Chat.Id;
+        var title = myChatMember.Chat.Title ?? "Telegram Group";
+        var status = myChatMember.NewChatMember.Status;
+
+        if (status == ChatMemberStatus.Administrator || status == ChatMemberStatus.Member)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            try
+            {
+                var administrators = await _botClient.GetChatAdministrators(chatId);
+                var creator = administrators.FirstOrDefault(a => a.Status == ChatMemberStatus.Creator);
+                if (creator == null) return;
+
+                var ownerTelegramId = creator.User.Id.ToString();
+                var ownerUser = await db.Users.FirstOrDefaultAsync(u => u.TelegramId == ownerTelegramId);
+                if (ownerUser == null)
+                {
+                    ownerUser = new Lanswitch.Domain.Entities.User
+                    {
+                        TelegramId = ownerTelegramId,
+                        FullName = $"{creator.User.FirstName} {creator.User.LastName}".Trim(),
+                        Username = creator.User.Username,
+                        Role = "Teacher",
+                        NativeLanguageId = 1
+                    };
+                    db.Users.Add(ownerUser);
+                    await db.SaveChangesAsync();
+                }
+                else if (ownerUser.Role != "Teacher" && !ownerUser.IsAdmin)
+                {
+                    ownerUser.Role = "Teacher";
+                    await db.SaveChangesAsync();
+                }
+
+                var group = await db.TelegramGroups.FirstOrDefaultAsync(g => g.TelegramChatId == chatId);
+                if (group == null)
+                {
+                    group = new TelegramGroup
+                    {
+                        TelegramChatId = chatId,
+                        Title = title,
+                        OwnerId = ownerUser.Id,
+                        IsActive = true
+                    };
+                    db.TelegramGroups.Add(group);
+                    await db.SaveChangesAsync();
+                }
+                else
+                {
+                    group.Title = title;
+                    group.OwnerId = ownerUser.Id;
+                    group.IsActive = true;
+                    await db.SaveChangesAsync();
+                }
+
+                // Guruh adminlarini ro'yxatga olish
+                foreach (var admin in administrators)
+                {
+                    if (admin.Status == ChatMemberStatus.Creator) continue;
+                    var adminTgId = admin.User.Id.ToString();
+                    var adminUser = await db.Users.FirstOrDefaultAsync(u => u.TelegramId == adminTgId);
+                    if (adminUser == null)
+                    {
+                        adminUser = new Lanswitch.Domain.Entities.User
+                        {
+                            TelegramId = adminTgId,
+                            FullName = $"{admin.User.FirstName} {admin.User.LastName}".Trim(),
+                            Username = admin.User.Username,
+                            Role = "Teacher",
+                            NativeLanguageId = 1
+                        };
+                        db.Users.Add(adminUser);
+                        await db.SaveChangesAsync();
+                    }
+
+                    var groupAdmin = await db.GroupAdmins.FirstOrDefaultAsync(ga => ga.GroupId == group.Id && ga.UserId == adminUser.Id);
+                    if (groupAdmin == null)
+                    {
+                        db.GroupAdmins.Add(new GroupAdmin
+                        {
+                            GroupId = group.Id,
+                            UserId = adminUser.Id,
+                            IsOwner = false,
+                            CanCreateHomework = true,
+                            CanReviewHomework = true,
+                            CanManageMembers = true
+                        });
+                    }
+                }
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Group sync error: {ex.Message}");
+            }
+        }
     }
 
     private async Task ShowAdminMenuAsync(long chatId)
@@ -192,6 +691,103 @@ public class TelegramBotAppService : ITelegramBotAppService
         var data = callbackQuery.Data;
         
         var user = await GetOrCreateUserAsync(callbackQuery.From);
+
+        // 1. O'quvchi tomonidan faylni tasdiqlash yoki bekor qilish
+        if (data != null && data.StartsWith("confirm_sub_"))
+        {
+            if (long.TryParse(data.Replace("confirm_sub_", ""), out var itemId))
+            {
+                var state = _stateManager.GetState(chatId);
+                if (state.Data.TryGetValue("PendingFileId", out var rawFileId) &&
+                    state.Data.TryGetValue("PendingFileType", out var rawFileType))
+                {
+                    string fileId = rawFileId?.ToString() ?? "";
+                    string fileType = rawFileType?.ToString() ?? "";
+                    long fileSize = 0;
+                    if (state.Data.TryGetValue("PendingFileSize", out var rawFileSize))
+                    {
+                        long.TryParse(rawFileSize?.ToString() ?? "0", out fileSize);
+                    }
+
+                    using var scope = _scopeFactory.CreateScope();
+                    var assignService = scope.ServiceProvider.GetRequiredService<IAssignmentService>();
+
+                    await assignService.SubmitMediaItemAsync(user.Id, itemId, new List<AttachmentDto>
+                    {
+                        new AttachmentDto
+                        {
+                            TelegramFileId = fileId,
+                            FileType = fileType,
+                            FileSizeBytes = fileSize
+                        }
+                    });
+
+                    _stateManager.ClearState(chatId);
+
+                    string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+                    var tmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+                    var backKeyboard = new InlineKeyboardMarkup(new[]
+                    {
+                        new[] { InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new WebAppInfo { Url = $"{tmaUrl}?user_id={user.Id}" }) }
+                    });
+
+                    await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Topshirig'ingiz qabul qilindi!");
+                    await _botClient.EditMessageText(
+                        chatId,
+                        callbackQuery.Message.MessageId,
+                        "✅ <b>Topshirig'ingiz muvaffaqiyatli qabul qilindi va yuklandi!</b>\n\nUstozingiz tekshirib baholaganida sizga xabar boradi.",
+                        parseMode: ParseMode.Html,
+                        replyMarkup: backKeyboard);
+                    return;
+                }
+            }
+        }
+        else if (data != null && data.StartsWith("cancel_sub_"))
+        {
+            _stateManager.ClearState(chatId);
+            await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Fayl bekor qilindi");
+            await _botClient.EditMessageText(
+                chatId,
+                callbackQuery.Message.MessageId,
+                "🗑️ <b>Fayl bekor qilindi.</b>\n\nYangi audio, video yoki rasm yuborishingiz mumkin:",
+                parseMode: ParseMode.Html);
+            return;
+        }
+
+        // 2. O'qituvchi tomonidan botda baholash (grade_sub_{subId}_{status})
+        if (data != null && data.StartsWith("grade_sub_"))
+        {
+            var parts = data.Split('_');
+            if (parts.Length == 4 && long.TryParse(parts[2], out var subId) && int.TryParse(parts[3], out var status))
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var assignService = scope.ServiceProvider.GetRequiredService<IAssignmentService>();
+                var ok = await assignService.GradeItemSubmissionAsync(subId, user.Id, new GradeSubmissionDto { Status = status, Comment = "Telegram bot orqali baholandi" });
+                if (ok)
+                {
+                    string statusIcon = status switch
+                    {
+                        1 => "✅ 1 Bajarildi",
+                        0 => "❌ 0 Jarima",
+                        2 => "⚠️ 2 Jarima Bajarildi",
+                        _ => "Tekshirildi"
+                    };
+
+                    await _botClient.AnswerCallbackQuery(callbackQuery.Id, $"Baholandi: {statusIcon}", showAlert: true);
+                    try
+                    {
+                        await _botClient.EditMessageCaption(
+                            chatId,
+                            callbackQuery.Message.MessageId,
+                            caption: (callbackQuery.Message.Caption ?? "") + $"\n\n🎯 <b>O'qituvchi bahosi:</b> {statusIcon}",
+                            parseMode: ParseMode.Html);
+                    }
+                    catch {}
+                    return;
+                }
+            }
+        }
+
         if (!user.IsAdmin)
         {
             await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Siz admin emassiz!", showAlert: true);

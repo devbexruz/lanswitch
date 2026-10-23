@@ -103,17 +103,33 @@ namespace Lanswitch.Api.Extensions
 
             if (!string.IsNullOrWhiteSpace(webhookUrl))
             {
-                while(true){
+                const int maxRetries = 3;
+                var retryCount = 0;
+                var configured = false;
+
+                while (retryCount < maxRetries)
+                {
                     try
                     {
                         await botClient.SetWebhook(url: webhookUrl, dropPendingUpdates: true);
                         logger.LogInformation("✅ Webhook configured successfully!");
+                        configured = true;
                         break;
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, "❌ Webhook configuration failed");
+                        retryCount++;
+                        logger.LogError(ex, "❌ Webhook configuration failed (Attempt {Attempt}/{MaxRetries})", retryCount, maxRetries);
+                        if (retryCount < maxRetries)
+                        {
+                            await Task.Delay(2000);
+                        }
                     }
+                }
+
+                if (!configured)
+                {
+                    logger.LogWarning("⚠️ Could not configure Telegram webhook. The server will continue running. Please check if your tunnel domain is valid and reachable.");
                 }
             }
             else

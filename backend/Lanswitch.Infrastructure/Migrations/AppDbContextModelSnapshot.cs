@@ -80,6 +80,274 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.ToTable("AppNotifications");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Assignment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("Deadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("GroupId");
+
+                    b.ToTable("Assignments");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AssignmentItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AssignmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Instructions")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("TargetUnitId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("TargetUnitId");
+
+                    b.ToTable("AssignmentItems");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AssignmentItemSubmission", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AssignmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("AssignmentItemId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ReviewedById")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("StudentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("AssignmentItemId");
+
+                    b.HasIndex("ReviewedById");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("AssignmentItemSubmissions");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Book", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CoverUrl")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Books");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookPart", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BookId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PartNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId");
+
+                    b.ToTable("BookParts");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookUnit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("PartId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("UnitNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartId");
+
+                    b.ToTable("BookUnits");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookWord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AudioTelegramFileId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExampleSentence")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Ipa")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PartOfSpeech")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TranslationUz")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("UnitId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("BookWords");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Category", b =>
                 {
                     b.Property<long>("Id")
@@ -339,6 +607,126 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.ToTable("GrammarContexts");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.GroupAdmin", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("CanCreateHomework")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanManageMembers")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanReviewHomework")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsOwner")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("GroupId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("GroupAdmins");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.GroupMember", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("StudentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("GroupId", "StudentId")
+                        .IsUnique();
+
+                    b.ToTable("GroupMembers");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.ItemSubmissionAttachment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("ItemSubmissionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TelegramDeepLink")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TelegramFileId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("TelegramMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemSubmissionId");
+
+                    b.ToTable("ItemSubmissionAttachments");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Language", b =>
                 {
                     b.Property<long>("Id")
@@ -560,6 +948,43 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.ToTable("SubtitleWords");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.TelegramGroup", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("OwnerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TelegramChatId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("TelegramChatId")
+                        .IsUnique();
+
+                    b.ToTable("TelegramGroups");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.User", b =>
                 {
                     b.Property<long>("Id")
@@ -567,6 +992,9 @@ namespace Lanswitch.Infrastructure.Migrations
                         .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AvatarUrl")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -590,12 +1018,19 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Property<string>("ProfileImage")
                         .HasColumnType("text");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("TelegramId")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -860,6 +1295,110 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Assignment", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.User", "Creator")
+                        .WithMany("CreatedAssignments")
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.TelegramGroup", "Group")
+                        .WithMany("Assignments")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AssignmentItem", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Assignment", "Assignment")
+                        .WithMany("Items")
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.BookUnit", "TargetUnit")
+                        .WithMany("AssignmentItems")
+                        .HasForeignKey("TargetUnitId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Assignment");
+
+                    b.Navigation("TargetUnit");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AssignmentItemSubmission", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Assignment", "Assignment")
+                        .WithMany("Submissions")
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.AssignmentItem", "AssignmentItem")
+                        .WithMany("Submissions")
+                        .HasForeignKey("AssignmentItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "Student")
+                        .WithMany("Submissions")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Assignment");
+
+                    b.Navigation("AssignmentItem");
+
+                    b.Navigation("ReviewedBy");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookPart", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.Book", "Book")
+                        .WithMany("Parts")
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Book");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookUnit", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.BookPart", "Part")
+                        .WithMany("Units")
+                        .HasForeignKey("PartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Part");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookWord", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.BookUnit", "Unit")
+                        .WithMany("Words")
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Unit");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Comment", b =>
                 {
                     b.HasOne("Lanswitch.Domain.Entities.Media", "Media")
@@ -962,6 +1501,55 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Language");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.GroupAdmin", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.TelegramGroup", "Group")
+                        .WithMany("Admins")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "User")
+                        .WithMany("GroupAdmins")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.GroupMember", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.TelegramGroup", "Group")
+                        .WithMany("Members")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lanswitch.Domain.Entities.User", "Student")
+                        .WithMany("GroupMembers")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.ItemSubmissionAttachment", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.AssignmentItemSubmission", "ItemSubmission")
+                        .WithMany("Attachments")
+                        .HasForeignKey("ItemSubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ItemSubmission");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.LearningLanguage", b =>
                 {
                     b.HasOne("Lanswitch.Domain.Entities.Language", "Language")
@@ -1051,6 +1639,17 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Subtitle");
 
                     b.Navigation("Word");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.TelegramGroup", b =>
+                {
+                    b.HasOne("Lanswitch.Domain.Entities.User", "Owner")
+                        .WithMany("OwnedGroups")
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("Lanswitch.Domain.Entities.User", b =>
@@ -1168,6 +1767,40 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("Word");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Assignment", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Submissions");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AssignmentItem", b =>
+                {
+                    b.Navigation("Submissions");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.AssignmentItemSubmission", b =>
+                {
+                    b.Navigation("Attachments");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.Book", b =>
+                {
+                    b.Navigation("Parts");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookPart", b =>
+                {
+                    b.Navigation("Units");
+                });
+
+            modelBuilder.Entity("Lanswitch.Domain.Entities.BookUnit", b =>
+                {
+                    b.Navigation("AssignmentItems");
+
+                    b.Navigation("Words");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.Comment", b =>
                 {
                     b.Navigation("Likes");
@@ -1214,9 +1847,28 @@ namespace Lanswitch.Infrastructure.Migrations
                     b.Navigation("SubtitleWords");
                 });
 
+            modelBuilder.Entity("Lanswitch.Domain.Entities.TelegramGroup", b =>
+                {
+                    b.Navigation("Admins");
+
+                    b.Navigation("Assignments");
+
+                    b.Navigation("Members");
+                });
+
             modelBuilder.Entity("Lanswitch.Domain.Entities.User", b =>
                 {
+                    b.Navigation("CreatedAssignments");
+
+                    b.Navigation("GroupAdmins");
+
+                    b.Navigation("GroupMembers");
+
                     b.Navigation("LearningLanguages");
+
+                    b.Navigation("OwnedGroups");
+
+                    b.Navigation("Submissions");
 
                     b.Navigation("UserGrammars");
 

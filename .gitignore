@@ -1,2 +1,6 @@
 **/bin
 **/obj
+*.pem
+publish_release/
+cloudflared.log
+tools/

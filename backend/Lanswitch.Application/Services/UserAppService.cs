@@ -18,6 +18,11 @@ public class UserAppService : IUserAppService
         return await _userRepository.GetByIdAsync(id);
     }
 
+    public async Task<User?> GetByTelegramIdAsync(string telegramId)
+    {
+        return await _userRepository.GetByTelegramIdAsync(telegramId);
+    }
+
     public async Task<User> CreateUserAsync(User user)
     {
         await _userRepository.AddAsync(user);
@@ -33,5 +38,14 @@ public class UserAppService : IUserAppService
     {
         _userRepository.Update(user);
         return Task.CompletedTask;
+    }
+
+    public async Task<User?> UpdateUserRoleAsync(long userId, string role)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null) return null;
+        user.Role = role;
+        _userRepository.Update(user);
+        return user;
     }
 }

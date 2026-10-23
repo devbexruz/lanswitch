@@ -6,11 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    allowedHosts: [
-      'lanswitch.developerlogic.uz',
-      'demoweb.developerlogic.uz',
-      'localhost'
-    ],
+    host: '0.0.0.0',
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5273',

@@ -1,34 +1,53 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap');
 
 :root {
-  /* Core Palette */
-  --color-regal-navy: #0d3b66;
-  --color-cornsilk: #faf0ca;
-  --color-royal-gold: #f4d35e;
-  --color-sandy-brown: #ee964b;
-  --color-tomato: #f95738;
+  /* Ko'k va Oq Palitra (Blue & White Design System) */
+  --primary-blue: #2563EB;
+  --primary-blue-hover: #1D4ED8;
+  --primary-blue-light: #3B82F6;
+  --ice-blue-bg: #EFF6FF;
+  --ice-blue-card: #F8FAFC;
+  --sky-border: #DBEAFE;
+  --sky-border-hover: #BFDBFE;
+  --pure-white: #FFFFFF;
 
-  /* Theme Mapping */
-  --bg-primary: var(--color-regal-navy);
-  --bg-secondary: #082643; /* Darker variant of regal navy */
-  --bg-glass: rgba(255, 255, 255, 0.07);
-  --bg-glass-hover: rgba(255, 255, 255, 0.12);
+  /* Matn Ranglari (Navy & Slate) */
+  --text-navy: #0F172A;
+  --text-navy-secondary: #334155;
+  --text-muted: #64748B;
+  --text-light-blue: #60A5FA;
+
+  /* Status Ranglari */
+  --status-success: #10B981;
+  --status-success-bg: #ECFDF5;
+  --status-success-border: #A7F3D0;
   
-  --text-primary: var(--color-cornsilk);
-  --text-secondary: var(--color-sandy-brown);
-  
-  --accent-primary: var(--color-tomato);
-  --accent-secondary: var(--color-royal-gold);
-  --accent-gradient: linear-gradient(135deg, var(--color-tomato) 0%, var(--color-royal-gold) 100%);
-  
-  --border-glass: rgba(255, 255, 255, 0.12);
-  
-  --font-main: 'Inter', sans-serif;
+  --status-danger: #EF4444;
+  --status-danger-bg: #FEF2F2;
+  --status-danger-border: #FECACA;
+
+  --status-warning: #F59E0B;
+  --status-warning-bg: #FFFBEB;
+  --status-warning-border: #FDE68A;
+
+  /* Yumaloqlik (Radii) */
+  --radius-pill: 9999px;
+  --radius-card: 24px;
+  --radius-card-sm: 16px;
+  --radius-modal: 28px;
+
+  /* Katta UI O'lchamlari */
+  --btn-height-lg: 56px;
+  --btn-height-md: 48px;
+
+  /* Yumshoq Ko'k Soyalar */
+  --shadow-subtle: 0 4px 20px -2px rgba(37, 99, 235, 0.06);
+  --shadow-card: 0 10px 25px -4px rgba(37, 99, 235, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  --shadow-hover: 0 16px 32px -4px rgba(37, 99, 235, 0.14);
+  --shadow-modal: 0 24px 48px -12px rgba(15, 23, 42, 0.25);
+
+  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-display: 'Outfit', sans-serif;
-  
-  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -38,188 +57,227 @@
 }
 
 body {
-  background-color: var(--bg-primary);
+  background-color: var(--ice-blue-bg);
   background-image: 
-    radial-gradient(circle at 10% 20%, rgba(249, 87, 56, 0.12), transparent 30%),
-    radial-gradient(circle at 90% 80%, rgba(244, 211, 94, 0.1), transparent 30%),
-    radial-gradient(circle at 50% 50%, rgba(102, 155, 188, 0.08), transparent 40%),
-    linear-gradient(135deg, #0d3b66 0%, #061c33 100%);
+    radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.07), transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.06), transparent 40%);
   background-attachment: fixed;
-  color: var(--text-primary);
+  color: var(--text-navy);
   font-family: var(--font-main);
-  line-height: 1.6;
+  line-height: 1.5;
   min-height: 100vh;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Glassmorphism Utilities */
-.glass-panel {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+/* Katta Yumaloq Karta (Big Rounded Card) */
+.blue-card {
+  background: var(--pure-white);
+  border: 1.5px solid var(--sky-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-/* Typography */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
+.blue-card:hover {
+  border-color: var(--sky-border-hover);
+  box-shadow: var(--shadow-hover);
+}
+
+/* Katta Yumaloq Tugmalar (Big Rounded Buttons) */
+.btn-big-blue {
+  background: var(--primary-blue);
+  color: var(--pure-white);
+  border: none;
+  border-radius: var(--radius-pill);
+  min-height: var(--btn-height-lg);
+  padding: 0 28px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.2;
-}
-
-.text-gradient {
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Buttons */
-.btn {
+  font-family: var(--font-main);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
-  font-weight: 600;
-  font-family: var(--font-main);
+  gap: 10px;
   cursor: pointer;
-  transition: all var(--transition-normal);
-  border: none;
-  outline: none;
+  box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.35);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  user-select: none;
+}
+
+.btn-big-blue:hover {
+  background: var(--primary-blue-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -4px rgba(37, 99, 235, 0.45);
+}
+
+.btn-big-blue:active {
+  transform: translateY(0);
+}
+
+.btn-big-white {
+  background: var(--pure-white);
+  color: var(--primary-blue);
+  border: 2px solid var(--sky-border);
+  border-radius: var(--radius-pill);
+  min-height: var(--btn-height-lg);
+  padding: 0 28px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   text-decoration: none;
 }
 
-.btn-primary {
-  background: var(--accent-gradient);
-  color: white;
-  box-shadow: 0 4px 20px rgba(112, 0, 255, 0.4);
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 25px rgba(112, 0, 255, 0.6);
-}
-
-.btn-glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.btn-glass:hover {
-  background: rgba(255, 255, 255, 0.1);
+.btn-big-white:hover {
+  border-color: var(--primary-blue);
+  background: var(--ice-blue-bg);
   transform: translateY(-2px);
 }
 
-/* Animations */
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+/* Katta Kapsula Tablari (Big Pill Tabs) */
+.pill-tab {
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--pure-white);
+  border: 1.5px solid var(--sky-border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
-@keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(112, 0, 255, 0.4); }
-  70% { box-shadow: 0 0 0 20px rgba(112, 0, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(112, 0, 255, 0); }
+.pill-tab:hover {
+  border-color: var(--primary-blue-light);
+  color: var(--primary-blue);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+.pill-tab.active {
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: var(--pure-white);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+/* Status Nishonlari (Badges) */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0;
+.badge-status.success {
+  background: var(--status-success-bg);
+  color: var(--status-success);
+  border: 1px solid var(--status-success-border);
 }
 
-.delay-100 { animation-delay: 0.1s; }
-.delay-200 { animation-delay: 0.2s; }
-.delay-300 { animation-delay: 0.3s; }
-.delay-400 { animation-delay: 0.4s; }
+.badge-status.danger {
+  background: var(--status-danger-bg);
+  color: var(--status-danger);
+  border: 1px solid var(--status-danger-border);
+}
 
-/* Global layout */
-.app-container {
+.badge-status.warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+  border: 1px solid var(--status-warning-border);
+}
+
+.badge-status.info {
+  background: var(--ice-blue-bg);
+  color: var(--primary-blue);
+  border: 1px solid var(--sky-border);
+}
+
+/* Modal va Overlay */
+.blue-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
   display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
 }
 
-/* Custom Sleek Scrollbar */
+.blue-modal-content {
+  background: var(--pure-white);
+  border: 2px solid var(--sky-border);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-modal);
+  max-width: 520px;
+  width: 100%;
+  padding: 32px 28px;
+  animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Scrollbar dizayni */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary); 
-  border-radius: 4px;
+  background: var(--ice-blue-bg);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  background: #CBD5E1;
+  border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent);
+  background: #94A3B8;
 }
 
-/* Global Modal Styles */
-.modal-overlay, .auth-modal-overlay, .subtitle-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(10, 10, 20, 0.8);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-  animation: fadeIn 0.3s forwards ease-out;
+/* Responsive Desktop Sidebar & Mobile Bottom Nav */
+@media (min-width: 769px) {
+  .app-mobile-bottom-nav {
+    display: none !important;
+  }
+  .app-desktop-sidebar {
+    display: flex !important;
+  }
+  .app-page-wrapper {
+    margin-left: 260px !important;
+    width: calc(100% - 260px) !important;
+    max-width: none !important;
+  }
 }
 
-.modal-content, .auth-modal-content, .subtitle-modal-content {
-  background: rgba(20, 25, 45, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  padding: 40px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-  position: relative;
-  opacity: 1;
-  animation: modalSlideUp 0.4s forwards cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalSlideUp {
-  from { opacity: 0; transform: translateY(40px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: white;
+@media (max-width: 768px) {
+  .app-mobile-bottom-nav {
+    display: grid !important;
+  }
+  .app-desktop-sidebar {
+    display: none !important;
+  }
+  .app-page-wrapper {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
 }

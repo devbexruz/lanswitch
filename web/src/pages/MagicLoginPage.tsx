@@ -38,12 +38,21 @@ export default function MagicLoginPage() {
 
         if (response.ok) {
           setStatus('success');
-          setMessage('Muvaffaqiyatli kirdingiz! Sahifaga yo\'naltirilmoqdasiz...');
+          const userName = data.user?.fullName || 'Foydalanuvchi';
+          setMessage(`Muvaffaqiyatli kirdingiz, ${userName}! Sahifaga yo'naltirilmoqdasiz...`);
+          
+          if (data.user) {
+            localStorage.setItem('lanswitch_user', JSON.stringify(data.user));
+          }
+          if (data.accessToken) {
+            localStorage.setItem('lanswitch_token', data.accessToken);
+          }
           login();
           
+          const redirectTo = searchParams.get('redirect') || '/teacher';
           setTimeout(() => {
-            navigate('/');
-          }, 1500);
+            navigate(redirectTo);
+          }, 1200);
         } else {
           setStatus('error');
           setMessage(data.message || 'Token muddati tugagan yoki xato.');

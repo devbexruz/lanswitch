@@ -19,10 +19,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins(builder.Configuration["Frontend:Host"]!) // Frontend manzilingiz
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .AllowCredentials(); // Agar cookie yoki auth header bo'lsa shart
+              .AllowCredentials();
     });
 });
 

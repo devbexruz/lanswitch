@@ -7,6 +7,7 @@ interface User {
   fullName: string;
   profileImage?: string;
   nativeLanguageId: number;
+  role?: 'Student' | 'Teacher' | 'Admin' | string;
   isAdmin: boolean;
   createdAt: string;
 }
@@ -16,6 +17,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: () => void;
   logout: () => void;
+  setRole: (role: 'Student' | 'Teacher') => Promise<void>;
   showAuthModal: boolean;
   setShowAuthModal: (show: boolean) => void;
   requireAuth: (callback: () => void) => void;
@@ -25,24 +27,69 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('lanswitch_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   const checkAuth = async () => {
     try {
+      // 1. Agar Telegram WebApp yoki URL parametrlari bo'lsa, avtomatik kirish
+      const urlParams = new URLSearchParams(window.location.search);
+      const tg = (window as any).Telegram?.WebApp;
+      const tgUser = tg?.initDataUnsafe?.user;
+      const queryTgId = urlParams.get('telegram_id') || tgUser?.id?.toString();
+      const queryUserId = urlParams.get('user_id');
+
+      if (tgUser || queryTgId || queryUserId) {
+        try {
+          const autoRes = await fetch('/api/auth/telegram-auto-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId: queryTgId || tgUser?.id?.toString(),
+              userId: queryUserId ? parseInt(queryUserId, 10) : undefined,
+              firstName: tgUser?.first_name,
+              lastName: tgUser?.last_name,
+              username: tgUser?.username,
+              photoUrl: tgUser?.photo_url,
+              initData: tg?.initData
+            })
+          });
+          if (autoRes.ok) {
+            const data = await autoRes.json();
+            if (data.user) {
+              setUser(data.user);
+              localStorage.setItem('lanswitch_user', JSON.stringify(data.user));
+            }
+            if (data.accessToken) {
+              localStorage.setItem('lanswitch_token', data.accessToken);
+            }
+            return;
+          }
+        } catch (e) {
+          console.warn('Auto login error:', e);
+        }
+      }
+
+      // 2. Standart /api/users/me tekshirish
       const response = await fetch('/api/users/me');
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
-      } else {
+        localStorage.setItem('lanswitch_user', JSON.stringify(userData));
+      } else if (response.status === 401) {
         setUser(null);
+        localStorage.removeItem('lanswitch_user');
+        localStorage.removeItem('lanswitch_token');
       }
     } catch (e) {
       console.error('Failed to fetch user', e);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -51,6 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const handleAuthFailed = () => {
       setUser(null);
+      localStorage.removeItem('lanswitch_user');
+      localStorage.removeItem('lanswitch_token');
     };
     
     window.addEventListener('auth-failed', handleAuthFailed);
@@ -58,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async () => {
-    // Backend login succeed bo'lganda chaqiriladi
     await checkAuth();
   };
 
@@ -69,6 +117,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error(e);
     }
     setUser(null);
+    localStorage.removeItem('lanswitch_user');
+    localStorage.removeItem('lanswitch_token');
+  };
+
+  const setRole = async (newRole: 'Student' | 'Teacher') => {
+    try {
+      await fetch('/api/users/role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole, userId: user?.id })
+      });
+      if (user) {
+        const updated = { ...user, role: newRole };
+        setUser(updated);
+        localStorage.setItem('lanswitch_user', JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.error('Failed to update role', e);
+    }
   };
 
   const requireAuth = (callback: () => void) => {
@@ -85,12 +152,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         login,
         logout,
+        setRole,
         showAuthModal,
         setShowAuthModal,
         requireAuth,
         checkAuth
       }}>
-      {!isLoading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

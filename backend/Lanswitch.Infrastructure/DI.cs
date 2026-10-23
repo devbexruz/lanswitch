@@ -35,6 +35,9 @@ public static class ServiceCollectionExtensions
 
         // ==== Infrastructure Services ====
         services.AddScoped<IMTProtoClient, MTProtoClientService>();
+        services.AddScoped<IGroupService, GroupService>();
+        services.AddScoped<IAssignmentService, AssignmentService>();
+        services.AddScoped<IVocabularyService, VocabularyService>();
 
         return services;
     }
