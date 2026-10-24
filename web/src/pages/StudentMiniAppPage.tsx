@@ -841,8 +841,8 @@ export default function StudentMiniAppPage() {
       {/* 1. TOP HEADER                                            */}
       {/* ======================================================== */}
       <header className="app-topbar" style={{
-        background: 'var(--pure-white)',
-        borderBottom: '2px solid var(--sky-border)',
+        background: 'linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
         paddingTop: 'calc(14px + var(--safe-area-top, env(safe-area-inset-top, 0px)))',
         paddingBottom: '14px',
         paddingLeft: 'calc(16px + var(--safe-area-left, env(safe-area-inset-left, 0px)))',
@@ -853,7 +853,7 @@ export default function StudentMiniAppPage() {
         position: 'sticky',
         top: 0,
         zIndex: 40,
-        boxShadow: 'var(--shadow-subtle)'
+        boxShadow: '0 4px 16px rgba(37, 99, 235, 0.2)'
       }}>
         {/* Left: Group Switcher or Section Title */}
         {mainTab === 'homework' ? (
@@ -861,16 +861,16 @@ export default function StudentMiniAppPage() {
             onClick={() => setShowGroupDrawer(true)}
             title={selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
             style={{
-              background: 'var(--ice-blue-bg)',
-              border: '1.5px solid var(--sky-border)',
-              color: 'var(--text-navy)',
+              background: 'rgba(255, 255, 255, 0.18)',
+              border: '1.5px solid rgba(255, 255, 255, 0.28)',
+              color: '#FFFFFF',
               borderRadius: '16px',
               padding: '6px 12px 6px 8px',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
               cursor: 'pointer',
-              boxShadow: 'var(--shadow-subtle)',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
               maxWidth: '220px',
               minWidth: 0,
               flexShrink: 1,
@@ -882,24 +882,24 @@ export default function StudentMiniAppPage() {
               width: '32px',
               height: '32px',
               borderRadius: '10px',
-              background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1D4ED8 100%)',
-              color: '#fff',
+              background: '#FFFFFF',
+              color: 'var(--primary-blue)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)'
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
             }}>
               <Users size={16} strokeWidth={2.5} />
             </div>
             <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-              <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1 }}>
+              <div style={{ fontSize: '10px', fontWeight: 800, color: 'rgba(255, 255, 255, 0.85)', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1 }}>
                 Guruh
               </div>
               <div style={{
                 fontSize: '13px',
                 fontWeight: 900,
-                color: 'var(--text-navy)',
+                color: '#FFFFFF',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -909,17 +909,17 @@ export default function StudentMiniAppPage() {
                 {selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
               </div>
             </div>
-            <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+            <ChevronDown size={14} color="#FFFFFF" style={{ flexShrink: 0, opacity: 0.9 }} />
           </button>
         ) : mainTab === 'movies' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Film size={22} color="var(--primary-blue)" />
-            <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)' }}>Kinolar</span>
+            <Film size={22} color="#FFFFFF" />
+            <span style={{ fontSize: '18px', fontWeight: 900, color: '#FFFFFF' }}>Kinolar</span>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Library size={22} color="var(--primary-blue)" />
-            <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)' }}>Lug'atlarim</span>
+            <Library size={22} color="#FFFFFF" />
+            <span style={{ fontSize: '18px', fontWeight: 900, color: '#FFFFFF' }}>Lug'atlarim</span>
           </div>
         )}
 
@@ -931,14 +931,14 @@ export default function StudentMiniAppPage() {
               width: '38px',
               height: '38px',
               borderRadius: '50%',
-              background: isFullscreen ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
-              border: '1.5px solid var(--sky-border)',
-              color: 'var(--primary-blue)',
+              background: 'rgba(255, 255, 255, 0.18)',
+              border: '1.5px solid rgba(255, 255, 255, 0.28)',
+              color: '#FFFFFF',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              boxShadow: 'var(--shadow-subtle)',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
               transition: 'all 0.2s ease',
               flexShrink: 0
             }}

@@ -11,6 +11,50 @@ import { AuthProvider } from './context/AuthContext'
 function initTelegramAndSafeArea() {
   if (typeof window === 'undefined') return;
 
+  const APP_THEME_COLOR = '#2563EB'; // Brand Blue for Top App Bar
+  const BOTTOM_NAV_COLOR = '#FFFFFF'; // White for Bottom Navigation Bar
+  const APP_BG_COLOR = '#EFF6FF'; // Ice Blue for Page Background
+
+  // 1. Sync mobile browser meta theme-color in JS
+  try {
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.setAttribute('content', APP_THEME_COLOR);
+
+    let metaApple = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (!metaApple) {
+      metaApple = document.createElement('meta');
+      metaApple.setAttribute('name', 'apple-mobile-web-app-status-bar-style');
+      document.head.appendChild(metaApple);
+    }
+    metaApple.setAttribute('content', 'black-translucent');
+  } catch (e) {
+    console.warn('Meta tag update error:', e);
+  }
+
+  const applyColors = () => {
+    try {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) {
+        if (typeof tg.setHeaderColor === 'function') {
+          tg.setHeaderColor(APP_THEME_COLOR);
+        }
+        if (typeof tg.setBackgroundColor === 'function') {
+          tg.setBackgroundColor(APP_BG_COLOR);
+        }
+        if (typeof tg.setBottomBarColor === 'function') {
+          tg.setBottomBarColor(BOTTOM_NAV_COLOR);
+        }
+      }
+    } catch (e) {
+      console.warn('Telegram set colors warning:', e);
+    }
+  };
+
   const updateSafeArea = () => {
     try {
       const root = document.documentElement;
@@ -45,6 +89,8 @@ function initTelegramAndSafeArea() {
       root.style.setProperty('--safe-area-bottom', `max(${safeBottom}px, env(safe-area-inset-bottom, 0px))`);
       root.style.setProperty('--safe-area-left', `max(${safeLeft}px, env(safe-area-inset-left, 0px))`);
       root.style.setProperty('--safe-area-right', `max(${safeRight}px, env(safe-area-inset-right, 0px))`);
+
+      applyColors();
     } catch (e) {
       console.warn('Safe area update error:', e);
     }
@@ -62,16 +108,25 @@ function initTelegramAndSafeArea() {
         tg.disableVerticalSwipes();
       }
 
+      applyColors();
+
       tg.onEvent?.('safeAreaChanged', updateSafeArea);
       tg.onEvent?.('contentSafeAreaChanged', updateSafeArea);
-      tg.onEvent?.('fullscreenChanged', updateSafeArea);
-      tg.onEvent?.('viewportChanged', updateSafeArea);
+      tg.onEvent?.('fullscreenChanged', () => {
+        updateSafeArea();
+        applyColors();
+      });
+      tg.onEvent?.('viewportChanged', () => {
+        updateSafeArea();
+        applyColors();
+      });
     }
   } catch (e) {
     console.warn('Telegram WebApp init warning:', e);
   }
 
   updateSafeArea();
+  applyColors();
   window.addEventListener('resize', updateSafeArea);
   window.addEventListener('orientationchange', updateSafeArea);
 }
