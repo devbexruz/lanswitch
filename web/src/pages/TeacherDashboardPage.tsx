@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, openTelegramBotChat } from '../utils/api';
-import { autoFullscreenOnDesktop } from '../utils/telegram';
+import { autoFullscreenOnDesktop, toggleAppFullscreen } from '../utils/telegram';
 import type { 
   TeacherGroup, CreateAssignmentPayload, AssignmentSummary, 
   AssignmentReport, GroupMember, StudentTimelineAssignment,
@@ -199,56 +199,8 @@ export default function TeacherDashboardPage() {
     };
   }, []);
 
-  const toggleFullscreen = async () => {
-    const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : undefined;
-
-    // 1. Telegram WebApp Fullscreen (Mobile & Desktop Bot API 8.0+)
-    if (tg && (typeof tg.requestFullscreen === 'function' || typeof tg.exitFullscreen === 'function')) {
-      try {
-        if (tg.isFullscreen) {
-          tg.exitFullscreen?.();
-          setIsFullscreen(false);
-          return;
-        } else {
-          tg.requestFullscreen?.();
-          tg.expand?.();
-          setIsFullscreen(true);
-          return;
-        }
-      } catch (e) {
-        console.warn('Telegram WebApp fullscreen toggle error:', e);
-      }
-    }
-
-    // 2. Fallback to Telegram WebApp expand if available
-    if (tg && typeof tg.expand === 'function') {
-      try {
-        tg.expand();
-      } catch {}
-    }
-
-    // 3. HTML5 DOM Fullscreen API (Browser)
-    try {
-      const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
-      if (!isDomFs) {
-        const el = document.documentElement as any;
-        if (el.requestFullscreen) {
-          await el.requestFullscreen();
-        } else if (el.webkitRequestFullscreen) {
-          await el.webkitRequestFullscreen();
-        }
-        setIsFullscreen(true);
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        }
-        setIsFullscreen(false);
-      }
-    } catch (err) {
-      console.warn('DOM Fullscreen error:', err);
-    }
+  const toggleFullscreen = () => {
+    toggleAppFullscreen(isFullscreen, setIsFullscreen);
   };
 
   useEffect(() => {

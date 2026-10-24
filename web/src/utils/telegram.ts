@@ -59,3 +59,71 @@ export function autoFullscreenOnDesktop() {
     }, 180);
   }
 }
+
+/**
+ * Ekranni to'liq qoplash (Fullscreen) va kichiklashtirishni almashtirish (Toggle)
+ * - Telegram WebApp API (Mobile & Desktop Bot API 8.0+)
+ * - HTML5 DOM Fullscreen API (Desktopda butun kompyuter monitorini to'liq qamrab olish)
+ */
+export async function toggleAppFullscreen(
+  isFullscreen: boolean,
+  setIsFullscreen: (val: boolean) => void
+) {
+  if (typeof window === 'undefined') return;
+  const tg = (window as any).Telegram?.WebApp;
+  const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+  const isTgFs = Boolean(tg?.isFullscreen);
+  const currentlyFullscreen = isFullscreen || isDomFs || isTgFs;
+
+  if (currentlyFullscreen) {
+    // 1. DOM Fullscreen dan chiqish (Agar butun monitor qoplangan bo'lsa)
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen?.();
+      } else if ((document as any).webkitFullscreenElement) {
+        await (document as any).webkitExitFullscreen?.();
+      }
+    } catch (e) {
+      console.warn('DOM exitFullscreen error:', e);
+    }
+
+    // 2. Telegram WebApp Fullscreen dan chiqish
+    try {
+      if (tg && typeof tg.exitFullscreen === 'function') {
+        tg.exitFullscreen();
+      }
+    } catch (e) {
+      console.warn('tg.exitFullscreen error:', e);
+    }
+
+    setIsFullscreen(false);
+  } else {
+    // 1. Telegram WebApp Fullscreenni chaqirish
+    try {
+      if (tg) {
+        tg.expand?.();
+        if (typeof tg.requestFullscreen === 'function') {
+          tg.requestFullscreen();
+        }
+      }
+    } catch (e) {
+      console.warn('tg.requestFullscreen error:', e);
+    }
+
+    // 2. HTML5 DOM Fullscreen API (Telegram Desktop va brauzerlarda butun monitorni qamrab oladi)
+    try {
+      const el = document.documentElement as any;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        await el.webkitRequestFullscreen();
+      }
+    } catch (e) {
+      // Mobile brauzerlarda agar DOM fullscreen bloklangan bo'lsa, xatolik berishi mumkin
+      console.warn('DOM requestFullscreen info:', e);
+    }
+
+    setIsFullscreen(true);
+  }
+}
+
