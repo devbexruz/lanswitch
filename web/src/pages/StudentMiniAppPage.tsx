@@ -1118,7 +1118,6 @@ export default function StudentMiniAppPage() {
       width: '100%',
       maxWidth: '640px',
       margin: '0 auto',
-      overflowX: 'hidden',
       boxSizing: 'border-box',
       background: 'var(--ice-blue-bg)',
       color: 'var(--text-navy)',

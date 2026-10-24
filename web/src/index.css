@@ -64,17 +64,15 @@
 
 html {
   width: 100%;
-  height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  min-height: 100%;
+  overflow-x: clip;
   -webkit-overflow-scrolling: touch;
 }
 
 body {
   width: 100%;
   min-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow-x: clip;
   -webkit-overflow-scrolling: touch;
   background-color: var(--ice-blue-bg);
   background-image: 
@@ -91,7 +89,6 @@ body {
 #root {
   width: 100%;
   min-height: 100%;
-  overflow-x: hidden;
   position: relative;
 }
 
@@ -314,6 +311,7 @@ body {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+  position: -webkit-sticky !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 50 !important;
