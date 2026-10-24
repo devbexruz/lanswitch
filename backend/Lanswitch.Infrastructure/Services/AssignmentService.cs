@@ -1276,7 +1276,7 @@ public class AssignmentService : IAssignmentService
         _stateManager.SetState(chatId, state);
 
         var botUsername = _config["BotConfiguration:BotUsername"]?.TrimStart('@') ?? "lanswitchbot";
-        var botUrl = $"https://t.me/{botUsername}";
+        var botUrl = $"tg://resolve?domain={botUsername}";
 
         string frontendHost = _config.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
         var tmaUrl = _config["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
@@ -1344,7 +1344,7 @@ public class AssignmentService : IAssignmentService
         var caption = $"📌 <b>Topshiriq:</b> {item.Title}\n👤 <b>Talaba:</b> {sub.Student.FullName}";
 
         var botUsername = _config["BotConfiguration:BotUsername"]?.TrimStart('@') ?? "lanswitchbot";
-        var botUrl = $"https://t.me/{botUsername}";
+        var botUrl = $"tg://resolve?domain={botUsername}";
 
         var keyboardList = new List<InlineKeyboardButton[]>();
         if (user.IsAdmin || user.Role == "Teacher")

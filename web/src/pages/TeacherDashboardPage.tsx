@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, openTelegramBotChat } from '../utils/api';
 import type { 
   TeacherGroup, CreateAssignmentPayload, AssignmentSummary, 
   AssignmentReport, GroupMember, StudentTimelineAssignment,
@@ -592,30 +592,7 @@ export default function TeacherDashboardPage() {
         return;
       }
 
-      const botUrl = res.botUrl || "https://t.me/lanswitchbot";
-      const tg = (window as any).Telegram?.WebApp;
-
-      if (tg) {
-        try {
-          if (typeof tg.openTelegramLink === 'function') {
-            tg.openTelegramLink(botUrl);
-          }
-        } catch (e) {
-          console.warn('tg.openTelegramLink error:', e);
-        }
-
-        setTimeout(() => {
-          try {
-            if (typeof tg.close === 'function') {
-              tg.close();
-            }
-          } catch (e) {
-            console.warn('tg.close error:', e);
-          }
-        }, 150);
-      } else {
-        window.open(botUrl, '_blank') || (window.location.href = botUrl);
-      }
+      openTelegramBotChat(res.botUsername || 'lanswitchbot');
     } catch (err: any) {
       alert("Xatolik: " + (err?.message || "Faylni botga yuborib bo'lmadi"));
     } finally {

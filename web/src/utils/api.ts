@@ -661,7 +661,7 @@ export const api = {
         return {
           success: true,
           botUsername: data.botUsername,
-          botUrl: data.botUrl || `https://t.me/${data.botUsername || 'lanswitchbot'}`,
+          botUrl: data.botUrl || `tg://resolve?domain=${data.botUsername || 'lanswitchbot'}`,
           message: data.message
         };
       }
@@ -695,7 +695,7 @@ export const api = {
         return {
           success: true,
           botUsername: data.botUsername,
-          botUrl: data.botUrl || `https://t.me/${data.botUsername || 'lanswitchbot'}`,
+          botUrl: data.botUrl || `tg://resolve?domain=${data.botUsername || 'lanswitchbot'}`,
           message: data.message
         };
       }
@@ -759,5 +759,57 @@ export const api = {
     }
   }
 };
+
+/**
+ * Botga to'g'ridan-to'g'ri o'tish:
+ * - Mobile Telegram Mini App da: tg.close() orqali ekran yopilib to'g'ridan-to'g'ri bot chatiga o'tadi
+ * - Oddiy veb / brauzerda: https:// orqali emas, tg://resolve?domain=... orqali ochiladi,
+ *   shunda brauzerdagi joriy sahifa o'chib ketmaydi (saqlanib qoladi).
+ */
+export function openTelegramBotChat(botUsername: string = 'lanswitchbot') {
+  const cleanUsername = (botUsername || 'lanswitchbot').replace(/^@/, '');
+  const tgDeepLink = `tg://resolve?domain=${cleanUsername}`;
+  const tg = (window as any).Telegram?.WebApp;
+
+  if (tg && (tg.initData || typeof tg.close === 'function')) {
+    // Mobile TMA muhiti:
+    try {
+      if (typeof tg.openTelegramLink === 'function') {
+        tg.openTelegramLink(`https://t.me/${cleanUsername}`);
+      }
+    } catch (e) {
+      console.warn('tg.openTelegramLink error:', e);
+    }
+
+    // Mobile da ekran yopilib to'g'ridan-to'g'ri bot chatiga o'tadi:
+    setTimeout(() => {
+      try {
+        if (typeof tg.close === 'function') {
+          tg.close();
+        }
+      } catch (e) {
+        console.warn('tg.close error:', e);
+      }
+    }, 100);
+  } else {
+    // Web / Brauzer muhiti:
+    // https:// bilan emas, tg:// orqali birdan ochiladi, joriy sahifa saqlanib qoladi!
+    try {
+      const a = document.createElement('a');
+      a.href = tgDeepLink;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+        } catch {}
+      }, 300);
+    } catch {
+      window.location.href = tgDeepLink;
+    }
+  }
+}
+
 
 

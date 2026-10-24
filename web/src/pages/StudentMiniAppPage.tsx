@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react';
-import { api } from '../utils/api';
+import { api, openTelegramBotChat } from '../utils/api';
 import type { 
   StudentGroup, AssignmentDetail, AssignmentItemDetail, 
   BookWord, QuizQuestion, Book, BookPart, BookUnit 
@@ -397,32 +397,7 @@ export default function StudentMiniAppPage() {
         return;
       }
 
-      const botUrl = res.botUrl || "https://t.me/lanswitchbot";
-      const tg = (window as any).Telegram?.WebApp;
-
-      if (tg) {
-        // Mini App muhitida: Bot chatiga o'tish va Mini Appni yopish/minimallashtirish
-        try {
-          if (typeof tg.openTelegramLink === 'function') {
-            tg.openTelegramLink(botUrl);
-          }
-        } catch (e) {
-          console.warn('tg.openTelegramLink error:', e);
-        }
-
-        setTimeout(() => {
-          try {
-            if (typeof tg.close === 'function') {
-              tg.close();
-            }
-          } catch (e) {
-            console.warn('tg.close error:', e);
-          }
-        }, 150);
-      } else {
-        // Web brauzerda: Botga to'g'ridan-to'g'ri o'tish (start buyrug'isiz)
-        window.open(botUrl, '_blank') || (window.location.href = botUrl);
-      }
+      openTelegramBotChat(res.botUsername || 'lanswitchbot');
     } catch (err: any) {
       alert("Xatolik: " + (err?.message || "Fayl yuklashni boshlab bo'lmadi"));
     } finally {
@@ -443,30 +418,7 @@ export default function StudentMiniAppPage() {
         return;
       }
 
-      const botUrl = res.botUrl || "https://t.me/lanswitchbot";
-      const tg = (window as any).Telegram?.WebApp;
-
-      if (tg) {
-        try {
-          if (typeof tg.openTelegramLink === 'function') {
-            tg.openTelegramLink(botUrl);
-          }
-        } catch (e) {
-          console.warn('tg.openTelegramLink error:', e);
-        }
-
-        setTimeout(() => {
-          try {
-            if (typeof tg.close === 'function') {
-              tg.close();
-            }
-          } catch (e) {
-            console.warn('tg.close error:', e);
-          }
-        }, 150);
-      } else {
-        window.open(botUrl, '_blank') || (window.location.href = botUrl);
-      }
+      openTelegramBotChat(res.botUsername || 'lanswitchbot');
     } catch (err: any) {
       alert("Xatolik: " + (err?.message || "Faylni botga yuborib bo'lmadi"));
     } finally {
@@ -1995,16 +1947,15 @@ export default function StudentMiniAppPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <a
-                href="https://t.me/lanswitchbot"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openTelegramBotChat('lanswitchbot')}
                 className="btn-big-blue"
-                style={{ width: '100%', minHeight: '56px', fontSize: '16px' }}
+                style={{ width: '100%', minHeight: '56px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
                 <Send size={20} />
                 <span>🚀 BOTGA START BOSISH</span>
-              </a>
+              </button>
 
               <button
                 onClick={async () => {
