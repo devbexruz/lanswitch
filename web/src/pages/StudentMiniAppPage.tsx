@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react';
 import { api, openTelegramBotChat } from '../utils/api';
+import { autoFullscreenOnDesktop } from '../utils/telegram';
 import type { 
   StudentGroup, AssignmentDetail, AssignmentItemDetail, 
   BookWord, QuizQuestion, Book, BookPart, BookUnit 
@@ -101,6 +102,7 @@ export default function StudentMiniAppPage() {
       try {
         tg.ready?.();
         tg.expand?.();
+        autoFullscreenOnDesktop();
         if (typeof tg.setHeaderColor === 'function') {
           tg.setHeaderColor('#1D4ED8');
         }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, openTelegramBotChat } from '../utils/api';
+import { autoFullscreenOnDesktop } from '../utils/telegram';
 import type { 
   TeacherGroup, CreateAssignmentPayload, AssignmentSummary, 
   AssignmentReport, GroupMember, StudentTimelineAssignment,
@@ -153,6 +154,7 @@ export default function TeacherDashboardPage() {
       try {
         tg.ready?.();
         tg.expand?.();
+        autoFullscreenOnDesktop();
         if (typeof tg.setHeaderColor === 'function') {
           tg.setHeaderColor('#1D4ED8');
         }

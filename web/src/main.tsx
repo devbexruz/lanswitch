@@ -6,6 +6,7 @@ import './index.css'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { AuthProvider } from './context/AuthContext'
+import { autoFullscreenOnDesktop } from './utils/telegram'
 
 // Telegram WebApp Full-Screen & Dynamic Safe-Area synchronization
 function initTelegramAndSafeArea() {
@@ -101,6 +102,7 @@ function initTelegramAndSafeArea() {
     if (tg) {
       tg.ready?.();
       tg.expand?.();
+      autoFullscreenOnDesktop();
 
       applyColors();
 
