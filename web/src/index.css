@@ -48,6 +48,12 @@
 
   --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-display: 'Outfit', sans-serif;
+
+  /* Safe Area Insets (for Notch, Dynamic Island, Home Indicator & TMA) */
+  --safe-area-top: max(var(--tg-safe-top, 0px), var(--tg-content-top, 0px), var(--tg-safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px));
+  --safe-area-bottom: max(var(--tg-safe-bottom, 0px), var(--tg-content-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--tg-content-safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+  --safe-area-left: max(var(--tg-safe-left, 0px), var(--tg-safe-area-inset-left, 0px), env(safe-area-inset-left, 0px));
+  --safe-area-right: max(var(--tg-safe-right, 0px), var(--tg-safe-area-inset-right, 0px), env(safe-area-inset-right, 0px));
 }
 
 * {
@@ -266,6 +272,7 @@ body {
     margin-left: 260px !important;
     width: calc(100% - 260px) !important;
     max-width: none !important;
+    padding-bottom: 40px !important;
   }
 }
 
@@ -279,5 +286,20 @@ body {
   .app-page-wrapper {
     margin-left: 0 !important;
     width: 100% !important;
+    padding-bottom: calc(110px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px))) !important;
   }
+}
+
+/* Common App Topbar with Safe Area support */
+.app-topbar {
+  padding-top: calc(14px + var(--safe-area-top, env(safe-area-inset-top, 0px))) !important;
+  padding-left: calc(16px + var(--safe-area-left, env(safe-area-inset-left, 0px))) !important;
+  padding-right: calc(16px + var(--safe-area-right, env(safe-area-inset-right, 0px))) !important;
+}
+
+/* Mobile Bottom Nav Safe Area */
+.app-mobile-bottom-nav {
+  padding-bottom: calc(8px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px))) !important;
+  padding-left: calc(8px + var(--safe-area-left, env(safe-area-inset-left, 0px))) !important;
+  padding-right: calc(8px + var(--safe-area-right, env(safe-area-inset-right, 0px))) !important;
 }

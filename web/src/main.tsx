@@ -7,22 +7,76 @@ import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { AuthProvider } from './context/AuthContext'
 
-// Telegram WebApp Full-Screen & Expand initialization
-if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
-  try {
-    const tg = (window as any).Telegram.WebApp;
-    tg.ready?.();
-    tg.expand?.();
-    if (typeof tg.requestFullscreen === 'function') {
-      tg.requestFullscreen();
+// Telegram WebApp Full-Screen & Dynamic Safe-Area synchronization
+function initTelegramAndSafeArea() {
+  if (typeof window === 'undefined') return;
+
+  const updateSafeArea = () => {
+    try {
+      const root = document.documentElement;
+      const tg = (window as any).Telegram?.WebApp;
+
+      let safeTop = 0;
+      let safeBottom = 0;
+      let safeLeft = 0;
+      let safeRight = 0;
+
+      if (tg) {
+        if (tg.safeAreaInset) {
+          safeTop = Math.max(safeTop, Number(tg.safeAreaInset.top) || 0);
+          safeBottom = Math.max(safeBottom, Number(tg.safeAreaInset.bottom) || 0);
+          safeLeft = Math.max(safeLeft, Number(tg.safeAreaInset.left) || 0);
+          safeRight = Math.max(safeRight, Number(tg.safeAreaInset.right) || 0);
+        }
+        if (tg.contentSafeAreaInset) {
+          safeTop = Math.max(safeTop, Number(tg.contentSafeAreaInset.top) || 0);
+          safeBottom = Math.max(safeBottom, Number(tg.contentSafeAreaInset.bottom) || 0);
+          safeLeft = Math.max(safeLeft, Number(tg.contentSafeAreaInset.left) || 0);
+          safeRight = Math.max(safeRight, Number(tg.contentSafeAreaInset.right) || 0);
+        }
+      }
+
+      root.style.setProperty('--tg-safe-top', `${safeTop}px`);
+      root.style.setProperty('--tg-safe-bottom', `${safeBottom}px`);
+      root.style.setProperty('--tg-safe-left', `${safeLeft}px`);
+      root.style.setProperty('--tg-safe-right', `${safeRight}px`);
+
+      root.style.setProperty('--safe-area-top', `max(${safeTop}px, env(safe-area-inset-top, 0px))`);
+      root.style.setProperty('--safe-area-bottom', `max(${safeBottom}px, env(safe-area-inset-bottom, 0px))`);
+      root.style.setProperty('--safe-area-left', `max(${safeLeft}px, env(safe-area-inset-left, 0px))`);
+      root.style.setProperty('--safe-area-right', `max(${safeRight}px, env(safe-area-inset-right, 0px))`);
+    } catch (e) {
+      console.warn('Safe area update error:', e);
     }
-    if (typeof tg.disableVerticalSwipes === 'function') {
-      tg.disableVerticalSwipes();
+  };
+
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.ready?.();
+      tg.expand?.();
+      if (typeof tg.requestFullscreen === 'function') {
+        tg.requestFullscreen();
+      }
+      if (typeof tg.disableVerticalSwipes === 'function') {
+        tg.disableVerticalSwipes();
+      }
+
+      tg.onEvent?.('safeAreaChanged', updateSafeArea);
+      tg.onEvent?.('contentSafeAreaChanged', updateSafeArea);
+      tg.onEvent?.('fullscreenChanged', updateSafeArea);
+      tg.onEvent?.('viewportChanged', updateSafeArea);
     }
   } catch (e) {
     console.warn('Telegram WebApp init warning:', e);
   }
+
+  updateSafeArea();
+  window.addEventListener('resize', updateSafeArea);
+  window.addEventListener('orientationchange', updateSafeArea);
 }
+
+initTelegramAndSafeArea();
 
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {

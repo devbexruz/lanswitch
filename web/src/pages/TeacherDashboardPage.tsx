@@ -698,14 +698,22 @@ export default function TeacherDashboardPage() {
   });
 
   return (
-    <div className="app-page-wrapper" style={{ minHeight: '100vh', background: 'var(--ice-blue-bg)', paddingBottom: '100px', fontFamily: 'var(--font-main)' }}>
+    <div className="app-page-wrapper" style={{
+      minHeight: '100vh',
+      background: 'var(--ice-blue-bg)',
+      paddingBottom: 'calc(110px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)))',
+      fontFamily: 'var(--font-main)'
+    }}>
       {/* ======================================================== */}
       {/* 1. TOPBAR (IDENTICAL TO STUDENT TOPBAR)                  */}
       {/* ======================================================== */}
-      <header style={{
+      <header className="app-topbar" style={{
         background: 'var(--pure-white)',
         borderBottom: '2px solid var(--sky-border)',
-        padding: '14px 20px',
+        paddingTop: 'calc(14px + var(--safe-area-top, env(safe-area-inset-top, 0px)))',
+        paddingBottom: '14px',
+        paddingLeft: 'calc(16px + var(--safe-area-left, env(safe-area-inset-left, 0px)))',
+        paddingRight: 'calc(16px + var(--safe-area-right, env(safe-area-inset-right, 0px)))',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -2311,7 +2319,8 @@ export default function TeacherDashboardPage() {
           zIndex: 100,
           display: 'flex',
           flexDirection: 'column',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          paddingBottom: 'calc(40px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)))'
         }}>
           {/* Top Sticky Bar */}
           <div style={{
@@ -2320,7 +2329,10 @@ export default function TeacherDashboardPage() {
             zIndex: 30,
             background: 'var(--pure-white)',
             borderBottom: '1.5px solid var(--sky-border)',
-            padding: '12px 20px',
+            paddingTop: 'calc(14px + var(--safe-area-top, env(safe-area-inset-top, 0px)))',
+            paddingBottom: '14px',
+            paddingLeft: 'calc(16px + var(--safe-area-left, env(safe-area-inset-left, 0px)))',
+            paddingRight: 'calc(16px + var(--safe-area-right, env(safe-area-inset-right, 0px)))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -3320,7 +3332,10 @@ export default function TeacherDashboardPage() {
               maxWidth: '640px',
               borderTopLeftRadius: 'var(--radius-modal)',
               borderTopRightRadius: 'var(--radius-modal)',
-              padding: '24px 20px 40px 20px',
+              paddingTop: '24px',
+              paddingLeft: 'calc(20px + var(--safe-area-left, env(safe-area-inset-left, 0px)))',
+              paddingRight: 'calc(20px + var(--safe-area-right, env(safe-area-inset-right, 0px)))',
+              paddingBottom: 'calc(28px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)))',
               boxShadow: 'var(--shadow-modal)',
               maxHeight: '80vh',
               overflowY: 'auto'
