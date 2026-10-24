@@ -75,6 +75,10 @@ export default function TeacherDashboardPage() {
   // Student Detail Review Modal ("Ko'rish & Tekshirish")
   const [detailReviewStudent, setDetailReviewStudent] = useState<any | null>(null);
 
+  // Jarimalar bajarilishi modal holati ("Jarimalar bajarildi")
+  const [resolvePenaltyStudent, setResolvePenaltyStudent] = useState<any | null>(null);
+  const [isResolvingPenalties, setIsResolvingPenalties] = useState(false);
+
   // Create Assignment Modal State (Starts empty, customizable default template)
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreatingAssignment, setIsCreatingAssignment] = useState(false);
@@ -535,6 +539,53 @@ export default function TeacherDashboardPage() {
       }
     } finally {
       setIsSubmittingPenalty(false);
+    }
+  };
+
+  const handleResolveStudentPenalties = async (student: any) => {
+    if (!selectedReport || !student) return;
+    setIsResolvingPenalties(true);
+
+    try {
+      const penalizedItems = (student.items || []).filter((i: any) => i.mySubmissionStatus === 0);
+
+      if (penalizedItems.length > 0) {
+        for (const item of penalizedItems) {
+          await api.setStudentItemStatus(
+            selectedReport.assignmentId,
+            item.id,
+            student.studentId,
+            2,
+            user?.id,
+            item.mySubmissionComment ? `${item.mySubmissionComment} (Jarima bajarildi)` : "Jarima bajarildi deb tasdiqlandi"
+          );
+        }
+      } else {
+        await api.setStudentAssignmentStatus(
+          selectedReport.assignmentId,
+          student.studentId,
+          2,
+          user?.id,
+          "Jarima bajarildi deb tasdiqlandi"
+        );
+      }
+
+      const rep = await api.getAssignmentReport(selectedReport.assignmentId, user?.id);
+      if (rep) {
+        setSelectedReport(rep);
+        if (detailReviewStudent && detailReviewStudent.studentId === student.studentId) {
+          const updated = rep.submittedStudents.find(s => s.studentId === student.studentId) ||
+                          rep.missingStudents.find(s => s.studentId === student.studentId);
+          if (updated) setDetailReviewStudent(updated);
+        }
+      }
+      if (selectedGroup) loadGroupAssignments(selectedGroup.id);
+      setResolvePenaltyStudent(null);
+    } catch (err) {
+      console.error('Error resolving penalties:', err);
+      alert('Jarimalarni bajarildi deb belgilashda xatolik yuz berdi');
+    } finally {
+      setIsResolvingPenalties(false);
     }
   };
 
@@ -2724,22 +2775,6 @@ export default function TeacherDashboardPage() {
                                       >
                                         ✕
                                       </button>
-                                      <button
-                                        title="Jarima bajarildi deb belgilash"
-                                        onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, st.studentId, 2, item.title, st.fullName)}
-                                        style={{
-                                          border: item.mySubmissionStatus === 2 ? '1.5px solid #D97706' : '1px solid #FDE68A',
-                                          background: item.mySubmissionStatus === 2 ? '#D97706' : '#FEF3C7',
-                                          color: item.mySubmissionStatus === 2 ? '#fff' : '#B45309',
-                                          borderRadius: '6px',
-                                          padding: '3px 7px',
-                                          fontSize: '11px',
-                                          fontWeight: 800,
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        ⚠️
-                                      </button>
                                       {item.mySubmissionStatus !== null && item.mySubmissionStatus !== undefined && (
                                         <button
                                           title="Bekor qilish"
@@ -2790,50 +2825,45 @@ export default function TeacherDashboardPage() {
                               <button
                                 onClick={() => handleSetStudentStatus(selectedReport.assignmentId, st.studentId, 1)}
                                 style={{
-                                  padding: '7px 12px',
+                                  padding: '7px 14px',
                                   borderRadius: '8px',
                                   border: isFullDone ? '2px solid #16A34A' : '1px solid #BBF7D0',
                                   background: isFullDone ? '#16A34A' : '#DCFCE7',
                                   color: isFullDone ? '#fff' : '#15803D',
                                   fontSize: '12px',
                                   fontWeight: 800,
-                                  cursor: 'pointer'
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px'
                                 }}
                               >
-                                Bajarildi
+                                <Check size={14} />
+                                <span>Bajarildi</span>
                               </button>
 
-                              <button
-                                onClick={() => handleSetStudentStatus(selectedReport.assignmentId, st.studentId, 0)}
-                                style={{
-                                  padding: '7px 12px',
-                                  borderRadius: '8px',
-                                  border: isPunishment ? '2px solid #DC2626' : '1px solid #FECACA',
-                                  background: isPunishment ? '#DC2626' : '#FEE2E2',
-                                  color: isPunishment ? '#fff' : '#B91C1C',
-                                  fontSize: '12px',
-                                  fontWeight: 800,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                Jarima
-                              </button>
-
-                              <button
-                                onClick={() => handleSetStudentStatus(selectedReport.assignmentId, st.studentId, 2)}
-                                style={{
-                                  padding: '7px 12px',
-                                  borderRadius: '8px',
-                                  border: isPunished ? '2px solid #D97706' : '1px solid #FDE68A',
-                                  background: isPunished ? '#D97706' : '#FEF3C7',
-                                  color: isPunished ? '#fff' : '#B45309',
-                                  fontSize: '12px',
-                                  fontWeight: 800,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                Jarima Bajardi
-                              </button>
+                              {isPunishment && (
+                                <button
+                                  onClick={() => setResolvePenaltyStudent(st)}
+                                  style={{
+                                    padding: '7px 14px',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #F59E0B',
+                                    background: '#FEF3C7',
+                                    color: '#B45309',
+                                    fontSize: '12px',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)'
+                                  }}
+                                >
+                                  <AlertTriangle size={14} />
+                                  <span>Jarimalar bajarildi</span>
+                                </button>
+                              )}
 
                               {st.status !== null && (
                                 <button
@@ -3174,21 +3204,6 @@ export default function TeacherDashboardPage() {
                         >
                           ❌ Jarima
                         </button>
-                        <button
-                          onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, detailReviewStudent.studentId, 2, item.title, detailReviewStudent.fullName)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            border: item.mySubmissionStatus === 2 ? '2px solid #D97706' : '1px solid #FDE68A',
-                            background: item.mySubmissionStatus === 2 ? '#D97706' : '#FEF3C7',
-                            color: item.mySubmissionStatus === 2 ? '#fff' : '#B45309',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ⚠️ Jarima Bajardi
-                        </button>
                         {item.mySubmissionStatus !== null && item.mySubmissionStatus !== undefined && (
                           <button
                             onClick={() => handleSetItemStatus(selectedReport.assignmentId, item.id, detailReviewStudent.studentId, -1, item.title, detailReviewStudent.fullName)}
@@ -3223,7 +3238,7 @@ export default function TeacherDashboardPage() {
                 onClick={() => handleSetStudentStatus(selectedReport.assignmentId, detailReviewStudent.studentId, 1)}
                 style={{
                   flex: 1,
-                  minWidth: '100px',
+                  minWidth: '130px',
                   padding: '10px 14px',
                   borderRadius: '10px',
                   border: 'none',
@@ -3231,45 +3246,43 @@ export default function TeacherDashboardPage() {
                   color: '#fff',
                   fontWeight: 800,
                   fontSize: '13px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.2)'
                 }}
               >
-                ✅ Full done
+                <CheckCircle2 size={16} />
+                <span>Bajarildi (Full done)</span>
               </button>
-              <button
-                onClick={() => handleSetStudentStatus(selectedReport.assignmentId, detailReviewStudent.studentId, 0)}
-                style={{
-                  flex: 1,
-                  minWidth: '100px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: '#DC2626',
-                  color: '#fff',
-                  fontWeight: 800,
-                  fontSize: '13px',
-                  cursor: 'pointer'
-                }}
-              >
-                ❌ Jarima (Punishment)
-              </button>
-              <button
-                onClick={() => handleSetStudentStatus(selectedReport.assignmentId, detailReviewStudent.studentId, 2)}
-                style={{
-                  flex: 1,
-                  minWidth: '100px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: '#D97706',
-                  color: '#fff',
-                  fontWeight: 800,
-                  fontSize: '13px',
-                  cursor: 'pointer'
-                }}
-              >
-                ⚠️ Jarima Bajardi
-              </button>
+
+              {(detailReviewStudent.items?.some((i: any) => i.mySubmissionStatus === 0) || detailReviewStudent.status === 0) && (
+                <button
+                  onClick={() => setResolvePenaltyStudent(detailReviewStudent)}
+                  style={{
+                    flex: 1,
+                    minWidth: '150px',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    border: '1.5px solid #F59E0B',
+                    background: '#FEF3C7',
+                    color: '#B45309',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)'
+                  }}
+                >
+                  <AlertTriangle size={16} />
+                  <span>Jarimalar bajarildi</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -3389,6 +3402,205 @@ export default function TeacherDashboardPage() {
                 }}
               >
                 {isSubmittingPenalty ? 'Saqlanmoqda...' : '🚨 Jarima qo\'llash'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 8.3. JARIMALAR BAJARILDI / RESOLVE PENALTIES MODAL       */}
+      {/* ======================================================== */}
+      {resolvePenaltyStudent && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 130,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '24px',
+            maxWidth: '560px',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: 'var(--shadow-modal)',
+            border: '2px solid #FDE68A',
+            overflow: 'hidden'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1.5px solid var(--sky-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#FFFBEB'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#B45309', fontWeight: 900, fontSize: '17px' }}>
+                <AlertTriangle size={22} color="#D97706" />
+                <span>Jarimalarni ko'rib chiqish va bajarilgan deb belgilash</span>
+              </div>
+              <button
+                onClick={() => setResolvePenaltyStudent(null)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', fontWeight: 800, cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Student Info */}
+            <div style={{ padding: '16px 24px 10px 24px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #F1F5F9' }}>
+              <img
+                src={resolvePenaltyStudent.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80"}
+                alt={resolvePenaltyStudent.fullName}
+                style={{ width: '46px', height: '46px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #FDE68A' }}
+              />
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-navy)' }}>
+                  {resolvePenaltyStudent.fullName}
+                </div>
+                <div style={{ fontSize: '12px', color: '#B45309', fontWeight: 700 }}>
+                  ⚠️ Quyidagi topshiriqlar bo'yicha jarima qo'llanilgan:
+                </div>
+              </div>
+            </div>
+
+            {/* Penalized Items List */}
+            <div style={{ padding: '16px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+              {(() => {
+                const penalizedItems = (resolvePenaltyStudent.items || []).filter((i: any) => i.mySubmissionStatus === 0);
+                if (penalizedItems.length === 0) {
+                  return (
+                    <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '14px', padding: '14px', color: '#991B1B', fontSize: '13px' }}>
+                      <div style={{ fontWeight: 800, marginBottom: '4px' }}>Umumiy topshiriq jarimasi:</div>
+                      <div>💬 "{resolvePenaltyStudent.comment || 'Jazo qo\'llanilgan'}"</div>
+                    </div>
+                  );
+                }
+
+                return penalizedItems.map((item: any) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: '#FFFBEB',
+                      border: '1.5px solid #FDE68A',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <div style={{ fontWeight: 800, fontSize: '14px', color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{item.itemType === 'video' || item.itemType === 'MediaSubmission' ? '🎬' : item.itemType === 'audio' ? '🎙️' : item.itemType === 'vocab' || item.itemType === 'Vocabulary' ? '📚' : '📝'}</span>
+                        <span>{item.title}</span>
+                      </div>
+                      <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>
+                        ❌ Jarima
+                      </span>
+                    </div>
+
+                    <div style={{ background: '#fff', border: '1px solid #FECACA', borderRadius: '10px', padding: '10px 12px', fontSize: '13px', color: '#991B1B' }}>
+                      🚨 <b>Jazo izohi:</b> "{item.mySubmissionComment || resolvePenaltyStudent.comment || 'Jazo izohi kiritilmagan'}"
+                    </div>
+
+                    {/* Media Attachments if available */}
+                    {item.attachments && item.attachments.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                        {item.attachments.map((att: any) => (
+                          <div key={att.id} style={{ background: '#fff', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--sky-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                              📎 {att.fileType}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleSendAttachmentToBot(att.id)}
+                              disabled={sendingAttId === att.id}
+                              style={{
+                                background: 'var(--ice-blue-bg)',
+                                border: '1px solid var(--sky-border)',
+                                borderRadius: '6px',
+                                padding: '4px 10px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: 'var(--primary-blue)',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <ExternalLink size={12} />
+                              <span>Botda ochish</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Footer with Actions */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1.5px solid var(--sky-border)',
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'flex-end',
+              background: '#F8FAFC'
+            }}>
+              <button
+                type="button"
+                onClick={() => setResolvePenaltyStudent(null)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  border: '1.5px solid var(--sky-border)',
+                  background: '#fff',
+                  color: 'var(--text-navy)',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Bekor qilish
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleResolveStudentPenalties(resolvePenaltyStudent)}
+                disabled={isResolvingPenalties}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: '#16A34A',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  cursor: isResolvingPenalties ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)'
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>{isResolvingPenalties ? 'Saqlanmoqda...' : 'Jarimalarni bajarilgan deb hisoblash'}</span>
               </button>
             </div>
           </div>
