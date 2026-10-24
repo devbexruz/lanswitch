@@ -8,7 +8,7 @@ import {
   BookOpen, CheckCircle2, XCircle, AlertTriangle, 
   Send, ChevronLeft, ChevronRight, Volume2, Sparkles, 
   Clock, Trophy, X, Check, RefreshCw, Film, Library, Play, Search, ArrowLeft,
-  Trash2, ExternalLink, FileText
+  Trash2, ExternalLink, FileText, ChevronDown, Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -678,26 +678,28 @@ export default function StudentMiniAppPage() {
                         {(att.fileType === 'voice' || att.fileType === 'audio') && '🎙️ Ovoz / Audio'}
                         {att.fileType === 'photo' && '🖼️ Rasm'}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAttachment(att.id)}
-                        style={{
-                          background: 'var(--status-danger-bg)',
-                          border: '1px solid var(--status-danger-border)',
-                          borderRadius: '6px',
-                          color: 'var(--status-danger)',
-                          padding: '4px 8px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontSize: '11px',
-                          fontWeight: 700
-                        }}
-                      >
-                        <Trash2 size={13} />
-                        <span>O'chirish</span>
-                      </button>
+                      {item.mySubmissionStatus !== 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAttachment(att.id)}
+                          style={{
+                            background: 'var(--status-danger-bg)',
+                            border: '1px solid var(--status-danger-border)',
+                            borderRadius: '6px',
+                            color: 'var(--status-danger)',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            fontWeight: 700
+                          }}
+                        >
+                          <Trash2 size={13} />
+                          <span>O'chirish</span>
+                        </button>
+                      )}
                     </div>
 
                     {(att.fileType === 'voice' || att.fileType === 'audio') && (
@@ -750,21 +752,41 @@ export default function StudentMiniAppPage() {
               </div>
             )}
 
-            <button
-              onClick={() => handleOpenBotForMedia(item.id)}
-              className="btn-big-blue"
-              style={{
-                width: '100%',
-                minHeight: '52px',
-                fontSize: '15px',
-                background: isCompleted ? 'var(--ice-blue-bg)' : 'var(--primary-blue)',
-                color: isCompleted ? 'var(--primary-blue)' : 'var(--pure-white)',
-                border: isCompleted ? '2px solid var(--primary-blue)' : 'none'
-              }}
-            >
-              <Send size={18} />
-              <span>{isCompleted ? 'QAYTA YUBORISH (BOT)' : 'YUBORISH (BOT)'}</span>
-            </button>
+            {item.mySubmissionStatus === 1 ? (
+              <div style={{
+                background: '#F0FDF4',
+                border: '1.5px solid #BBF7D0',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                color: '#15803D',
+                fontWeight: 800,
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginTop: '4px'
+              }}>
+                <CheckCircle2 size={18} color="#16A34A" />
+                <span>Topshiriq ustoz tomonidan 'Bajarildi' deb qabul qilingan (Yopiq)</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => handleOpenBotForMedia(item.id)}
+                className="btn-big-blue"
+                style={{
+                  width: '100%',
+                  minHeight: '52px',
+                  fontSize: '15px',
+                  background: isCompleted ? 'var(--ice-blue-bg)' : 'var(--primary-blue)',
+                  color: isCompleted ? 'var(--primary-blue)' : 'var(--pure-white)',
+                  border: isCompleted ? '2px solid var(--primary-blue)' : 'none'
+                }}
+              >
+                <Send size={18} />
+                <span>{item.attachments && item.attachments.length > 0 ? 'QAYTA YUBORISH (BOT)' : 'YUBORISH (BOT)'}</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -804,27 +826,57 @@ export default function StudentMiniAppPage() {
         {mainTab === 'homework' ? (
           <button
             onClick={() => setShowGroupDrawer(true)}
+            title={selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
             style={{
               background: 'var(--ice-blue-bg)',
-              border: '2px solid var(--primary-blue)',
-              color: 'var(--primary-blue)',
-              borderRadius: 'var(--radius-pill)',
-              padding: '10px 18px',
-              fontSize: '15px',
-              fontWeight: 800,
+              border: '1.5px solid var(--sky-border)',
+              color: 'var(--text-navy)',
+              borderRadius: '16px',
+              padding: '6px 12px 6px 8px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '8px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.12)',
-              maxWidth: '240px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              boxShadow: 'var(--shadow-subtle)',
+              maxWidth: '220px',
+              minWidth: 0,
+              flexShrink: 1,
+              transition: 'all 0.2s ease',
+              textAlign: 'left'
             }}
           >
-            <ChevronLeft size={18} strokeWidth={3} />
-            <span>{selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}</span>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1D4ED8 100%)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)'
+            }}>
+              <Users size={16} strokeWidth={2.5} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1 }}>
+                Guruh
+              </div>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 900,
+                color: 'var(--text-navy)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                marginTop: '2px',
+                lineHeight: 1.2
+              }}>
+                {selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
+              </div>
+            </div>
+            <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
           </button>
         ) : mainTab === 'movies' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -950,12 +1002,12 @@ export default function StudentMiniAppPage() {
                             <div style={{ fontSize: '12px', opacity: 0.9 }}>{assignment.groupTitle}</div>
                           </div>
                           <span style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: '12px', fontWeight: 800 }}>
-                            {pendingItems.length} ta bajarilmagan
+                            {pendingItems.length} ta bajarilmagan • {assignment.items.length} ta qism
                           </span>
                         </div>
 
                         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          {pendingItems.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
+                          {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
                         </div>
                       </div>
                     );

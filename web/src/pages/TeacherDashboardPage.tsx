@@ -7,9 +7,9 @@ import type {
 } from '../utils/api';
 import { 
   PlusCircle, CheckCircle2, XCircle, AlertTriangle, 
-  Send, BookOpen, ChevronRight, ChevronLeft, RefreshCw, Clock, Shield,
+  Send, BookOpen, ChevronRight, RefreshCw, Clock, Shield,
   Trash2, UserCheck, Eye, Volume2, Play, Search, ArrowLeft, Trophy, Sparkles, Check,
-  Film, Library, X
+  Film, Library, X, ChevronDown, Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -571,27 +571,57 @@ export default function TeacherDashboardPage() {
         {mainTab === 'classroom' ? (
           <button
             onClick={() => setShowGroupDrawer(true)}
+            title={selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
             style={{
               background: 'var(--ice-blue-bg)',
-              border: '2px solid var(--primary-blue)',
-              color: 'var(--primary-blue)',
-              borderRadius: 'var(--radius-pill)',
-              padding: '10px 18px',
-              fontSize: '15px',
-              fontWeight: 800,
+              border: '1.5px solid var(--sky-border)',
+              color: 'var(--text-navy)',
+              borderRadius: '16px',
+              padding: '6px 12px 6px 8px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '8px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.12)',
-              maxWidth: '240px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              boxShadow: 'var(--shadow-subtle)',
+              maxWidth: '220px',
+              minWidth: 0,
+              flexShrink: 1,
+              transition: 'all 0.2s ease',
+              textAlign: 'left'
             }}
           >
-            <ChevronLeft size={18} strokeWidth={3} />
-            <span>{selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}</span>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1D4ED8 100%)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)'
+            }}>
+              <Users size={16} strokeWidth={2.5} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1 }}>
+                Guruh
+              </div>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 900,
+                color: 'var(--text-navy)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                marginTop: '2px',
+                lineHeight: 1.2
+              }}>
+                {selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
+              </div>
+            </div>
+            <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
           </button>
         ) : mainTab === 'movies' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

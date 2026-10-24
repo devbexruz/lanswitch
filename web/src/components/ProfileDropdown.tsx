@@ -103,11 +103,11 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           </div>
         )}
 
-        <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', lineHeight: 1.2 }}>
+        <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '95px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {user?.fullName || 'Foydalanuvchi'}
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--primary-blue)', fontWeight: 700 }}>
+          <span style={{ fontSize: '11px', color: 'var(--primary-blue)', fontWeight: 700, whiteSpace: 'nowrap' }}>
             {currentRole === 'Teacher' ? "👨‍🏫 O'qituvchi" : '🎓 Talaba'}
           </span>
         </div>

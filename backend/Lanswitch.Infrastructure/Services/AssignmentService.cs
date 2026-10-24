@@ -352,6 +352,11 @@ public class AssignmentService : IAssignmentService
             .Include(s => s.Attachments)
             .FirstOrDefaultAsync(s => s.AssignmentItemId == assignmentItemId && s.StudentId == studentId);
 
+        if (sub != null && sub.Status == 1)
+        {
+            throw new InvalidOperationException("Ushbu topshiriq o'qituvchi tomonidan 'Bajarildi' deb qabul qilingan. Unga qayta kontent yuklab bo'lmaydi!");
+        }
+
         if (sub == null)
         {
             sub = new AssignmentItemSubmission
@@ -366,7 +371,11 @@ public class AssignmentService : IAssignmentService
         }
         else
         {
-            sub.Status = null; // Qayta topshirilganda tekshirilmagan holatga o'tadi
+            // Jarima bo'lsa yoki tekshirilmagan bo'lsa, qayta topshirilganda tekshirish uchun qoldiriladi
+            if (sub.Status != 2)
+            {
+                sub.Status = null;
+            }
             sub.SubmittedAt = DateTime.UtcNow;
         }
 
@@ -420,7 +429,6 @@ public class AssignmentService : IAssignmentService
             .FirstOrDefaultAsync(s => s.AssignmentItemId == dto.AssignmentItemId && s.StudentId == studentId);
 
         double percent = dto.TotalQuestions > 0 ? (double)dto.CorrectAnswers / dto.TotalQuestions * 100 : 0;
-        int status = percent >= 70 ? 1 : 0; // 70% dan yuqori bo'lsa Bajarildi (1), aks holda Jarima (0)
 
         if (sub == null)
         {
@@ -429,19 +437,17 @@ public class AssignmentService : IAssignmentService
                 AssignmentId = item.AssignmentId,
                 AssignmentItemId = dto.AssignmentItemId,
                 StudentId = studentId,
-                Status = status,
+                Status = null, // Student topshirishi statusni Bajarildi ga o'tkazmaydi (ustoz tekshiradi)
                 Comment = $"Test natijasi: {dto.CorrectAnswers}/{dto.TotalQuestions} ({percent:F0}%)",
-                SubmittedAt = DateTime.UtcNow,
-                ReviewedAt = DateTime.UtcNow
+                SubmittedAt = DateTime.UtcNow
             };
             _db.AssignmentItemSubmissions.Add(sub);
         }
         else
         {
-            sub.Status = status;
-            sub.Comment = $"Qayta topshirilgan test: {dto.CorrectAnswers}/{dto.TotalQuestions} ({percent:F0}%)";
+            // Status o'qituvchi tomonidan qo'yilgan bo'lsa tegilmaydi, aks holda null
+            sub.Comment = $"Test natijasi: {dto.CorrectAnswers}/{dto.TotalQuestions} ({percent:F0}%)";
             sub.SubmittedAt = DateTime.UtcNow;
-            sub.ReviewedAt = DateTime.UtcNow;
         }
 
         await _db.SaveChangesAsync();
@@ -622,22 +628,27 @@ public class AssignmentService : IAssignmentService
                 };
             }).ToList();
 
+            int totalItemsCount = assignment.Items.Count;
+            int completedItemsCount = studentItems.Count(i => i.MySubmissionStatus == 1 || i.MySubmissionStatus == 2);
+            bool hasPenalty = studentItems.Any(i => i.MySubmissionStatus == 0);
+
+            int? overallStatus = null;
+            if (hasPenalty)
+            {
+                overallStatus = 0; // Jarima (Punishment)
+            }
+            else if (totalItemsCount > 0 && completedItemsCount == totalItemsCount)
+            {
+                overallStatus = studentItems.Any(i => i.MySubmissionStatus == 2) ? 2 : 1;
+            }
+            else
+            {
+                overallStatus = null; // Tekshirilmagan / to'liq emas
+            }
+
             if (studentSubs.Any())
             {
                 // Topshirganlar
-                int? overallStatus = null;
-                if (studentSubs.Any(s => s.Status == 0))
-                {
-                    overallStatus = 0; // Jarima (Punishment)
-                }
-                else if (studentSubs.All(s => s.Status == 1 || s.Status == 2))
-                {
-                    overallStatus = studentSubs.Any(s => s.Status == 2) ? 2 : 1;
-                }
-                else
-                {
-                    overallStatus = null; // Tekshirilmagan / qisman
-                }
 
                 var allAttachments = studentSubs.SelectMany(s => s.Attachments).Select(att => new AttachmentDto
                 {
@@ -691,7 +702,7 @@ public class AssignmentService : IAssignmentService
             }
         }
 
-        var allStatuses = submittedList.Select(s => s.Status).ToList();
+        var allStatuses = submittedList.Concat(missingList).Select(s => s.Status).ToList();
         int fullCount = allStatuses.Count(s => s == 1);
         int punishmentCount = allStatuses.Count(s => s == 0);
         int punishedCount = allStatuses.Count(s => s == 2);
@@ -1172,6 +1183,10 @@ public class AssignmentService : IAssignmentService
         {
             var user = await _db.Users.FindAsync(studentOrTeacherId);
             if (user == null || !user.IsAdmin) return false;
+        }
+        else if (att.ItemSubmission.Status == 1)
+        {
+            throw new InvalidOperationException("Qabul qilingan topshiriq fayllarini o'chirib bo'lmaydi!");
         }
 
         _db.ItemSubmissionAttachments.Remove(att);
