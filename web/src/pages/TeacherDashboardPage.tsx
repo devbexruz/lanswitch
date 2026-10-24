@@ -9,7 +9,7 @@ import {
   PlusCircle, CheckCircle2, XCircle, AlertTriangle, 
   Send, BookOpen, ChevronRight, RefreshCw, Clock, Shield,
   Trash2, UserCheck, Eye, Volume2, Play, Search, ArrowLeft, Trophy, Sparkles, Check,
-  Film, Library, X, ChevronDown, Users
+  Film, Library, X, ChevronDown, Users, Maximize2, Minimize2, FileText, Video, Save, Download
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -55,6 +55,8 @@ export default function TeacherDashboardPage() {
   const [reportFilter, setReportFilter] = useState<'all' | 'full_done' | 'punishment' | 'punished' | 'pending'>('all');
   const [isReminding, setIsReminding] = useState(false);
   const [remindSuccess, setRemindSuccess] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState<number | null>(null);
 
   // Punishment Comment Modal State
   const [penaltyModal, setPenaltyModal] = useState<{
@@ -71,9 +73,10 @@ export default function TeacherDashboardPage() {
   // Student Detail Review Modal ("Ko'rish & Tekshirish")
   const [detailReviewStudent, setDetailReviewStudent] = useState<any | null>(null);
 
-  // Create Assignment Modal State (NO DEADLINE INPUT)
+  // Create Assignment Modal State (Starts empty, customizable default template)
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [customTitle, setCustomTitle] = useState(`${new Date().toLocaleDateString('ru-RU')} Lesson`);
+  const [isCreatingAssignment, setIsCreatingAssignment] = useState(false);
+  const [customTitle, setCustomTitle] = useState(`${new Date().toLocaleDateString('uz-UZ')} Darsi`);
   const [items, setItems] = useState<Array<{
     orderIndex: number;
     itemType: 'TextReminder' | 'Vocabulary' | 'MediaSubmission';
@@ -81,11 +84,10 @@ export default function TeacherDashboardPage() {
     instructions: string;
     targetUnitId?: number;
     vocabMode?: 'book' | 'custom';
-  }>>([
-    { orderIndex: 1, itemType: 'TextReminder', title: 'Reading Task', instructions: 'Read Reader Book chapter 4' },
-    { orderIndex: 2, itemType: 'Vocabulary', title: 'Vocabulary Unit 4', instructions: 'Learn 20 words and pass quiz', targetUnitId: 4, vocabMode: 'book' },
-    { orderIndex: 3, itemType: 'MediaSubmission', title: 'Speaking Homework', instructions: '1-minute audio describing hometown' }
-  ]);
+  }>>([]);
+  const [hasDefaultTemplate, setHasDefaultTemplate] = useState(() => {
+    return !!localStorage.getItem('lanswitch_teacher_assignment_template');
+  });
 
   // Books hierarchy for Create Assignment modal
   const [booksList, setBooksList] = useState<Book[]>([]);
@@ -136,6 +138,44 @@ export default function TeacherDashboardPage() {
 
     loadGroups();
   }, [tab, user?.id]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+      try {
+        const tg = (window as any).Telegram.WebApp;
+        tg.ready?.();
+        tg.expand?.();
+        if (typeof tg.requestFullscreen === 'function') {
+          tg.requestFullscreen();
+        }
+        if (typeof tg.disableVerticalSwipes === 'function') {
+          tg.disableVerticalSwipes();
+        }
+      } catch (e) {
+        console.warn('Telegram WebApp full screen error:', e);
+      }
+    }
+
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.requestFullscreen) {
+      try {
+        (window as any).Telegram.WebApp.requestFullscreen();
+      } catch {}
+    }
+
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     if (user?.role === 'Student') {
@@ -460,35 +500,142 @@ export default function TeacherDashboardPage() {
   // Create Assignment
   const handleCreateAssignment = async () => {
     if (!selectedGroup) return;
-    const payload: CreateAssignmentPayload = {
-      groupId: selectedGroup.id,
-      title: customTitle,
-      deadline: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
-      items: items.map((it, idx) => ({ ...it, orderIndex: idx + 1 }))
-    };
+    if (items.length === 0) {
+      alert("Topshiriq e'lon qilish uchun kamida 1 ta vazifa bo'limi qo'shilishi shart!");
+      return;
+    }
+    if (!customTitle.trim()) {
+      alert("Iltimos, topshiriq sarlavhasini kiriting!");
+      return;
+    }
 
-    await api.createAssignment(payload, user?.id);
-    setShowCreateModal(false);
-    alert('Vazifa muvaffaqiyatli yaratildi va Telegram guruhga e\'lon qilindi!');
-    loadGroupAssignments(selectedGroup.id);
+    setIsCreatingAssignment(true);
+    try {
+      const payload: CreateAssignmentPayload = {
+        groupId: selectedGroup.id,
+        title: customTitle.trim(),
+        deadline: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+        items: items.map((it, idx) => ({ ...it, orderIndex: idx + 1 }))
+      };
+
+      await api.createAssignment(payload, user?.id);
+      setShowCreateModal(false);
+      alert('Vazifa muvaffaqiyatli yaratildi va Telegram guruhga e\'lon qilindi!');
+      loadGroupAssignments(selectedGroup.id);
+    } catch (e: any) {
+      alert('Vazifani yaratishda xatolik yuz berdi: ' + (e?.message || 'Server xatosi'));
+    } finally {
+      setIsCreatingAssignment(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignmentId: number, title: string) => {
+    const ok = window.confirm(`"${title}" nomli vazifani haqiqatan ham butunlay o'chirmoqchimisiz?\n\nUndagi barcha topshiriqlar, talabalarning yuborgan javoblari va baholari o'chib ketadi.`);
+    if (!ok) return;
+
+    setDeletingAssignmentId(assignmentId);
+    try {
+      const res = await api.deleteAssignment(assignmentId, user?.id);
+      if (res.success) {
+        setAssignments(prev => prev.filter(a => a.id !== assignmentId));
+        if (selectedReport?.assignmentId === assignmentId) {
+          setShowReportModal(false);
+          setSelectedReport(null);
+          setDetailReviewStudent(null);
+        }
+        alert("Vazifa muvaffaqiyatli o'chirildi!");
+      } else {
+        alert(res.message || "Vazifani o'chirishda xatolik yuz berdi");
+      }
+    } catch (e: any) {
+      alert("Xatolik: " + (e?.message || "Server bilan aloqa xatosi"));
+    } finally {
+      setDeletingAssignmentId(null);
+    }
+  };
+
+  const handleDeleteAttachmentByTeacher = async (attachmentId: number) => {
+    const ok = window.confirm("Ushbu biriktirilgan faylni o'chirmoqchimisiz?");
+    if (!ok) return;
+
+    const okDel = await api.deleteAttachment(attachmentId, user?.id);
+    if (okDel) {
+      if (detailReviewStudent) {
+        const updatedItems = detailReviewStudent.items?.map((it: any) => ({
+          ...it,
+          attachments: it.attachments?.filter((a: any) => a.id !== attachmentId)
+        }));
+        setDetailReviewStudent({
+          ...detailReviewStudent,
+          items: updatedItems
+        });
+      }
+      if (selectedReport) {
+        handleOpenReport(selectedReport.assignmentId);
+      }
+      alert("Fayl muvaffaqiyatli o'chirildi!");
+    } else {
+      alert("Faylni o'chirib bo'lmadi!");
+    }
+  };
+
+  const handleOpenCreateModal = () => {
+    // Starts empty by default as requested: "boshlanishiga shunchaki bo'sh bo'lsin keraklisin qo'lda qo'shib yozadigan bo'ladi"
+    setItems([]);
+    setCustomTitle(`${new Date().toLocaleDateString('uz-UZ')} Darsi`);
+    setShowCreateModal(true);
+  };
+
+  const handleSaveCurrentAsTemplate = () => {
+    if (items.length === 0) {
+      alert("Shablon sifatida saqlash uchun kamida 1 ta topshiriq bo'limi qo'shing!");
+      return;
+    }
+    localStorage.setItem('lanswitch_teacher_assignment_template', JSON.stringify({
+      title: customTitle,
+      items
+    }));
+    setHasDefaultTemplate(true);
+    alert("✅ Hozirgi topshiriqlar Standart Shablon sifatida saqlandi! Har doim yangi vazifa tuzayotganda 'Standart shablonni yuklash' tugmasi bilan yuklashingiz mumkin.");
+  };
+
+  const handleLoadSavedTemplate = () => {
+    const saved = localStorage.getItem('lanswitch_teacher_assignment_template');
+    if (!saved) {
+      alert("Hozircha saqlangan standart shablon mavjud emas.");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+        setItems(parsed.items);
+        if (parsed.title) setCustomTitle(parsed.title);
+      } else {
+        alert("Saqlangan shablon bo'sh.");
+      }
+    } catch {
+      alert("Shablonni yuklashda xatolik yuz berdi");
+    }
   };
 
   const handleAddItem = (type: 'TextReminder' | 'Vocabulary' | 'MediaSubmission') => {
-    let title = 'Reading Task';
-    let instructions = 'Darslikdagi matnni o\'qib kelish';
-    let targetUnitId = undefined;
+    let title = '';
+    let instructions = '';
+    let targetUnitId = partUnitsList[0]?.id || 1;
 
     if (type === 'Vocabulary') {
-      title = `So'z boyligi (${items.length + 1}-qism)`;
-      instructions = '20 ta yangi so\'zni flashcard orqali yodlang va testdan o\'ting';
-      targetUnitId = 4;
+      title = `So'z boyligi va test`;
+      instructions = 'Belgilangan darslik so\'zlarini yodlang va kamida 70% natija bilan test topshiring';
     } else if (type === 'MediaSubmission') {
-      title = `Speaking / Audio (${items.length + 1}-qism)`;
-      instructions = 'Topshiriq bo\'yicha 1 daqiqalik audio yoki video yuboring';
+      title = `Video / Audio vazifa (Bot)`;
+      instructions = 'Mavzu yuzasidan 1 daqiqalik video yoki audio yozib Telegram botga yuboring';
+    } else {
+      title = `Kitob o'qish / Qoidalar`;
+      instructions = 'Darslikdagi matnni o\'qib, yangi qoidalarni daftarga qayd qiling';
     }
 
-    setItems([...items, {
-      orderIndex: items.length + 1,
+    setItems(prev => [...prev, {
+      orderIndex: prev.length + 1,
       itemType: type,
       title,
       instructions,
@@ -498,7 +645,7 @@ export default function TeacherDashboardPage() {
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, idx) => idx !== index));
+    setItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
   // Load Books Hierarchy for Create Assignment Modal
@@ -635,8 +782,32 @@ export default function TeacherDashboardPage() {
           </div>
         )}
 
-        {/* User Profile Dropdown with DB Role Switcher */}
-        <ProfileDropdown onNavigateTab={(t) => setMainTab(t as any)} variant="teacher" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "To'liq ekrandan chiqish" : "To'liq ekran (Full screen)"}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: isFullscreen ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
+              border: '1.5px solid var(--sky-border)',
+              color: 'var(--primary-blue)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-subtle)',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+          >
+            {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
+
+          {/* User Profile Dropdown with DB Role Switcher */}
+          <ProfileDropdown onNavigateTab={(t) => setMainTab(t as any)} variant="teacher" />
+        </div>
       </header>
 
       <main style={{ maxWidth: '1240px', margin: '24px auto', padding: '0 20px' }}>
@@ -741,7 +912,7 @@ export default function TeacherDashboardPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => setShowCreateModal(true)}
+                        onClick={handleOpenCreateModal}
                         disabled={!selectedGroup}
                         className="btn-big-blue"
                         style={{ minHeight: '40px', padding: '0 18px', fontSize: '13px' }}
@@ -797,6 +968,30 @@ export default function TeacherDashboardPage() {
                               style={{ minHeight: '40px', padding: '0 18px', fontSize: '13px' }}
                             >
                               <span>Hisobot & Tekshirish</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteAssignment(ass.id, ass.title)}
+                              disabled={deletingAssignmentId === ass.id}
+                              title="Vazifani o'chirish"
+                              style={{
+                                background: '#FEE2E2',
+                                color: '#DC2626',
+                                border: '1.5px solid #FECACA',
+                                borderRadius: 'var(--radius-pill)',
+                                padding: '0 14px',
+                                minHeight: '40px',
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Trash2 size={15} />
+                              <span>{deletingAssignmentId === ass.id ? "..." : "O'chirish"}</span>
                             </button>
                           </div>
                         </div>
@@ -1390,7 +1585,7 @@ export default function TeacherDashboardPage() {
       )}
 
       {/* ======================================================== */}
-      {/* 7. CREATE ASSIGNMENT MODAL (NO DEADLINE INPUT)           */}
+      {/* 7. CREATE ASSIGNMENT MODAL (REDESIGNED & SPACIOUS)       */}
       {/* ======================================================== */}
       {showCreateModal && (
         <div style={{
@@ -1400,199 +1595,703 @@ export default function TeacherDashboardPage() {
           right: 0,
           bottom: 0,
           background: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(6px)',
+          backdropFilter: 'blur(8px)',
           zIndex: 100,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px'
+          padding: '16px'
         }}>
           <div style={{
             background: 'var(--pure-white)',
             borderRadius: '24px',
-            maxWidth: '640px',
+            maxWidth: '860px',
             width: '100%',
-            maxHeight: '90vh',
+            maxHeight: '92vh',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            boxShadow: 'var(--shadow-modal)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             border: '2px solid var(--sky-border)'
           }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1.5px solid var(--sky-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--ice-blue-bg)' }}>
-              <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)' }}>Yangi Topshiriq Yaratish</div>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', fontSize: '18px', fontWeight: 800, cursor: 'pointer' }}>✕</button>
+            {/* Modal Top Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1.5px solid var(--sky-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%)',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, var(--primary-blue), #2563EB)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '20px',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                }}>
+                  ✨
+                </div>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)', lineHeight: 1.2 }}>
+                    Yangi Uyga Vazifa Tuzish
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--primary-blue)', fontWeight: 700, marginTop: '2px' }}>
+                    Guruh: {selectedGroup?.title || 'Tanlanmagan'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {hasDefaultTemplate && (
+                  <button
+                    type="button"
+                    onClick={handleLoadSavedTemplate}
+                    title="Avval saqlab qo'yilgan standart shablonni yuklash"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: '#EFF6FF',
+                      border: '1.5px solid #93C5FD',
+                      color: '#1D4ED8',
+                      borderRadius: '12px',
+                      padding: '8px 14px',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Sparkles size={14} />
+                    <span>Standart shablonni yuklash</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  style={{
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-navy)' }}>Topshiriq nomi:</label>
+            {/* Modal Body */}
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* 1. Assignment Title Input */}
+              <div style={{ background: '#F8FAFC', padding: '16px 20px', borderRadius: '16px', border: '1.5px solid var(--sky-border)' }}>
+                <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', display: 'block', marginBottom: '6px' }}>
+                  📝 Vazifa umumiy nomi / Mavzusi:
+                </label>
                 <input
                   type="text"
                   value={customTitle}
                   onChange={e => setCustomTitle(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1.5px solid var(--sky-border)', marginTop: '4px', fontSize: '15px' }}
+                  placeholder="Masalan: Unit 5: Past Simple darsi va yangi so'zlar"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '1.5px solid var(--sky-border)',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    background: '#fff',
+                    color: 'var(--text-navy)',
+                    outline: 'none'
+                  }}
                 />
               </div>
 
-              {/* Items Constructor */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)' }}>Bo'limlar ({items.length} ta):</span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
+              {/* 2. Default Template Configuration Panel */}
+              <div style={{
+                background: '#F0FDF4',
+                border: '1.5px solid #BBF7D0',
+                borderRadius: '16px',
+                padding: '14px 18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '20px' }}>⚙️</span>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 900, color: '#166534' }}>
+                        Standart Shablon Sozlamasi (Default Template)
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#15803D', marginTop: '1px' }}>
+                        Har gal bir xil topshiriqlarni qayta tuzmaslik uchun, hozirgi tuzilmani standart shablon qilib saqlang.
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={handleSaveCurrentAsTemplate}
+                      disabled={items.length === 0}
+                      title={items.length === 0 ? "Avval kamida bitta topshiriq bo'limi qo'shing" : "Hozirgi topshiriqlarni saqlash"}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '10px',
+                        background: items.length > 0 ? '#16A34A' : '#CBD5E1',
+                        color: '#fff',
+                        border: 'none',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: items.length > 0 ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Save size={14} />
+                      <span>Shablon qilib saqlash</span>
+                    </button>
+                    {hasDefaultTemplate && (
+                      <button
+                        type="button"
+                        onClick={handleLoadSavedTemplate}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: '10px',
+                          background: '#fff',
+                          color: '#166534',
+                          border: '1.5px solid #86EFAC',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Download size={14} />
+                        <span>Shablonni yuklash</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Items Constructor Section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <span style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-navy)' }}>
+                      Topshiriq Bo'limlari ({items.length} ta):
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                      O'quvchilar bajarishi lozim bo'lgan qismlar
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       onClick={() => handleAddItem('Vocabulary')}
                       className="btn-big-white"
-                      style={{ minHeight: '34px', padding: '0 10px', fontSize: '12px' }}
+                      style={{ minHeight: '36px', padding: '0 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #93C5FD', color: '#1D4ED8' }}
                     >
-                      + Lug'at
+                      <BookOpen size={14} />
+                      <span>+ Lug'at (Test)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAddItem('MediaSubmission')}
                       className="btn-big-white"
-                      style={{ minHeight: '34px', padding: '0 10px', fontSize: '12px' }}
+                      style={{ minHeight: '36px', padding: '0 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #C084FC', color: '#7E22CE' }}
                     >
-                      + Media (Bot)
+                      <Video size={14} />
+                      <span>+ Video/Audio (Bot)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAddItem('TextReminder')}
                       className="btn-big-white"
-                      style={{ minHeight: '34px', padding: '0 10px', fontSize: '12px' }}
+                      style={{ minHeight: '36px', padding: '0 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #FCD34D', color: '#B45309' }}
                     >
-                      + Matn
+                      <FileText size={14} />
+                      <span>+ Matn / Qoida</span>
                     </button>
                   </div>
                 </div>
 
-                {items.map((it, idx) => (
-                  <div key={idx} style={{ background: 'var(--ice-blue-bg)', borderRadius: '14px', padding: '14px', border: '1px solid var(--sky-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 800, fontSize: '13px', color: 'var(--primary-blue)' }}>
-                        {idx + 1}-bo'lim: {it.itemType}
-                      </span>
-                      {items.length > 1 && (
-                        <button onClick={() => handleRemoveItem(idx)} style={{ background: 'none', border: 'none', color: 'var(--status-danger)', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
-                          O'chirish
-                        </button>
-                      )}
+                {/* Empty State: Shown when items list is empty */}
+                {items.length === 0 ? (
+                  <div style={{
+                    background: 'var(--ice-blue-bg)',
+                    border: '2px dashed var(--sky-border)',
+                    borderRadius: '20px',
+                    padding: '36px 20px',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '16px'
+                  }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: '#DBEAFE',
+                      color: '#2563EB',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '30px'
+                    }}>
+                      📋
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '17px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px' }}>
+                        Hozircha hech qanday topshiriq bo'limi qo'shilmagan
+                      </div>
+                      <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '520px', margin: '0 auto', lineHeight: 1.5 }}>
+                        Quyidagi kerakli bo'limlardan birini tanlab yangi vazifa qo'shing yoki o'zingiz avval saqlab qo'ygan standart shablonni yuklang:
+                      </p>
                     </div>
 
-                    <input
-                      type="text"
-                      value={it.title}
-                      onChange={e => {
-                        const copy = [...items];
-                        copy[idx].title = e.target.value;
-                        setItems(copy);
-                      }}
-                      placeholder="Sarlavha"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--sky-border)', fontSize: '13px' }}
-                    />
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '14px',
+                      width: '100%',
+                      marginTop: '8px'
+                    }}>
+                      {/* Card 1: Lug'at */}
+                      <div
+                        onClick={() => handleAddItem('Vocabulary')}
+                        style={{
+                          background: '#fff',
+                          border: '2px solid #BFDBFE',
+                          borderRadius: '16px',
+                          padding: '18px 16px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1D4ED8', fontWeight: 800, fontSize: '14px' }}>
+                          <BookOpen size={18} />
+                          <span>Lug'at va Test</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                          Kitob unitidan yoki o'z so'zlar ro'yxatingizdan so'z yodlash va 4 variantli test topshirish.
+                        </div>
+                        <div style={{ marginTop: 'auto', paddingTop: '8px', color: '#2563EB', fontSize: '12px', fontWeight: 800 }}>
+                          + Qo'shish →
+                        </div>
+                      </div>
 
-                    {it.itemType === 'Vocabulary' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const copy = [...items];
-                              copy[idx].vocabMode = 'book';
-                              setItems(copy);
-                            }}
-                            style={{
-                              padding: '5px 10px',
-                              borderRadius: '8px',
-                              border: it.vocabMode === 'book' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                              background: it.vocabMode === 'book' ? 'var(--primary-blue)' : '#fff',
-                              color: it.vocabMode === 'book' ? '#fff' : 'var(--text-navy)',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            📖 Kitob Unitidan tanlash
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const copy = [...items];
-                              copy[idx].vocabMode = 'custom';
-                              setItems(copy);
-                            }}
-                            style={{
-                              padding: '5px 10px',
-                              borderRadius: '8px',
-                              border: it.vocabMode === 'custom' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                              background: it.vocabMode === 'custom' ? 'var(--primary-blue)' : '#fff',
-                              color: it.vocabMode === 'custom' ? '#fff' : 'var(--text-navy)',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ✍️ O'z so'zlar ro'yxatimni kiritish
-                          </button>
+                      {/* Card 2: Media Bot */}
+                      <div
+                        onClick={() => handleAddItem('MediaSubmission')}
+                        style={{
+                          background: '#fff',
+                          border: '2px solid #E9D5FF',
+                          borderRadius: '16px',
+                          padding: '18px 16px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#7E22CE', fontWeight: 800, fontSize: '14px' }}>
+                          <Video size={18} />
+                          <span>Video / Audio (Bot)</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                          O'quvchilar Telegram bot (@lanswitch_bot) ga video yoki audio xabar yuborishadi.
+                        </div>
+                        <div style={{ marginTop: 'auto', paddingTop: '8px', color: '#9333EA', fontSize: '12px', fontWeight: 800 }}>
+                          + Qo'shish →
+                        </div>
+                      </div>
+
+                      {/* Card 3: Matn / Qoida */}
+                      <div
+                        onClick={() => handleAddItem('TextReminder')}
+                        style={{
+                          background: '#fff',
+                          border: '2px solid #FDE68A',
+                          borderRadius: '16px',
+                          padding: '18px 16px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B45309', fontWeight: 800, fontSize: '14px' }}>
+                          <FileText size={18} />
+                          <span>Matn / Qoida / Eslatma</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                          Kitobdan o'qish, mashqlar yoki uyga berilgan qoidalarni yozib olish eslatmasi.
+                        </div>
+                        <div style={{ marginTop: 'auto', paddingTop: '8px', color: '#D97706', fontSize: '12px', fontWeight: 800 }}>
+                          + Qo'shish →
+                        </div>
+                      </div>
+                    </div>
+
+                    {hasDefaultTemplate && (
+                      <button
+                        type="button"
+                        onClick={handleLoadSavedTemplate}
+                        style={{
+                          marginTop: '8px',
+                          background: '#fff',
+                          border: '1.5px solid var(--sky-border)',
+                          borderRadius: '12px',
+                          padding: '10px 20px',
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          color: 'var(--primary-blue)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <Sparkles size={16} />
+                        <span>Saqlangan Standart Shablonni yuklash</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  items.map((it, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: '#fff',
+                        borderRadius: '18px',
+                        padding: '18px 20px',
+                        border: '1.5px solid var(--sky-border)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '14px'
+                      }}
+                    >
+                      {/* Item Top Bar */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            background: it.itemType === 'Vocabulary' ? '#EFF6FF' : it.itemType === 'MediaSubmission' ? '#FAF5FF' : '#FEF3C7',
+                            color: it.itemType === 'Vocabulary' ? '#1D4ED8' : it.itemType === 'MediaSubmission' ? '#7E22CE' : '#B45309',
+                            padding: '5px 12px',
+                            borderRadius: '10px',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            {it.itemType === 'Vocabulary' && <><BookOpen size={14} /> {idx + 1}-bo'lim: Lug'at (Test topshirish)</>}
+                            {it.itemType === 'MediaSubmission' && <><Video size={14} /> {idx + 1}-bo'lim: Video/Audio vazifa (Bot)</>}
+                            {it.itemType === 'TextReminder' && <><FileText size={14} /> {idx + 1}-bo'lim: Matn / Qoida / Eslatma</>}
+                          </span>
                         </div>
 
-                        {it.vocabMode === 'book' && (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                            <select
-                              value={selectedBookId || ''}
-                              onChange={e => handleBookSelect(Number(e.target.value))}
-                              style={{ padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--sky-border)', fontSize: '12px' }}
-                            >
-                              {booksList.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-                            </select>
+                        {/* Delete Mission Button - ALWAYS available for every mission */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          style={{
+                            background: '#FEE2E2',
+                            border: '1px solid #FECACA',
+                            color: '#DC2626',
+                            borderRadius: '10px',
+                            padding: '6px 14px',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                          title="Ushbu bo'limni o'chirish"
+                        >
+                          <Trash2 size={14} />
+                          <span>O'chirish</span>
+                        </button>
+                      </div>
 
-                            <select
-                              value={selectedPartId || ''}
-                              onChange={e => handlePartSelect(Number(e.target.value))}
-                              style={{ padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--sky-border)', fontSize: '12px' }}
-                            >
-                              {bookPartsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                            </select>
+                      {/* Title input */}
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                          Bo'lim sarlavhasi:
+                        </label>
+                        <input
+                          type="text"
+                          value={it.title}
+                          onChange={e => {
+                            const copy = [...items];
+                            copy[idx].title = e.target.value;
+                            setItems(copy);
+                          }}
+                          placeholder="Sarlavha"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1.5px solid var(--sky-border)',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            color: 'var(--text-navy)',
+                            background: 'var(--ice-blue-bg)'
+                          }}
+                        />
+                      </div>
 
-                            <select
-                              value={it.targetUnitId || ''}
-                              onChange={e => {
+                      {/* Vocabulary specific controls */}
+                      {it.itemType === 'Vocabulary' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC', padding: '14px', borderRadius: '14px', border: '1px solid var(--sky-border)' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
                                 const copy = [...items];
-                                copy[idx].targetUnitId = Number(e.target.value);
+                                copy[idx].vocabMode = 'book';
                                 setItems(copy);
                               }}
-                              style={{ padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--sky-border)', fontSize: '12px' }}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                border: it.vocabMode === 'book' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
+                                background: it.vocabMode === 'book' ? 'var(--primary-blue)' : '#fff',
+                                color: it.vocabMode === 'book' ? '#fff' : 'var(--text-navy)',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
                             >
-                              {partUnitsList.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
-                            </select>
+                              <BookOpen size={14} />
+                              <span>📖 Kitob Unitidan tanlash</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const copy = [...items];
+                                copy[idx].vocabMode = 'custom';
+                                setItems(copy);
+                              }}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                border: it.vocabMode === 'custom' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
+                                background: it.vocabMode === 'custom' ? 'var(--primary-blue)' : '#fff',
+                                color: it.vocabMode === 'custom' ? '#fff' : 'var(--text-navy)',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <span>✍️ O'z so'zlar ro'yxatimni kiritish</span>
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    )}
 
-                    <textarea
-                      rows={2}
-                      value={it.instructions}
-                      onChange={e => {
-                        const copy = [...items];
-                        copy[idx].instructions = e.target.value;
-                        setItems(copy);
-                      }}
-                      placeholder={it.vocabMode === 'custom' ? "So'zlar ro'yxati (masalan: apple - olma\nbook - kitob)" : "Yo'riqnoma"}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--sky-border)', fontSize: '13px' }}
-                    />
-                  </div>
-                ))}
+                          {it.vocabMode === 'book' ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+                              <div>
+                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>1. Darslik (Kitob):</label>
+                                <select
+                                  value={selectedBookId || ''}
+                                  onChange={e => handleBookSelect(Number(e.target.value))}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                >
+                                  {booksList.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>2. Qism (Part):</label>
+                                <select
+                                  value={selectedPartId || ''}
+                                  onChange={e => handlePartSelect(Number(e.target.value))}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                >
+                                  {bookPartsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>3. Mavzu / Unit:</label>
+                                <select
+                                  value={it.targetUnitId || ''}
+                                  onChange={e => {
+                                    const copy = [...items];
+                                    copy[idx].targetUnitId = Number(e.target.value);
+                                    setItems(copy);
+                                  }}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                >
+                                  {partUnitsList.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-navy)', display: 'block', marginBottom: '4px' }}>
+                                So'zlar ro'yxati (Format: so'z - tarjimasi):
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={it.instructions}
+                                onChange={e => {
+                                  const copy = [...items];
+                                  copy[idx].instructions = e.target.value;
+                                  setItems(copy);
+                                }}
+                                placeholder="apple - olma&#10;book - kitob&#10;pencil - qalam"
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Media info */}
+                      {it.itemType === 'MediaSubmission' && (
+                        <div style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#6B21A8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Video size={16} />
+                          <span>Talabalar ushbu topshiriq uchun Telegram bot (@lanswitch_bot) orqali video yoki audio yozib yuborishadi.</span>
+                        </div>
+                      )}
+
+                      {/* Instructions input (if not custom vocab) */}
+                      {!(it.itemType === 'Vocabulary' && it.vocabMode === 'custom') && (
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                            Yo'riqnoma va talablar (O'quvchiga ko'rinadi):
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={it.instructions}
+                            onChange={e => {
+                              const copy = [...items];
+                              copy[idx].instructions = e.target.value;
+                              setItems(copy);
+                            }}
+                            placeholder={
+                              it.itemType === 'MediaSubmission'
+                                ? "Masalan: Mavzu yuzasidan 1 daqiqalik video yozib botga yuboring"
+                                : it.itemType === 'TextReminder'
+                                ? "Masalan: 32-betdagi 4-mashqni yozma bajarish va yangi qoidalarni daftarga yozish"
+                                : "Topshiriq yo'riqnomasi"
+                            }
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Modal Bottom Action Bar */}
+            <div style={{
+              padding: '16px 24px',
+              background: 'var(--ice-blue-bg)',
+              borderTop: '1.5px solid var(--sky-border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => handleAddItem('Vocabulary')}
+                  className="btn-big-white"
+                  style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px' }}
+                >
+                  + 📚 Lug'at
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddItem('MediaSubmission')}
+                  className="btn-big-white"
+                  style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px' }}
+                >
+                  + 🎬 Media
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddItem('TextReminder')}
+                  className="btn-big-white"
+                  style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px' }}
+                >
+                  + 📝 Matn
+                </button>
               </div>
 
-              <button
-                onClick={handleCreateAssignment}
-                className="btn-big-blue"
-                style={{ width: '100%', minHeight: '50px', fontSize: '15px', marginTop: '10px' }}
-              >
-                <span>🚀 E'LON QILISH (GURUHGA YUBORISH)</span>
-              </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="btn-big-white"
+                  style={{ minHeight: '44px', padding: '0 18px', fontSize: '14px' }}
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateAssignment}
+                  disabled={items.length === 0 || isCreatingAssignment}
+                  className="btn-big-blue"
+                  style={{
+                    minHeight: '44px',
+                    padding: '0 24px',
+                    fontSize: '14px',
+                    opacity: (items.length === 0 || isCreatingAssignment) ? 0.6 : 1,
+                    cursor: (items.length === 0 || isCreatingAssignment) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isCreatingAssignment ? (
+                    <span>Yuklanmoqda...</span>
+                  ) : (
+                    <span>🚀 Guruhga e'lon qilish ({items.length} ta)</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1660,29 +2359,52 @@ export default function TeacherDashboardPage() {
               </div>
             </div>
 
-            {selectedReport.missingCount > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
               <button
-                onClick={handleRemindMissing}
-                disabled={isReminding}
+                onClick={() => handleDeleteAssignment(selectedReport.assignmentId, selectedReport.title)}
+                disabled={deletingAssignmentId === selectedReport.assignmentId}
+                title="Vazifani o'chirish"
                 style={{
-                  background: '#DC2626',
-                  color: '#fff',
-                  border: 'none',
+                  background: '#FEE2E2',
+                  color: '#DC2626',
+                  border: '1.5px solid #FECACA',
                   padding: '8px 14px',
                   borderRadius: 'var(--radius-pill)',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   fontSize: '12px',
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  flexShrink: 0
+                  gap: '6px'
                 }}
               >
-                <Send size={14} />
-                <span>Eslatma ({selectedReport.missingCount})</span>
+                <Trash2 size={14} />
+                <span>O'chirish</span>
               </button>
-            ) : <div style={{ width: '80px' }} />}
+
+              {selectedReport.missingCount > 0 && (
+                <button
+                  onClick={handleRemindMissing}
+                  disabled={isReminding}
+                  style={{
+                    background: '#DC2626',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-pill)',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Send size={14} />
+                  <span>Eslatma ({selectedReport.missingCount})</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Body Content */}
@@ -1706,7 +2428,7 @@ export default function TeacherDashboardPage() {
             });
 
             return (
-              <div style={{ maxWidth: '900px', width: '100%', margin: '0 auto', padding: '20px 16px 80px 16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ maxWidth: '1240px', width: '100%', margin: '0 auto', padding: '20px 16px 80px 16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* 4 Core Status Filters */}
                 <div style={{
                   display: 'flex',
@@ -2155,6 +2877,32 @@ export default function TeacherDashboardPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
                         {item.attachments.map((att: any) => (
                           <div key={att.id} style={{ background: '#fff', borderRadius: '12px', padding: '12px', border: '1.5px solid var(--sky-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                                Biriktirilgan fayl ({att.fileType})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAttachmentByTeacher(att.id)}
+                                title="Talabaning ushbu faylini o'chirish"
+                                style={{
+                                  background: '#FEE2E2',
+                                  border: '1px solid #FECACA',
+                                  color: '#DC2626',
+                                  borderRadius: '8px',
+                                  padding: '4px 10px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                <Trash2 size={12} />
+                                <span>Faylni o'chirish</span>
+                              </button>
+                            </div>
                             {att.fileType === 'photo' ? (
                               <img
                                 src={att.streamUrl}

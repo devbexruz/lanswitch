@@ -270,6 +270,31 @@ public class AssignmentsController : ControllerBase
     }
 
     /// <summary>
+    /// Vazifani to'liq o'chirish (Assignment, unga tegishli items va submissions)
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteAssignment(long id, [FromQuery] long? teacherId = null)
+    {
+        var tId = teacherId ?? GetUserId();
+        if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
+
+        try
+        {
+            var ok = await _assignmentService.DeleteAssignmentAsync(id, tId);
+            if (!ok) return NotFound(new { message = "Vazifa topilmadi yoki o'chirib bo'lmadi" });
+            return Ok(new { success = true, message = "Vazifa muvaffaqiyatli o'chirildi" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { message = ex.Message });
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Biriktirilgan faylni o'chirish
     /// </summary>
     [HttpDelete("attachments/{id}")]

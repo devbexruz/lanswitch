@@ -8,7 +8,7 @@ import {
   BookOpen, CheckCircle2, XCircle, AlertTriangle, 
   Send, ChevronLeft, ChevronRight, Volume2, Sparkles, 
   Clock, Trophy, X, Check, RefreshCw, Film, Library, Play, Search, ArrowLeft,
-  Trash2, ExternalLink, FileText, ChevronDown, Users
+  Trash2, ExternalLink, FileText, ChevronDown, Users, Maximize2, Minimize2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -77,18 +77,48 @@ export default function StudentMiniAppPage() {
   const [units, setUnits] = useState<BookUnit[]>([]);
   const [isLoadingVocab, setIsLoadingVocab] = useState(false);
 
-  // Initialize Telegram WebApp & Auth State
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Initialize Telegram WebApp & Fullscreen State
   useEffect(() => {
     try {
       const tg = (window as any).Telegram?.WebApp;
       if (tg) {
-        tg.ready();
-        tg.expand();
+        tg.ready?.();
+        tg.expand?.();
+        if (typeof tg.requestFullscreen === 'function') {
+          tg.requestFullscreen();
+        }
+        if (typeof tg.disableVerticalSwipes === 'function') {
+          tg.disableVerticalSwipes();
+        }
       }
     } catch (e) {
       console.warn('Telegram WebApp SDK not initialized:', e);
     }
 
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.requestFullscreen) {
+      try {
+        (window as any).Telegram.WebApp.requestFullscreen();
+      } catch {}
+    }
+
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
+
+  useEffect(() => {
     if (!initialLoadedRef.current) {
       initialLoadedRef.current = true;
       loadInitialData();
@@ -890,8 +920,32 @@ export default function StudentMiniAppPage() {
           </div>
         )}
 
-        {/* User Profile Dropdown with DB Role Switcher */}
-        <ProfileDropdown onNavigateTab={(t) => setMainTab(t as any)} variant="student" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "To'liq ekrandan chiqish" : "To'liq ekran (Full screen)"}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: isFullscreen ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
+              border: '1.5px solid var(--sky-border)',
+              color: 'var(--primary-blue)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-subtle)',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+          >
+            {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
+
+          {/* User Profile Dropdown with DB Role Switcher */}
+          <ProfileDropdown onNavigateTab={(t) => setMainTab(t as any)} variant="student" />
+        </div>
       </header>
 
       {/* ======================================================== */}

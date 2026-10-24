@@ -7,6 +7,23 @@ import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { AuthProvider } from './context/AuthContext'
 
+// Telegram WebApp Full-Screen & Expand initialization
+if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+  try {
+    const tg = (window as any).Telegram.WebApp;
+    tg.ready?.();
+    tg.expand?.();
+    if (typeof tg.requestFullscreen === 'function') {
+      tg.requestFullscreen();
+    }
+    if (typeof tg.disableVerticalSwipes === 'function') {
+      tg.disableVerticalSwipes();
+    }
+  } catch (e) {
+    console.warn('Telegram WebApp init warning:', e);
+  }
+}
+
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   let [resource, config] = args;

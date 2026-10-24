@@ -145,7 +145,7 @@ public class AuthController : ControllerBase
     public IActionResult RedirectToFrontend([FromQuery] string token)
     {
         // Telegram bot localhost ssilkalarni qabul qilmaydi, shuning uchun API orqali redirect qilamiz
-        string front_url = _configuration.GetValue<string>("Frontend:Host", "example.uz");
+        string front_url = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
         return Redirect($"https://{front_url}/auth/login?token={token}");
     }
 

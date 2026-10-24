@@ -1182,7 +1182,7 @@ public class AssignmentService : IAssignmentService
         if (att.ItemSubmission.StudentId != studentOrTeacherId)
         {
             var user = await _db.Users.FindAsync(studentOrTeacherId);
-            if (user == null || !user.IsAdmin) return false;
+            if (user == null || (!user.IsAdmin && user.Role != "Teacher")) return false;
         }
         else if (att.ItemSubmission.Status == 1)
         {
@@ -1190,6 +1190,56 @@ public class AssignmentService : IAssignmentService
         }
 
         _db.ItemSubmissionAttachments.Remove(att);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteAssignmentAsync(long assignmentId, long teacherId)
+    {
+        var assignment = await _db.Assignments
+            .Include(a => a.Group)
+                .ThenInclude(g => g.Admins)
+            .Include(a => a.Items)
+            .Include(a => a.Submissions)
+                .ThenInclude(s => s.Attachments)
+            .FirstOrDefaultAsync(a => a.Id == assignmentId);
+
+        if (assignment == null) return false;
+
+        var teacher = await _db.Users.FindAsync(teacherId);
+        bool hasAccess = (teacher != null && (teacher.IsAdmin || teacher.Role == "Teacher"))
+                         || assignment.CreatorId == teacherId
+                         || (assignment.Group != null && (assignment.Group.OwnerId == teacherId || assignment.Group.Admins.Any(ga => ga.UserId == teacherId)));
+
+        if (!hasAccess)
+        {
+            throw new UnauthorizedAccessException("Ushbu vazifani o'chirish uchun sizda ruxsat yo'q!");
+        }
+
+        // 1. Remove attachments
+        foreach (var sub in assignment.Submissions)
+        {
+            if (sub.Attachments != null && sub.Attachments.Count > 0)
+            {
+                _db.ItemSubmissionAttachments.RemoveRange(sub.Attachments);
+            }
+        }
+
+        // 2. Remove submissions
+        if (assignment.Submissions != null && assignment.Submissions.Count > 0)
+        {
+            _db.AssignmentItemSubmissions.RemoveRange(assignment.Submissions);
+        }
+
+        // 3. Remove items
+        if (assignment.Items != null && assignment.Items.Count > 0)
+        {
+            _db.AssignmentItems.RemoveRange(assignment.Items);
+        }
+
+        // 4. Remove assignment
+        _db.Assignments.Remove(assignment);
+
         await _db.SaveChangesAsync();
         return true;
     }

@@ -376,6 +376,23 @@ export const api = {
     return true;
   },
 
+  // Teacher Delete Assignment
+  async deleteAssignment(assignmentId: number, teacherId?: number): Promise<{ success: boolean; message?: string }> {
+    try {
+      const url = teacherId 
+        ? `${API_BASE}/assignments/${assignmentId}?teacherId=${teacherId}`
+        : `${API_BASE}/assignments/${assignmentId}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        return { success: false, message: err?.message || 'Vazifani o\'chirishda xatolik yuz berdi' };
+      }
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Server bilan aloqa xatosi' };
+    }
+  },
+
   // Teacher Review Queue
   async getTeacherSubmissions(groupId: number, filter?: string, teacherId?: number): Promise<SubmissionReview[]> {
     try {
