@@ -32,98 +32,102 @@ export function isTelegramDesktop(): boolean {
 }
 
 /**
- * Desktopda Telegram Mini App ochilganda avtomatik ravishda boshidayoq to'liq ekranga yoyish (Full-screen mode)
+ * Desktopda Telegram Mini App ochilganda oynani maksimal kengaytirish
  */
 export function autoFullscreenOnDesktop() {
   if (typeof window === 'undefined') return;
   const tg = (window as any).Telegram?.WebApp;
   if (!tg) return;
 
-  if (isTelegramDesktop() && typeof tg.requestFullscreen === 'function') {
-    try {
-      tg.expand?.();
-      if (!tg.isFullscreen) {
-        tg.requestFullscreen();
-      }
-    } catch (e) {
-      console.warn('Telegram requestFullscreen error:', e);
-    }
-
-    // Telegram Desktop ba'zan webview to'liq tayyor bo'lishi uchun ozgina vaqt talab qilishi mumkin
-    setTimeout(() => {
-      try {
-        if (!tg.isFullscreen && typeof tg.requestFullscreen === 'function') {
-          tg.requestFullscreen();
-        }
-      } catch {}
-    }, 180);
+  // Telegram desktopda oynani maksimal kengaytirish (expand)
+  try {
+    tg.expand?.();
+  } catch (e) {
+    console.warn('tg.expand error:', e);
   }
 }
 
 /**
  * Ekranni to'liq qoplash (Fullscreen) va kichiklashtirishni almashtirish (Toggle)
- * - Telegram WebApp API (Mobile & Desktop Bot API 8.0+)
- * - HTML5 DOM Fullscreen API (Desktopda butun kompyuter monitorini to'liq qamrab olish)
+ * - Mobile Telegram Mini App: Bot API 8.0 tg.requestFullscreen() & tg.exitFullscreen()
+ * - Desktop Telegram & Brauzerlar: HTML5 DOM Fullscreen (Chromium orqali monitor ekranini 100% to'liq qoplab olish)
  */
-export async function toggleAppFullscreen(
+export function toggleAppFullscreen(
   isFullscreen: boolean,
   setIsFullscreen: (val: boolean) => void
 ) {
   if (typeof window === 'undefined') return;
   const tg = (window as any).Telegram?.WebApp;
-  const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
-  const isTgFs = Boolean(tg?.isFullscreen);
-  const currentlyFullscreen = isFullscreen || isDomFs || isTgFs;
+  const platform = (tg?.platform || '').toLowerCase();
+  const isMobile = ['android', 'ios'].includes(platform) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 
-  if (currentlyFullscreen) {
-    // 1. DOM Fullscreen dan chiqish (Agar butun monitor qoplangan bo'lsa)
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen?.();
-      } else if ((document as any).webkitFullscreenElement) {
-        await (document as any).webkitExitFullscreen?.();
-      }
-    } catch (e) {
-      console.warn('DOM exitFullscreen error:', e);
-    }
-
-    // 2. Telegram WebApp Fullscreen dan chiqish
-    try {
-      if (tg && typeof tg.exitFullscreen === 'function') {
-        tg.exitFullscreen();
-      }
-    } catch (e) {
-      console.warn('tg.exitFullscreen error:', e);
-    }
-
-    setIsFullscreen(false);
-  } else {
-    // 1. Telegram WebApp Fullscreenni chaqirish
+  if (isMobile) {
+    // 1. MOBIL MUHIT (Telegram Mini App Bot API 8.0)
     try {
       if (tg) {
-        tg.expand?.();
-        if (typeof tg.requestFullscreen === 'function') {
-          tg.requestFullscreen();
+        const currentlyFs = tg.isFullscreen ?? isFullscreen;
+        if (currentlyFs) {
+          tg.exitFullscreen?.();
+          setIsFullscreen(false);
+        } else {
+          tg.requestFullscreen?.();
+          tg.expand?.();
+          setIsFullscreen(true);
         }
+      } else {
+        setIsFullscreen(!isFullscreen);
       }
     } catch (e) {
-      console.warn('tg.requestFullscreen error:', e);
+      console.warn('Mobile tg fullscreen error:', e);
     }
+  } else {
+    // 2. DESKTOP MUHIT (Telegram Desktop ilovasi va oddiy brauzerlar)
+    // HTML5 DOM Fullscreen butun kompyuter monitorini 100% to'liq qamrab oladi
+    const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement || isFullscreen);
 
-    // 2. HTML5 DOM Fullscreen API (Telegram Desktop va brauzerlarda butun monitorni qamrab oladi)
-    try {
-      const el = document.documentElement as any;
-      if (el.requestFullscreen) {
-        await el.requestFullscreen();
-      } else if (el.webkitRequestFullscreen) {
-        await el.webkitRequestFullscreen();
+    if (isDomFs) {
+      // Monitor to'liq ekranidan chiqish
+      try {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        }
+      } catch (e) {
+        console.warn('DOM exitFullscreen error:', e);
       }
-    } catch (e) {
-      // Mobile brauzerlarda agar DOM fullscreen bloklangan bo'lsa, xatolik berishi mumkin
-      console.warn('DOM requestFullscreen info:', e);
-    }
 
-    setIsFullscreen(true);
+      try {
+        if (tg && typeof tg.exitFullscreen === 'function') {
+          tg.exitFullscreen();
+        }
+      } catch {}
+
+      setIsFullscreen(false);
+    } else {
+      // Monitor to'liq ekranini qoplab olish (1920x1080 true fullscreen)
+      try {
+        const el = document.documentElement as any;
+        if (el.requestFullscreen) {
+          el.requestFullscreen().catch((err: any) => console.warn('DOM requestFullscreen error:', err));
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        }
+      } catch (e) {
+        console.warn('DOM requestFullscreen exception:', e);
+      }
+
+      try {
+        if (tg) {
+          tg.expand?.();
+          if (typeof tg.requestFullscreen === 'function') {
+            tg.requestFullscreen();
+          }
+        }
+      } catch {}
+
+      setIsFullscreen(true);
+    }
   }
 }
 

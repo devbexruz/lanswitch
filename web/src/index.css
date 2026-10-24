@@ -260,20 +260,17 @@ body {
   }
 }
 
-/* Scrollbar dizayni */
+/* Scrollbarni butunlay yashirish (Telegram Mini App va mobil ekranlar toza ko'rinishi uchun) */
+html, body, #root, * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--ice-blue-bg);
-}
-::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 
 /* Responsive Desktop Sidebar & Mobile Bottom Nav */
