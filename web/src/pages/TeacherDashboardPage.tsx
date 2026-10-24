@@ -141,16 +141,32 @@ export default function TeacherDashboardPage() {
   }, [tab, user?.id]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+    const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : undefined;
+
+    const updateFsState = () => {
+      const isTgFs = Boolean(tg?.isFullscreen);
+      const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setIsFullscreen(isTgFs || isDomFs);
+    };
+
+    if (tg) {
       try {
-        const tg = (window as any).Telegram.WebApp;
         tg.ready?.();
         tg.expand?.();
-        if (typeof tg.requestFullscreen === 'function') {
-          tg.requestFullscreen();
+        if (typeof tg.setHeaderColor === 'function') {
+          tg.setHeaderColor('#1D4ED8');
         }
-        if (typeof tg.disableVerticalSwipes === 'function') {
-          tg.disableVerticalSwipes();
+        if (typeof tg.setBackgroundColor === 'function') {
+          tg.setBackgroundColor('#EFF6FF');
+        }
+
+        // Listen for Telegram WebApp fullscreen change events (Bot API 8.0+)
+        if (typeof tg.onEvent === 'function') {
+          tg.onEvent('fullscreenChanged', updateFsState);
+          tg.onEvent('fullscreenFailed', () => {
+            tg.expand?.();
+            updateFsState();
+          });
         }
       } catch (e) {
         console.warn('Telegram WebApp full screen error:', e);
@@ -158,23 +174,74 @@ export default function TeacherDashboardPage() {
     }
 
     const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      updateFsState();
     };
+
     document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+
+    updateFsState();
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      if (tg && typeof tg.offEvent === 'function') {
+        try {
+          tg.offEvent('fullscreenChanged', updateFsState);
+        } catch {}
+      }
+    };
   }, []);
 
-  const toggleFullscreen = () => {
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.requestFullscreen) {
+  const toggleFullscreen = async () => {
+    const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : undefined;
+
+    // 1. Telegram WebApp Fullscreen (Mobile & Desktop Bot API 8.0+)
+    if (tg && (typeof tg.requestFullscreen === 'function' || typeof tg.exitFullscreen === 'function')) {
       try {
-        (window as any).Telegram.WebApp.requestFullscreen();
+        if (tg.isFullscreen) {
+          tg.exitFullscreen?.();
+          setIsFullscreen(false);
+          return;
+        } else {
+          tg.requestFullscreen?.();
+          tg.expand?.();
+          setIsFullscreen(true);
+          return;
+        }
+      } catch (e) {
+        console.warn('Telegram WebApp fullscreen toggle error:', e);
+      }
+    }
+
+    // 2. Fallback to Telegram WebApp expand if available
+    if (tg && typeof tg.expand === 'function') {
+      try {
+        tg.expand();
       } catch {}
     }
 
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-    } else {
-      document.exitFullscreen?.().catch(() => {});
+    // 3. HTML5 DOM Fullscreen API (Browser)
+    try {
+      const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      if (!isDomFs) {
+        const el = document.documentElement as any;
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        }
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      console.warn('DOM Fullscreen error:', err);
     }
   };
 

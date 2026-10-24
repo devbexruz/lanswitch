@@ -101,12 +101,6 @@ function initTelegramAndSafeArea() {
     if (tg) {
       tg.ready?.();
       tg.expand?.();
-      if (typeof tg.requestFullscreen === 'function') {
-        tg.requestFullscreen();
-      }
-      if (typeof tg.disableVerticalSwipes === 'function') {
-        tg.disableVerticalSwipes();
-      }
 
       applyColors();
 
