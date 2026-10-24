@@ -745,12 +745,21 @@ public class TelegramBotAppService : ITelegramBotAppService
         else if (data != null && data.StartsWith("cancel_sub_"))
         {
             _stateManager.ClearState(chatId);
-            await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Fayl bekor qilindi");
+            await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Topshiriq yuklash bekor qilindi");
+
+            string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+            var tmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+            var backKeyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new WebAppInfo { Url = $"{tmaUrl}?user_id={user.Id}" }) }
+            });
+
             await _botClient.EditMessageText(
                 chatId,
                 callbackQuery.Message.MessageId,
-                "🗑️ <b>Fayl bekor qilindi.</b>\n\nYangi audio, video yoki rasm yuborishingiz mumkin:",
-                parseMode: ParseMode.Html);
+                "🗑️ <b>Topshiriq yuklash bekor qilindi.</b>\n\nIstalgan vaqtda Mini App orqali qayta yuborishingiz mumkin.",
+                parseMode: ParseMode.Html,
+                replyMarkup: backKeyboard);
             return;
         }
 

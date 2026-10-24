@@ -228,4 +228,13 @@ public class StudentTimelineAssignmentDto
     public List<AssignmentItemDetailDto> Items { get; set; } = new();
 }
 
+public class PrepareUploadResultDto
+{
+    public bool Success { get; set; }
+    public string BotUsername { get; set; } = null!;
+    public string BotUrl { get; set; } = null!;
+    public string? Message { get; set; }
+}
+
+
 

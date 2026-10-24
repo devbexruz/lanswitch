@@ -40,6 +40,7 @@ export default function StudentMiniAppPage() {
   const [activeFilter, setActiveFilter] = useState<'All' | 'Completed' | 'Penalty' | 'Unchecked' | 'Pending'>('All');
   const [assignments, setAssignments] = useState<AssignmentDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [preparingUploadItemId, setPreparingUploadItemId] = useState<number | null>(null);
 
   // First-time Onboarding Modal State
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -371,20 +372,48 @@ export default function StudentMiniAppPage() {
 
 
   // Open Telegram Bot to submit media
-  const handleOpenBotForMedia = (itemId: number) => {
-    const botUrl = `https://t.me/lanswitchbot?start=item_${itemId}`;
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg && typeof tg.openTelegramLink === 'function') {
-      tg.openTelegramLink(botUrl);
-      setTimeout(() => {
+  const handleOpenBotForMedia = async (itemId: number) => {
+    if (preparingUploadItemId === itemId) return;
+    setPreparingUploadItemId(itemId);
+
+    try {
+      const res = await api.prepareMediaUpload(itemId, studentId);
+      if (!res.success) {
+        alert(res.message || "Xatolik yuz berdi. Iltimos botni bloklamaganingizni tekshiring.");
+        setPreparingUploadItemId(null);
+        return;
+      }
+
+      const botUrl = res.botUrl || "https://t.me/lanswitchbot";
+      const tg = (window as any).Telegram?.WebApp;
+
+      if (tg) {
+        // Mini App muhitida: Bot chatiga o'tish va Mini Appni yopish/minimallashtirish
         try {
-          tg.close();
+          if (typeof tg.openTelegramLink === 'function') {
+            tg.openTelegramLink(botUrl);
+          }
         } catch (e) {
-          console.error(e);
+          console.warn('tg.openTelegramLink error:', e);
         }
-      }, 300);
-    } else {
-      window.location.href = botUrl;
+
+        setTimeout(() => {
+          try {
+            if (typeof tg.close === 'function') {
+              tg.close();
+            }
+          } catch (e) {
+            console.warn('tg.close error:', e);
+          }
+        }, 150);
+      } else {
+        // Web brauzerda: Botga to'g'ridan-to'g'ri o'tish (start buyrug'isiz)
+        window.open(botUrl, '_blank') || (window.location.href = botUrl);
+      }
+    } catch (err: any) {
+      alert("Xatolik: " + (err?.message || "Fayl yuklashni boshlab bo'lmadi"));
+    } finally {
+      setPreparingUploadItemId(null);
     }
   };
 
@@ -756,7 +785,15 @@ export default function StudentMiniAppPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => handleOpenBotForMedia(item.id)}
+                          onClick={() => {
+                            const viewUrl = att.streamUrl || `https://t.me/lanswitchbot?start=view_att_${att.id}`;
+                            const tg = (window as any).Telegram?.WebApp;
+                            if (tg && typeof tg.openTelegramLink === 'function') {
+                              tg.openTelegramLink(viewUrl);
+                            } else {
+                              window.open(viewUrl, '_blank');
+                            }
+                          }}
                           style={{
                             background: 'var(--ice-blue-bg)',
                             border: '1px solid var(--sky-border)',
@@ -803,6 +840,7 @@ export default function StudentMiniAppPage() {
             ) : (
               <button
                 onClick={() => handleOpenBotForMedia(item.id)}
+                disabled={preparingUploadItemId === item.id}
                 className="btn-big-blue"
                 style={{
                   width: '100%',
@@ -810,11 +848,22 @@ export default function StudentMiniAppPage() {
                   fontSize: '15px',
                   background: isCompleted ? 'var(--ice-blue-bg)' : 'var(--primary-blue)',
                   color: isCompleted ? 'var(--primary-blue)' : 'var(--pure-white)',
-                  border: isCompleted ? '2px solid var(--primary-blue)' : 'none'
+                  border: isCompleted ? '2px solid var(--primary-blue)' : 'none',
+                  opacity: preparingUploadItemId === item.id ? 0.7 : 1,
+                  cursor: preparingUploadItemId === item.id ? 'wait' : 'pointer'
                 }}
               >
-                <Send size={18} />
-                <span>{item.attachments && item.attachments.length > 0 ? 'QAYTA YUBORISH (BOT)' : 'YUBORISH (BOT)'}</span>
+                {preparingUploadItemId === item.id ? (
+                  <>
+                    <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Botga xabar yuborilmoqda...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={18} />
+                    <span>{item.attachments && item.attachments.length > 0 ? 'QAYTA FAYL YUKLASH (BOT)' : 'VIDEO / AUDIO YUKLASH (BOT)'}</span>
+                  </>
+                )}
               </button>
             )}
           </div>

@@ -345,4 +345,28 @@ public class AssignmentsController : ControllerBase
 
         return NotFound();
     }
+
+    /// <summary>
+    /// Student uchun botga media topshiriq yuklash holatini tayyorlash va bot orqali xabar yuborish
+    /// </summary>
+    [HttpPost("items/{itemId}/prepare-upload")]
+    public async Task<IActionResult> PrepareMediaUpload([FromRoute] long itemId, [FromQuery] long? studentId = null)
+    {
+        var sId = studentId ?? GetUserId();
+        if (sId == 0) return Unauthorized(new { message = "Student ID not identified" });
+
+        try
+        {
+            var res = await _assignmentService.PrepareMediaUploadAsync(itemId, sId);
+            if (!res.Success)
+            {
+                return BadRequest(new { message = res.Message });
+            }
+            return Ok(res);
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

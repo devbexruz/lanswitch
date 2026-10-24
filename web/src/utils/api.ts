@@ -643,6 +643,40 @@ export const api = {
     return false;
   },
 
+  // Prepare media upload via Telegram Bot
+  async prepareMediaUpload(itemId: number, studentId?: number): Promise<{ success: boolean; botUsername?: string; botUrl?: string; message?: string }> {
+    try {
+      const url = studentId 
+        ? `${API_BASE}/assignments/items/${itemId}/prepare-upload?studentId=${studentId}`
+        : `${API_BASE}/assignments/items/${itemId}/prepare-upload`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(studentId ? { 'X-User-Id': studentId.toString() } : {})
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        return {
+          success: true,
+          botUsername: data.botUsername,
+          botUrl: data.botUrl || `https://t.me/${data.botUsername || 'lanswitchbot'}`,
+          message: data.message
+        };
+      }
+      return {
+        success: false,
+        message: data?.message || 'Yuklashni tayyorlashda xatolik yuz berdi'
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        message: e?.message || 'Server bilan aloqa xatosi'
+      };
+    }
+  },
+
   // Books hierarchy
   async getBookParts(bookId: number): Promise<BookPart[]> {
     try {

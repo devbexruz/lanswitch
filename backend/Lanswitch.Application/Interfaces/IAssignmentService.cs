@@ -25,6 +25,7 @@ public interface IAssignmentService
     Task<bool> GradeStudentItemAsync(long assignmentId, long itemId, long studentId, int status, long teacherId, string? comment = null);
     Task<bool> DeleteAttachmentAsync(long attachmentId, long studentOrTeacherId);
     Task<bool> DeleteAssignmentAsync(long assignmentId, long teacherId);
+    Task<PrepareUploadResultDto> PrepareMediaUploadAsync(long itemId, long studentId);
 }
 
 

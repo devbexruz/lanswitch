@@ -18,12 +18,14 @@ public class AssignmentService : IAssignmentService
     private readonly AppDbContext _db;
     private readonly ITelegramBotClient _botClient;
     private readonly IConfiguration _config;
+    private readonly IBotStateManager _stateManager;
 
-    public AssignmentService(AppDbContext db, ITelegramBotClient botClient, IConfiguration config)
+    public AssignmentService(AppDbContext db, ITelegramBotClient botClient, IConfiguration config, IBotStateManager stateManager)
     {
         _db = db;
         _botClient = botClient;
         _config = config;
+        _stateManager = stateManager;
     }
 
     public async Task<Assignment> CreateAssignmentAsync(long teacherId, CreateAssignmentDto dto)
@@ -1242,6 +1244,82 @@ public class AssignmentService : IAssignmentService
 
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<PrepareUploadResultDto> PrepareMediaUploadAsync(long itemId, long studentId)
+    {
+        var student = await _db.Users.FindAsync(studentId);
+        if (student == null)
+            throw new InvalidOperationException("Talaba topilmadi!");
+
+        if (string.IsNullOrWhiteSpace(student.TelegramId) || !long.TryParse(student.TelegramId, out var chatId))
+            throw new InvalidOperationException("Foydalanuvchining Telegram ma'lumotlari aniqlanmadi.");
+
+        var item = await _db.AssignmentItems
+            .Include(i => i.Assignment)
+            .FirstOrDefaultAsync(i => i.Id == itemId);
+
+        if (item == null)
+            throw new InvalidOperationException("Topshiriq topilmadi!");
+
+        var existingSub = await _db.AssignmentItemSubmissions
+            .FirstOrDefaultAsync(s => s.AssignmentItemId == itemId && s.StudentId == studentId);
+
+        if (existingSub != null && existingSub.Status == 1)
+        {
+            throw new InvalidOperationException("Ushbu topshiriq o'qituvchi tomonidan 'Bajarildi' deb qabul qilingan va unga qayta fayl yuklab bo'lmaydi.");
+        }
+
+        // Set state in BotStateManager so that next media received from this user is linked to this item
+        var state = new AdminState { CurrentStep = AdminStep.WaitingMediaSubmission };
+        state.Data["ItemId"] = itemId;
+        _stateManager.SetState(chatId, state);
+
+        var botUsername = _config["BotConfiguration:BotUsername"]?.TrimStart('@') ?? "lanswitchbot";
+        var botUrl = $"https://t.me/{botUsername}";
+
+        string frontendHost = _config.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+        var tmaUrl = _config["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+
+        var keyboard = new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new Telegram.Bot.Types.WebAppInfo { Url = $"{tmaUrl}?user_id={student.Id}" }),
+                InlineKeyboardButton.WithCallbackData("❌ Bekor qilish", $"cancel_sub_{itemId}")
+            }
+        });
+
+        var text = $"📌 <b>Topshiriq:</b> {item.Title}\n" +
+                   $"📝 <b>Yo'riqnoma:</b> {item.Instructions ?? "Javobingizni audio, video yoki rasm sifatida yuboring"}\n\n" +
+                   $"👇 <i>Iltimos, ushbu topshiriq uchun javobingizni (voice, video yoki rasm) shu yerga yuboring:</i>";
+
+        try
+        {
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: text,
+                parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
+                replyMarkup: keyboard);
+        }
+        catch (Exception ex)
+        {
+            return new PrepareUploadResultDto
+            {
+                Success = false,
+                BotUsername = botUsername,
+                BotUrl = botUrl,
+                Message = $"Telegram botga xabar yuborib bo'lmadi: {ex.Message}. Iltimos, avval botni ishga tushirganingiz va bloklamaganingizni tekshiring."
+            };
+        }
+
+        return new PrepareUploadResultDto
+        {
+            Success = true,
+            BotUsername = botUsername,
+            BotUrl = botUrl,
+            Message = "Tayyorlandi"
+        };
     }
 }
 
