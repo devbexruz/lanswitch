@@ -41,6 +41,13 @@ export default function StudentMiniAppPage() {
   const [assignments, setAssignments] = useState<AssignmentDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [preparingUploadItemId, setPreparingUploadItemId] = useState<number | null>(null);
+  const [sendingAttId, setSendingAttId] = useState<number | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{
+    url: string;
+    type: 'photo' | 'video' | 'audio';
+    title?: string;
+    attachmentId?: number;
+  } | null>(null);
 
   // First-time Onboarding Modal State
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -92,6 +99,12 @@ export default function StudentMiniAppPage() {
         }
         if (typeof tg.disableVerticalSwipes === 'function') {
           tg.disableVerticalSwipes();
+        }
+        if (typeof tg.setHeaderColor === 'function') {
+          tg.setHeaderColor('#1D4ED8');
+        }
+        if (typeof tg.setBackgroundColor === 'function') {
+          tg.setBackgroundColor('#EFF6FF');
         }
       }
     } catch (e) {
@@ -414,6 +427,50 @@ export default function StudentMiniAppPage() {
       alert("Xatolik: " + (err?.message || "Fayl yuklashni boshlab bo'lmadi"));
     } finally {
       setPreparingUploadItemId(null);
+    }
+  };
+
+  // Send media attachment directly to Telegram bot chat
+  const handleSendAttachmentToBot = async (attachmentId: number) => {
+    if (sendingAttId === attachmentId) return;
+    setSendingAttId(attachmentId);
+
+    try {
+      const res = await api.sendAttachmentToBot(attachmentId, studentId);
+      if (!res.success) {
+        alert(res.message || "Xatolik: Faylni Telegram botga yuborib bo'lmadi.");
+        setSendingAttId(null);
+        return;
+      }
+
+      const botUrl = res.botUrl || "https://t.me/lanswitchbot";
+      const tg = (window as any).Telegram?.WebApp;
+
+      if (tg) {
+        try {
+          if (typeof tg.openTelegramLink === 'function') {
+            tg.openTelegramLink(botUrl);
+          }
+        } catch (e) {
+          console.warn('tg.openTelegramLink error:', e);
+        }
+
+        setTimeout(() => {
+          try {
+            if (typeof tg.close === 'function') {
+              tg.close();
+            }
+          } catch (e) {
+            console.warn('tg.close error:', e);
+          }
+        }, 150);
+      } else {
+        window.open(botUrl, '_blank') || (window.location.href = botUrl);
+      }
+    } catch (err: any) {
+      alert("Xatolik: " + (err?.message || "Faylni botga yuborib bo'lmadi"));
+    } finally {
+      setSendingAttId(null);
     }
   };
 
@@ -762,56 +819,223 @@ export default function StudentMiniAppPage() {
                     </div>
 
                     {(att.fileType === 'voice' || att.fileType === 'audio') && (
-                      <audio controls src={att.streamUrl} style={{ width: '100%', height: '36px' }} />
-                    )}
-
-                    {att.fileType === 'photo' && (
-                      <img
-                        src={att.streamUrl}
-                        alt="Yuklangan rasm"
-                        style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '8px' }}
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                      />
-                    )}
-
-                    {att.fileType === 'video' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <video
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <audio
                           controls
                           src={att.streamUrl}
-                          style={{ width: '100%', maxHeight: '220px', borderRadius: '8px', background: '#000' }}
+                          style={{ width: '100%', height: '40px', borderRadius: '8px' }}
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            const viewUrl = att.streamUrl || `https://t.me/lanswitchbot?start=view_att_${att.id}`;
-                            const tg = (window as any).Telegram?.WebApp;
-                            if (tg && typeof tg.openTelegramLink === 'function') {
-                              tg.openTelegramLink(viewUrl);
-                            } else {
-                              window.open(viewUrl, '_blank');
-                            }
-                          }}
+                          onClick={() => handleSendAttachmentToBot(att.id)}
+                          disabled={sendingAttId === att.id}
                           style={{
                             background: 'var(--ice-blue-bg)',
                             border: '1px solid var(--sky-border)',
                             borderRadius: '8px',
-                            padding: '6px 10px',
+                            padding: '8px 12px',
                             fontSize: '12px',
                             fontWeight: 700,
                             color: 'var(--primary-blue)',
-                            cursor: 'pointer',
+                            cursor: sendingAttId === att.id ? 'wait' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '6px'
+                            gap: '6px',
+                            opacity: sendingAttId === att.id ? 0.7 : 1
                           }}
                         >
-                          <ExternalLink size={14} />
-                          <span>Telegram botda ko'rish (Katta video)</span>
+                          {sendingAttId === att.id ? (
+                            <>
+                              <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                              <span>Botga yuborilmoqda...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink size={14} />
+                              <span>Telegram botda eshitish</span>
+                            </>
+                          )}
                         </button>
+                      </div>
+                    )}
+
+                    {att.fileType === 'photo' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div
+                          onClick={() => setPreviewMedia({ url: att.streamUrl || '', type: 'photo', title: item.title, attachmentId: att.id })}
+                          style={{
+                            position: 'relative',
+                            cursor: 'pointer',
+                            borderRadius: '10px',
+                            overflow: 'hidden',
+                            border: '1px solid var(--sky-border)',
+                            background: '#F8FAFC'
+                          }}
+                        >
+                          <img
+                            src={att.streamUrl}
+                            alt="Yuklangan rasm"
+                            style={{
+                              width: '100%',
+                              maxHeight: '220px',
+                              objectFit: 'cover',
+                              display: 'block'
+                            }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          <div style={{
+                            position: 'absolute',
+                            right: '8px',
+                            bottom: '8px',
+                            background: 'rgba(15, 23, 42, 0.75)',
+                            backdropFilter: 'blur(4px)',
+                            color: '#FFFFFF',
+                            borderRadius: '6px',
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <Maximize2 size={12} />
+                            <span>Katta ko'rish</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewMedia({ url: att.streamUrl || '', type: 'photo', title: item.title, attachmentId: att.id })}
+                            style={{
+                              flex: 1,
+                              background: '#F8FAFC',
+                              border: '1px solid var(--sky-border)',
+                              borderRadius: '8px',
+                              padding: '8px 10px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: 'var(--text-navy)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Maximize2 size={13} />
+                            <span>Katta rasm</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSendAttachmentToBot(att.id)}
+                            disabled={sendingAttId === att.id}
+                            style={{
+                              flex: 1,
+                              background: 'var(--ice-blue-bg)',
+                              border: '1px solid var(--sky-border)',
+                              borderRadius: '8px',
+                              padding: '8px 10px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: 'var(--primary-blue)',
+                              cursor: sendingAttId === att.id ? 'wait' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              opacity: sendingAttId === att.id ? 0.7 : 1
+                            }}
+                          >
+                            {sendingAttId === att.id ? (
+                              <>
+                                <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                <span>Yuborilmoqda...</span>
+                              </>
+                            ) : (
+                              <>
+                                <ExternalLink size={13} />
+                                <span>Telegramda ko'rish</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {att.fileType === 'video' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#000' }}>
+                          <video
+                            controls
+                            playsInline
+                            src={att.streamUrl}
+                            style={{ width: '100%', maxHeight: '240px', display: 'block' }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewMedia({ url: att.streamUrl || '', type: 'video', title: item.title, attachmentId: att.id })}
+                            style={{
+                              flex: 1,
+                              background: '#F8FAFC',
+                              border: '1px solid var(--sky-border)',
+                              borderRadius: '8px',
+                              padding: '8px 10px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: 'var(--text-navy)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Maximize2 size={13} />
+                            <span>Katta ekranda</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSendAttachmentToBot(att.id)}
+                            disabled={sendingAttId === att.id}
+                            style={{
+                              flex: 1,
+                              background: 'var(--ice-blue-bg)',
+                              border: '1px solid var(--sky-border)',
+                              borderRadius: '8px',
+                              padding: '8px 10px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: 'var(--primary-blue)',
+                              cursor: sendingAttId === att.id ? 'wait' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              opacity: sendingAttId === att.id ? 0.7 : 1
+                            }}
+                          >
+                            {sendingAttId === att.id ? (
+                              <>
+                                <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                <span>Botga yuborilmoqda...</span>
+                              </>
+                            ) : (
+                              <>
+                                <ExternalLink size={13} />
+                                <span>Telegramda ko'rish</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -875,8 +1099,11 @@ export default function StudentMiniAppPage() {
   return (
     <div className="app-page-wrapper" style={{
       minHeight: '100vh',
+      width: '100%',
       maxWidth: '640px',
       margin: '0 auto',
+      overflowX: 'hidden',
+      boxSizing: 'border-box',
       background: 'var(--ice-blue-bg)',
       color: 'var(--text-navy)',
       fontFamily: 'var(--font-main)',
@@ -2421,6 +2648,157 @@ export default function StudentMiniAppPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* FULLSCREEN / LIGHTBOX MEDIA PREVIEW MODAL                */}
+      {/* ======================================================== */}
+      {previewMedia && (
+        <div
+          onClick={() => setPreviewMedia(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(10, 15, 29, 0.94)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {/* Top Bar inside Lightbox */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '640px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '14px',
+              padding: '0 4px'
+            }}
+          >
+            <div style={{ color: '#FFFFFF', fontSize: '15px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {previewMedia.title || "Media ko'rish"}
+            </div>
+            <button
+              onClick={() => setPreviewMedia(null)}
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.2)',
+                border: 'none',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Media Container */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '640px',
+              maxHeight: '75vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              background: '#000',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)'
+            }}
+          >
+            {previewMedia.type === 'photo' && (
+              <img
+                src={previewMedia.url}
+                alt="Preview"
+                style={{
+                  width: '100%',
+                  maxHeight: '75vh',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+              />
+            )}
+            {previewMedia.type === 'video' && (
+              <video
+                controls
+                autoPlay
+                playsInline
+                src={previewMedia.url}
+                style={{
+                  width: '100%',
+                  maxHeight: '75vh',
+                  display: 'block'
+                }}
+              />
+            )}
+            {previewMedia.type === 'audio' && (
+              <div style={{ padding: '30px 20px', width: '100%', background: '#1E293B' }}>
+                <audio controls autoPlay src={previewMedia.url} style={{ width: '100%' }} />
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Bar: Telegram bot button */}
+          {previewMedia.attachmentId && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                marginTop: '16px',
+                width: '100%',
+                maxWidth: '640px',
+                display: 'flex',
+                justifyContent: 'center'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => previewMedia.attachmentId && handleSendAttachmentToBot(previewMedia.attachmentId)}
+                disabled={sendingAttId === previewMedia.attachmentId}
+                style={{
+                  background: 'var(--primary-blue)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '12px 20px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: sendingAttId === previewMedia.attachmentId ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)'
+                }}
+              >
+                {sendingAttId === previewMedia.attachmentId ? (
+                  <>
+                    <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Telegram botga yuborilmoqda...</span>
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink size={16} />
+                    <span>Telegram botda ochish</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

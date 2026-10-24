@@ -1321,6 +1321,94 @@ public class AssignmentService : IAssignmentService
             Message = "Tayyorlandi"
         };
     }
+
+    public async Task<SendAttachmentResultDto> SendAttachmentToTelegramAsync(long attachmentId, long userId)
+    {
+        var user = await _db.Users.FindAsync(userId);
+        if (user == null)
+            throw new InvalidOperationException("Foydalanuvchi topilmadi!");
+
+        if (string.IsNullOrWhiteSpace(user.TelegramId) || !long.TryParse(user.TelegramId, out var chatId))
+            throw new InvalidOperationException("Foydalanuvchining Telegram ID si aniqlanmadi.");
+
+        var att = await _db.ItemSubmissionAttachments
+            .Include(a => a.ItemSubmission).ThenInclude(s => s.AssignmentItem)
+            .Include(a => a.ItemSubmission).ThenInclude(s => s.Student)
+            .FirstOrDefaultAsync(a => a.Id == attachmentId);
+
+        if (att == null)
+            throw new InvalidOperationException("Fayl topilmadi!");
+
+        var sub = att.ItemSubmission;
+        var item = sub.AssignmentItem;
+        var caption = $"📌 <b>Topshiriq:</b> {item.Title}\n👤 <b>Talaba:</b> {sub.Student.FullName}";
+
+        var botUsername = _config["BotConfiguration:BotUsername"]?.TrimStart('@') ?? "lanswitchbot";
+        var botUrl = $"https://t.me/{botUsername}";
+
+        var keyboardList = new List<InlineKeyboardButton[]>();
+        if (user.IsAdmin || user.Role == "Teacher")
+        {
+            keyboardList.Add(new[]
+            {
+                InlineKeyboardButton.WithCallbackData("✅ 1 Bajarildi", $"grade_sub_{sub.Id}_1"),
+                InlineKeyboardButton.WithCallbackData("❌ 0 Jarima", $"grade_sub_{sub.Id}_0"),
+                InlineKeyboardButton.WithCallbackData("⚠️ 2 Jarima", $"grade_sub_{sub.Id}_2")
+            });
+        }
+
+        string frontendHost = _config.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+        var attTmaUrl = _config["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+        keyboardList.Add(new[]
+        {
+            InlineKeyboardButton.WithWebApp("📱 Mini App da ochish", new Telegram.Bot.Types.WebAppInfo { Url = $"{attTmaUrl}?user_id={user.Id}" })
+        });
+
+        var replyKb = new InlineKeyboardMarkup(keyboardList);
+
+        try
+        {
+            var inputFile = new Telegram.Bot.Types.InputFileId(att.TelegramFileId);
+            if (att.FileType == "video")
+            {
+                await _botClient.SendVideo(chatId, inputFile, caption: caption, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: replyKb);
+            }
+            else if (att.FileType == "voice")
+            {
+                await _botClient.SendVoice(chatId, inputFile, caption: caption, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: replyKb);
+            }
+            else if (att.FileType == "audio")
+            {
+                await _botClient.SendAudio(chatId, inputFile, caption: caption, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: replyKb);
+            }
+            else if (att.FileType == "photo")
+            {
+                await _botClient.SendPhoto(chatId, inputFile, caption: caption, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: replyKb);
+            }
+            else
+            {
+                await _botClient.SendDocument(chatId, inputFile, caption: caption, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: replyKb);
+            }
+        }
+        catch (Exception ex)
+        {
+            return new SendAttachmentResultDto
+            {
+                Success = false,
+                BotUsername = botUsername,
+                BotUrl = botUrl,
+                Message = $"Telegram botga fayl yuborib bo'lmadi: {ex.Message}. Iltimos, avval botni ishga tushirganingiz va bloklamaganingizni tekshiring."
+            };
+        }
+
+        return new SendAttachmentResultDto
+        {
+            Success = true,
+            BotUsername = botUsername,
+            BotUrl = botUrl,
+            Message = "Fayl Telegram botingizga yuborildi!"
+        };
+    }
 }
 
 

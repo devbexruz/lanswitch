@@ -9,7 +9,7 @@ import {
   PlusCircle, CheckCircle2, XCircle, AlertTriangle, 
   Send, BookOpen, ChevronRight, RefreshCw, Clock, Shield,
   Trash2, UserCheck, Eye, Volume2, Play, Search, ArrowLeft, Trophy, Sparkles, Check,
-  Film, Library, X, ChevronDown, Users, Maximize2, Minimize2, FileText, Video, Save, Download
+  Film, Library, X, ChevronDown, Users, Maximize2, Minimize2, FileText, Video, Save, Download, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -57,6 +57,7 @@ export default function TeacherDashboardPage() {
   const [remindSuccess, setRemindSuccess] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<number | null>(null);
+  const [sendingAttId, setSendingAttId] = useState<number | null>(null);
 
   // Punishment Comment Modal State
   const [penaltyModal, setPenaltyModal] = useState<{
@@ -576,6 +577,49 @@ export default function TeacherDashboardPage() {
       alert("Fayl muvaffaqiyatli o'chirildi!");
     } else {
       alert("Faylni o'chirib bo'lmadi!");
+    }
+  };
+
+  const handleSendAttachmentToBot = async (attachmentId: number) => {
+    if (sendingAttId === attachmentId) return;
+    setSendingAttId(attachmentId);
+
+    try {
+      const res = await api.sendAttachmentToBot(attachmentId, user?.id);
+      if (!res.success) {
+        alert(res.message || "Xatolik: Faylni Telegram botga yuborib bo'lmadi.");
+        setSendingAttId(null);
+        return;
+      }
+
+      const botUrl = res.botUrl || "https://t.me/lanswitchbot";
+      const tg = (window as any).Telegram?.WebApp;
+
+      if (tg) {
+        try {
+          if (typeof tg.openTelegramLink === 'function') {
+            tg.openTelegramLink(botUrl);
+          }
+        } catch (e) {
+          console.warn('tg.openTelegramLink error:', e);
+        }
+
+        setTimeout(() => {
+          try {
+            if (typeof tg.close === 'function') {
+              tg.close();
+            }
+          } catch (e) {
+            console.warn('tg.close error:', e);
+          }
+        }, 150);
+      } else {
+        window.open(botUrl, '_blank') || (window.location.href = botUrl);
+      }
+    } catch (err: any) {
+      alert("Xatolik: " + (err?.message || "Faylni botga yuborib bo'lmadi"));
+    } finally {
+      setSendingAttId(null);
     }
   };
 
@@ -2916,35 +2960,122 @@ export default function TeacherDashboardPage() {
                               </button>
                             </div>
                             {att.fileType === 'photo' ? (
-                              <img
-                                src={att.streamUrl}
-                                alt="Submission"
-                                style={{ width: '100%', maxHeight: '420px', objectFit: 'contain', borderRadius: '8px', background: '#F8FAFC' }}
-                              />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <img
+                                  src={att.streamUrl}
+                                  alt="Submission"
+                                  style={{ width: '100%', maxHeight: '420px', objectFit: 'contain', borderRadius: '8px', background: '#F8FAFC' }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendAttachmentToBot(att.id)}
+                                  disabled={sendingAttId === att.id}
+                                  style={{
+                                    background: 'var(--ice-blue-bg)',
+                                    border: '1px solid var(--sky-border)',
+                                    borderRadius: '8px',
+                                    padding: '8px 12px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: 'var(--primary-blue)',
+                                    cursor: sendingAttId === att.id ? 'wait' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px'
+                                  }}
+                                >
+                                  {sendingAttId === att.id ? (
+                                    <>
+                                      <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                      <span>Botga yuborilmoqda...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ExternalLink size={13} />
+                                      <span>🖼️ Rasmni Telegram botda ko'rish</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             ) : att.fileType === 'audio' || att.fileType === 'voice' ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   <Volume2 size={16} color="var(--primary-blue)" />
                                   <span>Ovozli xabar / Audio</span>
                                 </div>
                                 <audio controls src={att.streamUrl} style={{ width: '100%' }} />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendAttachmentToBot(att.id)}
+                                  disabled={sendingAttId === att.id}
+                                  style={{
+                                    background: 'var(--ice-blue-bg)',
+                                    border: '1px solid var(--sky-border)',
+                                    borderRadius: '8px',
+                                    padding: '8px 12px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: 'var(--primary-blue)',
+                                    cursor: sendingAttId === att.id ? 'wait' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px'
+                                  }}
+                                >
+                                  {sendingAttId === att.id ? (
+                                    <>
+                                      <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                      <span>Botga yuborilmoqda...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ExternalLink size={13} />
+                                      <span>🎙️ Ovozni Telegram botda eshitish</span>
+                                    </>
+                                  )}
+                                </button>
                               </div>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <video
                                   controls
+                                  playsInline
                                   src={att.streamUrl}
                                   style={{ width: '100%', maxHeight: '380px', borderRadius: '8px', background: '#000' }}
                                 />
-                                <a
-                                  href={att.telegramDeepLink || att.streamUrl || `https://t.me/lanswitchbot?start=view_att_${att.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--primary-blue)', fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendAttachmentToBot(att.id)}
+                                  disabled={sendingAttId === att.id}
+                                  style={{
+                                    background: 'var(--ice-blue-bg)',
+                                    border: '1px solid var(--sky-border)',
+                                    borderRadius: '8px',
+                                    padding: '8px 12px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: 'var(--primary-blue)',
+                                    cursor: sendingAttId === att.id ? 'wait' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px'
+                                  }}
                                 >
-                                  <Play size={14} />
-                                  <span>🎬 Videoni Telegram botda ko'rish</span>
-                                </a>
+                                  {sendingAttId === att.id ? (
+                                    <>
+                                      <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                      <span>Botga yuborilmoqda...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ExternalLink size={13} />
+                                      <span>🎬 Videoni Telegram botda ko'rish</span>
+                                    </>
+                                  )}
+                                </button>
                               </div>
                             )}
                           </div>

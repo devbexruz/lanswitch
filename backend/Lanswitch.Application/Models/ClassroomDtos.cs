@@ -236,5 +236,14 @@ public class PrepareUploadResultDto
     public string? Message { get; set; }
 }
 
+public class SendAttachmentResultDto
+{
+    public bool Success { get; set; }
+    public string BotUsername { get; set; } = null!;
+    public string BotUrl { get; set; } = null!;
+    public string? Message { get; set; }
+}
+
+
 
 

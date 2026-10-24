@@ -369,4 +369,28 @@ public class AssignmentsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Biriktirilgan faylni (video, audio, voice, photo) to'g'ridan-to'g'ri Telegram bot orqali foydalanuvchiga yuborish
+    /// </summary>
+    [HttpPost("attachments/{id}/send-to-bot")]
+    public async Task<IActionResult> SendAttachmentToBot([FromRoute] long id, [FromQuery] long? userId = null)
+    {
+        var uId = userId ?? GetUserId();
+        if (uId == 0) return Unauthorized(new { message = "User ID not identified" });
+
+        try
+        {
+            var res = await _assignmentService.SendAttachmentToTelegramAsync(id, uId);
+            if (!res.Success)
+            {
+                return BadRequest(new { message = res.Message });
+            }
+            return Ok(res);
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

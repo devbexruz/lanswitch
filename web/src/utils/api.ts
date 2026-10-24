@@ -677,6 +677,40 @@ export const api = {
     }
   },
 
+  // Send attachment directly to Telegram bot chat
+  async sendAttachmentToBot(attachmentId: number, userId?: number): Promise<{ success: boolean; botUsername?: string; botUrl?: string; message?: string }> {
+    try {
+      const url = userId
+        ? `${API_BASE}/assignments/attachments/${attachmentId}/send-to-bot?userId=${userId}`
+        : `${API_BASE}/assignments/attachments/${attachmentId}/send-to-bot`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userId ? { 'X-User-Id': userId.toString() } : {})
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        return {
+          success: true,
+          botUsername: data.botUsername,
+          botUrl: data.botUrl || `https://t.me/${data.botUsername || 'lanswitchbot'}`,
+          message: data.message
+        };
+      }
+      return {
+        success: false,
+        message: data?.message || 'Faylni yuborishda xatolik yuz berdi'
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        message: e?.message || 'Server bilan aloqa xatosi'
+      };
+    }
+  },
+
   // Books hierarchy
   async getBookParts(bookId: number): Promise<BookPart[]> {
     try {

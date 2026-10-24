@@ -26,6 +26,7 @@ public interface IAssignmentService
     Task<bool> DeleteAttachmentAsync(long attachmentId, long studentOrTeacherId);
     Task<bool> DeleteAssignmentAsync(long assignmentId, long teacherId);
     Task<PrepareUploadResultDto> PrepareMediaUploadAsync(long itemId, long studentId);
+    Task<SendAttachmentResultDto> SendAttachmentToTelegramAsync(long attachmentId, long userId);
 }
 
 
