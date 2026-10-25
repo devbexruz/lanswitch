@@ -515,6 +515,8 @@ public class TelegramBotAppService : ITelegramBotAppService
 
         var welcomeMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n\n" +
                          $"🚀 <b>Lanswitch</b> — ingliz tilini o'rganish va o'qitishni avtomatlashtiruvchi zamonaviy ta'lim platformasi!\n\n" +
+                         $"🎁 <b>Yangi foydalanuvchilar uchun 25 000 so'm Bepul Bonus!</b>\n" +
+                         $"Platformani to'liq sinab ko'rishingiz uchun hisobingizga <b>25 000 so'm</b> boshlang'ich bonus taqdim etiladi. Mini App'ga kirib, bonusni 1 marta bosish bilan faollashtiring!\n\n" +
                          $"Siz platformadan 2 xil maqsadda foydalanishingiz mumkin:\n\n" +
                          $"👨‍🏫 <b>1. O'qituvchi / Repetitor bo'lsangiz:</b>\n" +
                          $"• O'quvchilaringiz mavjud bo'lgan Telegram guruhingizga ushbu botni qo'shing va <b>Administrator</b> qiling.\n" +

@@ -950,6 +950,9 @@ public class SubscriptionService : ISubscriptionService
         int minsLeft = (int)((remainingSeconds % 3600) / 60);
         int secsLeft = (int)(remainingSeconds % 60);
 
+        var hasPriorSubscription = subs.Any();
+        bool canClaimBonus = !user.HasReceivedInitialBonus && !hasPriorSubscription;
+
         return new
         {
             user = new
@@ -959,9 +962,14 @@ public class SubscriptionService : ISubscriptionService
                 username = user.Username,
                 role = user.Role,
                 balance = user.Balance,
-                liveBalance = currentLiveBalance
+                liveBalance = currentLiveBalance,
+                hasReceivedInitialBonus = user.HasReceivedInitialBonus,
+                canClaimBonus = canClaimBonus
             },
             hasActiveSubscription = activeSub != null,
+            canClaimBonus = canClaimBonus,
+            hasReceivedInitialBonus = user.HasReceivedInitialBonus,
+            bonusAmount = 25000m,
             subscription = activeSub == null ? null : new
             {
                 id = activeSub.Id,
@@ -1131,5 +1139,53 @@ public class SubscriptionService : ISubscriptionService
             Console.WriteLine($"Error sending topup instructions to user {userId}: {ex.Message}");
             return false;
         }
+    }
+
+    public async Task<object> ClaimInitialBonusAsync(long userId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
+
+        if (user.HasReceivedInitialBonus)
+        {
+            throw new InvalidOperationException("Siz allaqachon 25 000 so'm boshlang'ich bonusni qabul qilgansiz.");
+        }
+
+        var hasPriorSubscription = await _context.UserSubscriptions.AnyAsync(s => s.UserId == userId);
+        if (hasPriorSubscription)
+        {
+            throw new InvalidOperationException("Boshlang'ich bonus faqat avval hech qachon obuna faollashtirmagan yangi foydalanuvchilar uchun amal qiladi.");
+        }
+
+        const decimal bonusAmount = 25000m;
+        user.Balance += bonusAmount;
+        user.HasReceivedInitialBonus = true;
+
+        var payment = new SubscriptionPaymentRequest
+        {
+            UserId = user.Id,
+            PlanId = "initial_bonus",
+            PlanName = "Boshlang'ich Bonus",
+            Amount = bonusAmount,
+            ApprovedAmount = bonusAmount,
+            ReceiptImageUrl = "system://initial_bonus",
+            Status = "Approved",
+            AdminNotes = "25 000 so'm yangi foydalanuvchi bonusi",
+            CreatedAt = DateTime.UtcNow,
+            ProcessedAt = DateTime.UtcNow,
+            ProcessedBy = "System"
+        };
+        _context.SubscriptionPaymentRequests.Add(payment);
+
+        await _context.SaveChangesAsync();
+
+        return new
+        {
+            message = "Tabriklaymiz! 25 000 so'm boshlang'ich bonus balansingizga muvaffaqiyatli qo'shildi!",
+            balance = user.Balance,
+            liveBalance = user.Balance,
+            hasReceivedInitialBonus = true,
+            canClaimBonus = false
+        };
     }
 }

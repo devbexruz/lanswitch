@@ -18,7 +18,7 @@ import BottomNav from '../components/BottomNav';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function StudentMiniAppPage() {
-  const { user: authUser, hasSubscription, checkSubscription, setRole } = useAuth();
+  const { user: authUser, hasSubscription, checkSubscription, setRole, canClaimBonus, claimBonus } = useAuth();
   const navigate = useNavigate();
 
   // Navigation: 3 Core Panels
@@ -1222,9 +1222,60 @@ export default function StudentMiniAppPage() {
               <h2 style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '8px' }}>
                 Hali guruhga qo'shilmagansiz
               </h2>
-              <p style={{ fontSize: '14px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '24px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
                 Siz hozir <b>Mustaqil ta'lim</b> rejimidasiz. O'zingiz mustaqil o'rganishingiz yoki topshiriqlarni ko'rish uchun quyidagilardan foydalanishingiz mumkin:
               </p>
+
+              {/* BONUS BANNER FOR NEW USERS */}
+              {canClaimBonus && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.18) 100%)',
+                  border: '1.5px solid #10B981',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '220px' }}>
+                    <span style={{ fontSize: '28px' }}>🎁</span>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 900, color: '#065F46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>25 000 so'm Boshlang'ich Bonus!</span>
+                        <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#047857', marginTop: '2px', lineHeight: 1.4 }}>
+                        Kinolar va AI yordamchini mutlaqo bepul sinab ko'rish uchun bonusni oling!
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await claimBonus();
+                      if (ok) setIsSubscriptionModalOpen(true);
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '9px 16px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                      flexShrink: 0
+                    }}
+                  >
+                    🎁 25 000 bonusni olish
+                  </button>
+                </div>
+              )}
 
               {/* CARD 1: O'QUVCHI UCHUN */}
               <div style={{
@@ -1716,8 +1767,10 @@ export default function StudentMiniAppPage() {
           {/* Student Premium Info Banner (Only for non-premium users) */}
           {!hasSubscription && (
             <div style={{
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.16) 100%)',
-              border: '1.5px solid rgba(245, 158, 11, 0.4)',
+              background: canClaimBonus 
+                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.16) 100%)'
+                : 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.16) 100%)',
+              border: canClaimBonus ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1.5px solid rgba(245, 158, 11, 0.4)',
               borderRadius: '16px',
               padding: '14px 18px',
               display: 'flex',
@@ -1727,37 +1780,71 @@ export default function StudentMiniAppPage() {
               flexWrap: 'wrap'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: 1 }}>
-                <span style={{ fontSize: '24px' }}>👑</span>
+                <span style={{ fontSize: '28px' }}>{canClaimBonus ? '🎁' : '👑'}</span>
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '2px' }}>
-                    Student Premium — Kinolar & AI Ustoz
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Student Premium {canClaimBonus ? "— 25 000 so'm Boshlang'ich Bonus!" : "— Kinolar & AI Ustoz"}</span>
+                    {canClaimBonus && (
+                      <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
+                    )}
                   </div>
                   <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Barcha darslar, lug'at va topshiriqlar mutlaqo bepul! Kinolarni ko'rish va film ichida AI yordamchi bilan chatlashish uchun <strong>Student Premium (50 000 so'm/oy)</strong> kerak bo'ladi.
+                    {canClaimBonus ? (
+                      "Yangi foydalanuvchilar uchun 25 000 so'm bepul bonus mavjud! Bonusni oling va kinolarni bepul tomosha qiling."
+                    ) : (
+                      <>Barcha darslar, lug'at va topshiriqlar mutlaqo bepul! Kinolarni ko'rish va film ichida AI yordamchi bilan chatlashish uchun <strong>Student Premium (50 000 so'm/oy)</strong> kerak bo'ladi.</>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <button
-                onClick={() => setIsSubscriptionModalOpen(true)}
-                style={{
-                  background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  flexShrink: 0
-                }}
-              >
-                👑 Obunani ko'rish
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {canClaimBonus && (
+                  <button
+                    onClick={async () => {
+                      const ok = await claimBonus();
+                      if (ok) setIsSubscriptionModalOpen(true);
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '8px 16px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      flexShrink: 0
+                    }}
+                  >
+                    🎁 25 000 bonusni olish
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsSubscriptionModalOpen(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    flexShrink: 0
+                  }}
+                >
+                  👑 Obunani ko'rish
+                </button>
+              </div>
             </div>
           )}
 
@@ -1810,8 +1897,10 @@ export default function StudentMiniAppPage() {
                     {!hasSubscription && (
                       <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
                         <span style={{
-                          background: 'linear-gradient(135deg, #F59E0B, #D97706)',
-                          color: '#000',
+                          background: canClaimBonus 
+                            ? 'linear-gradient(135deg, #10B981, #059669)' 
+                            : 'linear-gradient(135deg, #F59E0B, #D97706)',
+                          color: canClaimBonus ? '#fff' : '#000',
                           padding: '2px 8px',
                           borderRadius: '6px',
                           fontSize: '11px',
@@ -1821,7 +1910,7 @@ export default function StudentMiniAppPage() {
                           alignItems: 'center',
                           gap: '3px'
                         }}>
-                          👑 Premium
+                          {canClaimBonus ? '🎁 25 000 bonus' : '👑 Premium'}
                         </span>
                       </div>
                     )}

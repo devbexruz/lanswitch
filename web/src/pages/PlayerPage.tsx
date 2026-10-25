@@ -64,7 +64,7 @@ const PlayerPage: React.FC = () => {
   const { mediaId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, canClaimBonus, claimBonus } = useAuth();
 
   const [media, setMedia] = useState<Media | null>(null);
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
@@ -918,10 +918,18 @@ const PlayerPage: React.FC = () => {
       <main className="player-layout-container">
         {!hasSubscription ? (
           <div className="player-premium-lock-card">
-            <div className="premium-lock-badge">👑 Student Premium</div>
-            <h2 className="premium-lock-title">Kinolarni ko'rish uchun Student Premium talab etiladi</h2>
+            <div className="premium-lock-badge" style={canClaimBonus ? { background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff' } : {}}>
+              {canClaimBonus ? "🎁 25 000 so'm Bepul Bonus" : "👑 Student Premium"}
+            </div>
+            <h2 className="premium-lock-title">
+              {canClaimBonus 
+                ? "25 000 so'm bonus bilan kinoni bepul boshlang!" 
+                : "Kinolarni ko'rish uchun Student Premium talab etiladi"}
+            </h2>
             <p className="premium-lock-desc">
-              Talabalar uchun barcha darslar, lug'at va guruh topshiriqlari mutlaqo bepul! Faqat sevimli filmlarni tomosha qilish va film ichidagi AI ustoz bilan muloqot qilish uchun Student Premium faollashtirilishi kerak.
+              {canClaimBonus 
+                ? "Sizda yangi foydalanuvchi sifatida 25 000 so'm boshlang'ich bonus mavjud! Bonusni oling va filmni darhol tomosha qilishni boshlang."
+                : "Talabalar uchun barcha darslar, lug'at va guruh topshiriqlari mutlaqo bepul! Faqat sevimli filmlarni tomosha qilish va film ichidagi AI ustoz bilan muloqot qilish uchun Student Premium faollashtirilishi kerak."}
             </p>
 
             <div className="premium-lock-features">
@@ -940,21 +948,37 @@ const PlayerPage: React.FC = () => {
                 </div>
               </div>
               <div className="lock-feature-item">
-                <span>💳</span>
+                <span>{canClaimBonus ? '🎁' : '💳'}</span>
                 <div>
-                  <strong>50 000 so'm / oy (Real-time sarf)</strong>
-                  <p>Istalgan summa bilan to'ldiring — minutigacha hisoblab beriladi</p>
+                  <strong>{canClaimBonus ? "25 000 so'm Bepul Bonus" : "50 000 so'm / oy (Real-time sarf)"}</strong>
+                  <p>{canClaimBonus ? "Bonus bilan 15 kun bepul ko'ring — minutigacha hisoblab beriladi" : "Istalgan summa bilan to'ldiring — minutigacha hisoblab beriladi"}</p>
                 </div>
               </div>
             </div>
 
             <div className="premium-lock-actions">
-              <button 
-                className="btn-unlock-premium"
-                onClick={() => setIsSubscriptionModalOpen(true)}
-              >
-                👑 Student Premium faollashtirish
-              </button>
+              {canClaimBonus ? (
+                <button 
+                  className="btn-unlock-premium"
+                  style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)' }}
+                  onClick={async () => {
+                    const ok = await claimBonus();
+                    if (ok) {
+                      await checkSubscription();
+                    }
+                    setIsSubscriptionModalOpen(true);
+                  }}
+                >
+                  🎁 25 000 bonusni olish va boshlash
+                </button>
+              ) : (
+                <button 
+                  className="btn-unlock-premium"
+                  onClick={() => setIsSubscriptionModalOpen(true)}
+                >
+                  👑 Student Premium faollashtirish
+                </button>
+              )}
               <button 
                 className="btn-lock-back"
                 onClick={() => {

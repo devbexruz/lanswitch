@@ -23,4 +23,5 @@ public interface ISubscriptionService
     Task<object> GetUserBalanceAndSubscriptionAsync(long userId);
     Task<object> GetLogsAndStatsAsync();
     Task<bool> SendTopUpInstructionsToBotAsync(long userId, string? planId);
+    Task<object> ClaimInitialBonusAsync(long userId);
 }

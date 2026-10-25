@@ -13,7 +13,7 @@ interface ProfileDropdownProps {
 }
 
 export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps) {
-  const { user, isAuthenticated, logout, setRole, login, hasSubscription, subscription, checkSubscription } = useAuth();
+  const { user, isAuthenticated, logout, setRole, login, hasSubscription, subscription, checkSubscription, canClaimBonus } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isPlansOpen, setIsPlansOpen] = useState(false);
@@ -346,27 +346,38 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
               borderRadius: '12px',
               background: hasSubscription 
                 ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.26))' 
-                : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.14))',
-              border: hasSubscription ? '1.5px solid #F59E0B' : '1.5px solid rgba(245, 158, 11, 0.35)',
-              color: '#92400E',
+                : canClaimBonus
+                  ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.2))'
+                  : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.14))',
+              border: hasSubscription 
+                ? '1.5px solid #F59E0B' 
+                : canClaimBonus
+                  ? '1.5px solid #10B981'
+                  : '1.5px solid rgba(245, 158, 11, 0.35)',
+              color: canClaimBonus ? '#065F46' : '#92400E',
               fontSize: '13px',
               fontWeight: 800,
               cursor: 'pointer',
               textAlign: 'left',
               transition: 'all 0.15s ease',
-              boxShadow: hasSubscription ? '0 4px 14px rgba(245, 158, 11, 0.2)' : 'none'
+              boxShadow: hasSubscription ? '0 4px 14px rgba(245, 158, 11, 0.2)' : canClaimBonus ? '0 4px 14px rgba(16, 185, 129, 0.2)' : 'none'
             }}
           >
-            <Crown size={18} color="#D97706" />
+            <Crown size={18} color={canClaimBonus ? '#10B981' : '#D97706'} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#78350F', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: canClaimBonus ? '#065F46' : '#78350F', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span>👑</span> Tariflar va Balans
+                {canClaimBonus && (
+                  <span style={{ background: '#10B981', color: '#fff', fontSize: '9.5px', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                    🎁 25 000 bonus
+                  </span>
+                )}
               </span>
-              <span style={{ fontSize: '11px', color: hasSubscription ? '#047857' : '#B45309', fontWeight: 800 }}>
+              <span style={{ fontSize: '11px', color: hasSubscription ? '#047857' : canClaimBonus ? '#059669' : '#B45309', fontWeight: 800 }}>
                 {hasSubscription ? (
                   subscription?.formattedRemainingTime ? `⏳ ${subscription.formattedRemainingTime}` : '✨ Obuna faol'
                 ) : (
-                  "Hisobni to'ldirish & boshlash"
+                  canClaimBonus ? "🎁 25 000 bonusni oling!" : "Hisobni to'ldirish & boshlash"
                 )}
               </span>
             </div>

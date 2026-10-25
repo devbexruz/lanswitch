@@ -10,6 +10,8 @@ interface User {
   role?: 'Student' | 'Teacher' | 'Admin' | string;
   isAdmin: boolean;
   createdAt: string;
+  balance?: number;
+  hasReceivedInitialBonus?: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +19,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasSubscription: boolean;
   subscription: any | null;
+  canClaimBonus: boolean;
+  claimBonus: () => Promise<boolean>;
   checkSubscription: () => Promise<void>;
   login: () => void;
   logout: () => void;
@@ -51,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   });
 
+  const [canClaimBonus, setCanClaimBonus] = useState<boolean>(false);
+
   const checkSubscription = async () => {
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
@@ -62,13 +68,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSubscription(data.subscription || null);
         const isSubActive = Boolean(user?.isAdmin || (data.hasActiveSubscription && data.subscription?.isActive));
         setHasSubscription(isSubActive);
+        setCanClaimBonus(Boolean(data.canClaimBonus));
+        if (data.user?.balance !== undefined && user) {
+          if (user.balance !== data.user.balance || user.hasReceivedInitialBonus !== data.user.hasReceivedInitialBonus) {
+            const updated = { 
+              ...user, 
+              balance: data.user.balance, 
+              hasReceivedInitialBonus: data.user.hasReceivedInitialBonus 
+            };
+            setUser(updated);
+            localStorage.setItem('lanswitch_user', JSON.stringify(updated));
+          }
+        }
       } else {
         setHasSubscription(Boolean(user?.isAdmin));
         setSubscription(null);
+        setCanClaimBonus(false);
       }
     } catch {
       setHasSubscription(Boolean(user?.isAdmin));
       setSubscription(null);
+      setCanClaimBonus(false);
+    }
+  };
+
+  const claimBonus = async (): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
+      const res = await fetch('/api/subscription/claim-bonus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCanClaimBonus(false);
+        if (user) {
+          const updated = { 
+            ...user, 
+            balance: data.balance, 
+            hasReceivedInitialBonus: true 
+          };
+          setUser(updated);
+          localStorage.setItem('lanswitch_user', JSON.stringify(updated));
+        }
+        await checkSubscription();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Claim bonus error:', e);
+      return false;
     }
   };
 
@@ -222,6 +274,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         hasSubscription,
         subscription,
+        canClaimBonus,
+        claimBonus,
         checkSubscription,
         login,
         logout,

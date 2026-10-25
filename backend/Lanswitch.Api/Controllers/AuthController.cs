@@ -136,7 +136,9 @@ public class AuthController : ControllerBase
                 user.NativeLanguageId,
                 user.Role,
                 user.IsAdmin,
-                user.CreatedAt
+                user.CreatedAt,
+                user.Balance,
+                user.HasReceivedInitialBonus
             }
         });
     }

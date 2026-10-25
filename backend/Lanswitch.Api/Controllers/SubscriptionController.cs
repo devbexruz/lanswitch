@@ -83,6 +83,24 @@ public class SubscriptionController : ControllerBase
         }
     }
 
+    [Authorize]
+    [HttpPost("claim-bonus")]
+    public async Task<IActionResult> ClaimBonus()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        try
+        {
+            var res = await _subscriptionService.ClaimInitialBonusAsync(userId.Value);
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     public record SwitchPlanRequest(string TargetPlanId);
 
     [Authorize]

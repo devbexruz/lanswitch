@@ -49,6 +49,9 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [canClaimBonus, setCanClaimBonus] = useState<boolean>(false);
+  const [claimingBonus, setClaimingBonus] = useState<boolean>(false);
+
   // 1-Step Switch / Start Confirmation
   const [confirmSwitchPlan, setConfirmSwitchPlan] = useState<Plan | null>(null);
   const [switchingPlan, setSwitchingPlan] = useState(false);
@@ -73,10 +76,11 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
     setSuccessMessage(null);
     setErrorMessage(null);
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
       const [plansRes, myRes, cardRes] = await Promise.all([
         fetch('/api/subscription/plans'),
         fetch('/api/subscription/my', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         }),
         fetch('/api/subscription/card-settings')
       ]);
@@ -88,6 +92,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         const myData = await myRes.json();
         setUserData(myData.user);
         setMySubscription(myData.subscription);
+        setCanClaimBonus(Boolean(myData.canClaimBonus));
 
         if (myData.user) {
           setLiveBalance(myData.user.liveBalance ?? myData.user.balance ?? 0);
@@ -100,6 +105,65 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
       console.error("Tarif ma'lumotlarini yuklashda xatolik:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClaimBonus = async () => {
+    setClaimingBonus(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
+      const res = await fetch('/api/subscription/claim-bonus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMessage("🎁 Tabriklaymiz! 25 000 so'm boshlang'ich bonus balansingizga qo'shildi!");
+        setCanClaimBonus(false);
+        await loadData();
+        if (onSubscriptionUpdated) onSubscriptionUpdated();
+      } else {
+        setErrorMessage(data.message || "Bonusni olishda xatolik yuz berdi");
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMessage("Tarmoq xatosi yuz berdi");
+    } finally {
+      setClaimingBonus(false);
+    }
+  };
+
+  const handleClaimBonusAndStart = async (plan: Plan) => {
+    setClaimingBonus(true);
+    setErrorMessage(null);
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
+      const res = await fetch('/api/subscription/claim-bonus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      if (res.ok) {
+        setCanClaimBonus(false);
+        await loadData();
+        if (onSubscriptionUpdated) onSubscriptionUpdated();
+        setConfirmSwitchPlan(plan);
+      } else {
+        const data = await res.json();
+        setErrorMessage(data.message || "Bonusni olishda xatolik yuz berdi");
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMessage("Tarmoq xatosi yuz berdi");
+    } finally {
+      setClaimingBonus(false);
     }
   };
 
@@ -329,6 +393,75 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
           </div>
           <button className="compact-close-x" onClick={onClose} title="Yopish">✕</button>
         </div>
+
+        {/* ======================================================== */}
+        {/* 25 000 SO'M INITIAL BONUS BANNER                        */}
+        {/* ======================================================== */}
+        {canClaimBonus && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.28) 100%)',
+            border: '2px solid #F59E0B',
+            borderRadius: '16px',
+            padding: '16px 20px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '14px',
+            flexWrap: 'wrap',
+            boxShadow: '0 8px 24px rgba(245, 158, 11, 0.22)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '240px' }}>
+              <div style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                color: '#fff',
+                fontSize: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+              }}>
+                🎁
+              </div>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 900, color: '#FEF3C7', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>25 000 so'm Boshlang'ich Bonus!</span>
+                  <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#CBD5E1', marginTop: '2px', lineHeight: 1.4 }}>
+                  Siz hali obuna faollashtirmagansiz. 25 000 so'm bonusni oling va istalgan tarifni sinab ko'ring!
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleClaimBonus}
+              disabled={claimingBonus}
+              style={{
+                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 20px',
+                fontSize: '13.5px',
+                fontWeight: 900,
+                cursor: claimingBonus ? 'wait' : 'pointer',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                flexShrink: 0
+              }}
+            >
+              <span>{claimingBonus ? "Yuklanmoqda..." : "🎁 25 000 bonusni olish"}</span>
+            </button>
+          </div>
+        )}
 
         {/* ======================================================== */}
         {/* COMPACT REALTIME BALANCE BAR                             */}
@@ -620,6 +753,15 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                     {isCurrent ? (
                       <button className="btn-current" disabled>
                         ✓ Joriy faol tarif
+                      </button>
+                    ) : canClaimBonus ? (
+                      <button
+                        className="btn-start"
+                        style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: '#fff', fontWeight: 900 }}
+                        onClick={() => handleClaimBonusAndStart(plan)}
+                        disabled={claimingBonus}
+                      >
+                        🎁 25 000 bonus bilan boshlash
                       </button>
                     ) : !mySubscription && liveBalance > 0 ? (
                       <button

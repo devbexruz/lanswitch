@@ -47,7 +47,9 @@ public class UserController : ControllerBase
             user.NativeLanguageId,
             user.Role,
             user.IsAdmin,
-            user.CreatedAt
+            user.CreatedAt,
+            user.Balance,
+            user.HasReceivedInitialBonus
         });
     }
 
@@ -75,7 +77,9 @@ public class UserController : ControllerBase
             user.NativeLanguageId,
             user.Role,
             user.IsAdmin,
-            user.CreatedAt
+            user.CreatedAt,
+            user.Balance,
+            user.HasReceivedInitialBonus
         });
     }
 
@@ -153,7 +157,9 @@ public class UserController : ControllerBase
                 updatedUser.NativeLanguageId,
                 updatedUser.Role,
                 updatedUser.IsAdmin,
-                updatedUser.CreatedAt
+                updatedUser.CreatedAt,
+                updatedUser.Balance,
+                updatedUser.HasReceivedInitialBonus
             }
         });
     }
