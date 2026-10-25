@@ -509,49 +509,62 @@ const AdminPage: React.FC = () => {
 
   return (
     <div className="admin-page animate-fade-in">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <div>
-          <h1 className="page-title">Admin Panel</h1>
-          <p className="page-subtitle">Tizimni boshqarish paneli</p>
+      <div className="admin-header-wrap">
+        <div className="admin-brand-block">
+          <div className="admin-logo-badge">🛡️</div>
+          <div>
+            <h1 className="admin-title-text">
+              Lanswitch Console
+              <span className="admin-live-badge">● Jonli Tizim</span>
+            </h1>
+            <p className="admin-subtitle">Tariflar, erkin to'lovlar, kvitansiyalar va platforma boshqaruvi</p>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+
+        <div className="admin-nav-tabs">
           <button
-            className={`btn ${activeTab === 'media' ? 'btn-primary' : 'btn-outline-light'}`}
-            onClick={() => setActiveTab('media')}
-          >
-            Media
-          </button>
-          <button
-            className={`btn ${activeTab === 'subscriptions' ? 'btn-primary' : 'btn-outline-light'}`}
+            className={`admin-nav-btn ${activeTab === 'subscriptions' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('subscriptions');
               fetchSubscriptions();
+              fetchPaymentRequests();
             }}
           >
-            👑 Tariflar & Obunalar
+            <span>👑 Tariflar & To'lovlar</span>
+            {paymentRequests.filter(r => r.status === 'Pending').length > 0 && (
+              <span style={{ background: '#ef4444', color: '#fff', fontSize: '10.5px', fontWeight: 900, padding: '1px 6px', borderRadius: '10px' }}>
+                {paymentRequests.filter(r => r.status === 'Pending').length}
+              </span>
+            )}
           </button>
           <button
-            className={`btn ${activeTab === 'categories' ? 'btn-primary' : 'btn-outline-light'}`}
+            className={`admin-nav-btn ${activeTab === 'media' ? 'active' : ''}`}
+            onClick={() => setActiveTab('media')}
+          >
+            🎬 Kinolar & Seriallar
+          </button>
+          <button
+            className={`admin-nav-btn ${activeTab === 'categories' ? 'active' : ''}`}
             onClick={() => setActiveTab('categories')}
           >
-            Janrlar
+            📂 Janrlar
           </button>
           <button
-            className={`btn ${activeTab === 'grammar' ? 'btn-primary' : 'btn-outline-light'}`}
+            className={`admin-nav-btn ${activeTab === 'grammar' ? 'active' : ''}`}
             onClick={() => setActiveTab('grammar')}
           >
             📖 Grammatika
           </button>
           <button
-            className={`btn ${activeTab === 'users' ? 'btn-primary' : 'btn-outline-light'}`}
+            className={`admin-nav-btn ${activeTab === 'users' ? 'active' : ''}`}
             onClick={() => setActiveTab('users')}
           >
-            Foydalanuvchilar
+            👥 Foydalanuvchilar
           </button>
         </div>
       </div>
 
-      <div className="admin-content glass-panel">
+      <div className="admin-glass-container">
         {activeTab === 'media' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>

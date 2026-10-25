@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './SubscriptionPlansModal.css';
 
 interface Plan {
@@ -244,7 +245,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="subscription-modal-overlay" onClick={onClose}>
       <div className="subscription-modal-container animate-fade-in" onClick={e => e.stopPropagation()}>
         <div className="subscription-modal-header">
@@ -548,7 +549,8 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
