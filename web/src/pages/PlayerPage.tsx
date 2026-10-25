@@ -5,6 +5,7 @@ import CommentsSection from '../features/player/components/CommentsSection';
 import { parseTimeSpanToSeconds, formatSecondsToMMSS } from '../utils/timeUtils';
 import { useAuth } from '../context/AuthContext';
 import { showTelegramBackButton, hideTelegramBackButton } from '../utils/telegram';
+import ReactMarkdown from 'react-markdown';
 import './PlayerPage.css';
 
 interface Episode {
@@ -28,13 +29,34 @@ interface Media {
   episodes?: Episode[];
 }
 
+interface Gap {
+  id: number;
+  text: string;
+  index: number;
+  aiAnalysis?: string;
+}
+
+interface SubtitleWordItem {
+  id?: number;
+  text: string;
+  translation?: string;
+}
+
 interface Subtitle {
   id: number;
   text: string;
   startTimeSeconds: number;
   endTimeSeconds: number;
   index: number;
-  words?: any[];
+  gaps?: Gap[];
+  words?: SubtitleWordItem[];
+}
+
+interface ChatMessage {
+  id?: number;
+  role: 'User' | 'AI';
+  content: string;
+  createdAt?: string;
 }
 
 const PlayerPage: React.FC = () => {
@@ -52,11 +74,19 @@ const PlayerPage: React.FC = () => {
   const [currentEpisodeId, setCurrentEpisodeId] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
 
-  // Subtitle selection & Fullscreen drawer state
+  // Subtitle selection & Drawer states
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isFullscreenDrawerOpen, setIsFullscreenDrawerOpen] = useState(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
+
+  // Deep AI Analysis & Chat toggle state
+  const [isDeepAiOpen, setIsDeepAiOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatSending, setIsChatSending] = useState(false);
+  const [isAnalyzingSub, setIsAnalyzingSub] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Mobile detection (screen width <= 768px)
   const [isMobile, setIsMobile] = useState<boolean>(() => 
@@ -142,7 +172,7 @@ const PlayerPage: React.FC = () => {
             setVideoUrl(found.videoUrl || '');
           }
 
-          // Fetch Subtitles
+          // Fetch Subtitles with Gaps and Words
           const subUrl = targetEpisodeId
             ? `/api/subtitle?episodeId=${targetEpisodeId}`
             : `/api/subtitle?mediaId=${mediaId}`;
@@ -156,9 +186,35 @@ const PlayerPage: React.FC = () => {
               index: s.index,
               startTimeSeconds: parseTimeSpanToSeconds(s.startTime),
               endTimeSeconds: parseTimeSpanToSeconds(s.endTime),
-              words: s.words || []
+              gaps: s.gaps || [],
+              words: (s.words || []).map((w: any) => ({
+                id: w.id,
+                text: w.text || '',
+                translation: w.translation || null
+              }))
             }));
             setSubtitles(formattedSubs);
+          }
+
+          // Fetch past chat messages
+          const chatUrl = targetEpisodeId 
+            ? `/api/EpisodeChat/episode/${targetEpisodeId}` 
+            : `/api/MediaChat/media/${mediaId}`;
+          try {
+            const chatRes = await fetch(chatUrl);
+            if (chatRes.ok) {
+              const msgs = await chatRes.json();
+              if (Array.isArray(msgs)) {
+                setChatMessages(msgs.map((m: any) => ({
+                  id: m.id,
+                  role: m.role === 'AI' || m.role === 'Model' ? 'AI' : 'User',
+                  content: m.content || '',
+                  createdAt: m.createdAt
+                })));
+              }
+            }
+          } catch (chatErr) {
+            console.warn('Chat history could not be loaded:', chatErr);
           }
         }
       } catch (err) {
@@ -311,6 +367,115 @@ const PlayerPage: React.FC = () => {
 
   const currentSub = subtitles[selectedSubtitleIndex] || (subtitles.length > 0 ? subtitles[0] : null);
 
+  // Trigger on-demand AI analysis if gaps are not yet created
+  const handleAnalyzeCurrentSub = async () => {
+    if (!currentSub || isAnalyzingSub) return;
+    try {
+      setIsAnalyzingSub(true);
+      const res = await fetch(`/api/subtitle/${currentSub.id}/analyze`, { method: 'POST' });
+      if (res.ok) {
+        const updated = await res.json();
+        if (updated && updated.gaps) {
+          setSubtitles(prev => prev.map(s => s.id === currentSub.id ? {
+            ...s,
+            gaps: updated.gaps,
+            words: updated.words || s.words
+          } : s));
+        }
+      }
+    } catch (err) {
+      console.error('Analysis error:', err);
+    } finally {
+      setIsAnalyzingSub(false);
+    }
+  };
+
+  // Send message to AI Tutor
+  const handleSendChatMessage = async (msgToSend?: string) => {
+    const text = (msgToSend || chatInput).trim();
+    if (!text || isChatSending || !media) return;
+
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'User', content: text }]);
+    setIsChatSending(true);
+
+    try {
+      const endpoint = currentEpisodeId ? '/api/EpisodeChat' : '/api/MediaChat';
+      const body = currentEpisodeId 
+        ? { episodeId: currentEpisodeId, subtitleId: currentSub?.id, message: text }
+        : { mediaId: media.id, subtitleId: currentSub?.id, message: text };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, { role: 'AI', content: data.response }]);
+      } else {
+        const err = await res.json().catch(() => null);
+        setChatMessages(prev => [...prev, { role: 'AI', content: err?.message || "Kechirasiz, javob olishda xatolik yuz berdi." }]);
+      }
+    } catch (e) {
+      console.error('Chat error:', e);
+      setChatMessages(prev => [...prev, { role: 'AI', content: "Server bilan bog'lanishda xatolik yuz berdi." }]);
+    } finally {
+      setIsChatSending(false);
+      setTimeout(() => {
+        chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+  // Extract concise summary from pre-generated aiAnalysis
+  const summaryData = useMemo(() => {
+    if (!currentSub || !currentSub.gaps || currentSub.gaps.length === 0) {
+      return { translation: null, grammarNote: null, fullAnalysis: null };
+    }
+
+    const firstGap = currentSub.gaps[0];
+    const raw = firstGap.aiAnalysis || '';
+    if (!raw.trim()) return { translation: null, grammarNote: null, fullAnalysis: null };
+
+    // 1. Try to extract quoted translation: "..." degan ma'noni beradi / bildiradi
+    const quoteMatch = raw.match(/["“]([^"”]+)["”]\s+degan\s+ma'noni/i) 
+      || raw.match(/["“]([^"”]+)["”]/);
+    const translation = quoteMatch ? quoteMatch[1] : null;
+
+    // 2. First paragraph as short grammar / summary note
+    const paragraphs = raw.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+    let grammarNote = paragraphs[0] || null;
+
+    // Remove the quoted translation part from the grammar note if redundant
+    if (grammarNote && translation && grammarNote.includes(translation)) {
+      const parts = grammarNote.split(/degan\s+ma'noni\s+(?:beradi|bildiradi)\.?/i);
+      if (parts.length > 1 && parts[1].trim()) {
+        grammarNote = parts[1].trim();
+      }
+    }
+
+    return {
+      translation,
+      grammarNote,
+      fullAnalysis: raw
+    };
+  }, [currentSub]);
+
+  // Words forming this sentence
+  const sentenceWords = useMemo(() => {
+    if (!currentSub) return [];
+    if (currentSub.words && currentSub.words.length > 0) {
+      return currentSub.words;
+    }
+    // Fallback: split by space
+    return currentSub.text.split(' ')
+      .map(w => w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’]/g, "").trim())
+      .filter(w => w.length > 0)
+      .map((w, idx) => ({ id: idx, text: w, translation: undefined }));
+  }, [currentSub]);
+
   // Filtered subtitles for transcript search
   const filteredSubtitles = useMemo(() => {
     if (!subSearchQuery.trim()) return subtitles;
@@ -334,12 +499,20 @@ const PlayerPage: React.FC = () => {
   };
 
   /**
-   * Subtitle Analysis Panel Body (Focused, clean without clutter)
+   * Subtitle Analysis Panel Body
+   * Features:
+   * 1. Current Subtitle text (clickable words)
+   * 2. Qisqacha mazmun (Tarjima & Qisqa grammatika)
+   * 3. Gapdagi so'zlar (Sentence words with translations)
+   * 4. «Chuqurroq AI tahlili» toggle:
+   *    - Oldindan tayyorlangan to'liq AI tahlili (Markdown)
+   *    - AI Ustoz bilan muloqot (Interactive Chat)
+   * 5. Interactive Transcript (Dialoglar ro'yxati)
    */
   const renderAnalysisBody = (isDrawer = false) => {
     return (
       <div className={`analysis-body-content ${isDrawer ? 'drawer-mode' : ''}`}>
-        {/* Active / Selected Subtitle Focus Card */}
+        {/* Main Subtitle Focus Card */}
         <div className="current-sub-box">
           <div className="sub-box-header">
             <span className="sub-box-badge">
@@ -374,6 +547,7 @@ const PlayerPage: React.FC = () => {
             </div>
           </div>
 
+          {/* English Sentence Text */}
           <div className="current-sub-text">
             {currentSub ? (
               currentSub.text.split(' ').map((w, i) => (
@@ -391,12 +565,188 @@ const PlayerPage: React.FC = () => {
               <span style={{ opacity: 0.6 }}>Subtitrlar mavjud emas</span>
             )}
           </div>
-          <div className="sub-hint-text">
-            💡 So'zlar ustiga bosib tarjimasini ko'rishingiz mumkin
+
+          {/* Qisqacha Mazmun: Tarjima & Qisqa Grammatik Tahlil */}
+          {(summaryData.translation || summaryData.grammarNote) && (
+            <div className="sub-quick-summary-box">
+              {summaryData.translation && (
+                <div className="summary-translation-row">
+                  <span className="summary-flag">🇺🇿</span>
+                  <span className="summary-trans-text">«{summaryData.translation}»</span>
+                </div>
+              )}
+              {summaryData.grammarNote && (
+                <div className="summary-grammar-row">
+                  <span className="summary-icon">🎯</span>
+                  <div className="summary-grammar-text">
+                    <ReactMarkdown>{summaryData.grammarNote}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Gapni tashkil qilgan so'zlar (Sentence Words List) */}
+          {sentenceWords.length > 0 && (
+            <div className="sentence-words-section">
+              <div className="words-section-label">
+                <span>🔤 Gapdagi so'zlar:</span>
+              </div>
+              <div className="words-chips-grid">
+                {sentenceWords.map((sw, idx) => (
+                  <div
+                    key={idx}
+                    className="sentence-word-chip"
+                    onClick={(e) => handleWordClick(e, sw.text)}
+                    title="Tarjimasi va talaffuzini ko'rish"
+                  >
+                    <span className="chip-en-text">{sw.text}</span>
+                    {sw.translation && (
+                      <span className="chip-uz-text">{sw.translation}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Button to toggle Deep AI Analysis & Chat */}
+          <div className="deep-ai-toggle-row">
+            <button
+              className={`btn-deep-ai-toggle ${isDeepAiOpen ? 'active' : ''}`}
+              onClick={() => setIsDeepAiOpen(prev => !prev)}
+            >
+              <span className="ai-sparkle-icon">✨</span>
+              <span>{isDeepAiOpen ? "Chuqur tahlilni yopish ▲" : "🧠 Chuqurroq AI tahlili & Savol berish ▼"}</span>
+            </button>
           </div>
+
+          {/* Deep Pre-Generated AI Analysis + Interactive Chat Section */}
+          {isDeepAiOpen && (
+            <div className="deep-ai-accordion-content animate-fade-in">
+              {/* 1. Pre-generated Deep AI Analysis (Markdown) */}
+              <div className="pre-generated-analysis-card">
+                <div className="deep-card-title-row">
+                  <span className="deep-card-badge">Oldindan tahlil qilingan</span>
+                  <h4>📖 To'liq Grammatik & Mazmun Tahlili</h4>
+                </div>
+
+                {currentSub?.gaps && currentSub.gaps.length > 0 ? (
+                  currentSub.gaps.map((gap, gIdx) => (
+                    <div key={gap.id || gIdx} className="gap-markdown-wrapper">
+                      {gap.text && gap.text !== currentSub.text && (
+                        <div className="gap-focus-label">🎯 {gap.text}</div>
+                      )}
+                      <div className="ai-markdown-body">
+                        <ReactMarkdown>{gap.aiAnalysis || "Ushbu ibora grammatikasi tahlil qilinmoqda..."}</ReactMarkdown>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="no-deep-analysis-state">
+                    <p>Ushbu gap uchun chuqur tahlil hali saqlanmagan.</p>
+                    <button
+                      className="btn-create-analysis"
+                      onClick={handleAnalyzeCurrentSub}
+                      disabled={isAnalyzingSub}
+                    >
+                      {isAnalyzingSub ? "⏳ Tahlil qilinmoqda..." : "⚡ AI tahlilini yaratish"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Interactive AI Tutor Chat */}
+              <div className="interactive-ai-chat-card">
+                <div className="chat-card-header">
+                  <div className="chat-tutor-title">
+                    <span className="tutor-avatar">🤖</span>
+                    <div>
+                      <h5>AI Ustoz bilan muloqot</h5>
+                      <span className="tutor-status">Ushbu gap yuzasidan savol bering</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Prompts Chips */}
+                <div className="quick-prompts-row">
+                  <button
+                    className="quick-prompt-chip"
+                    onClick={() => handleSendChatMessage("Nega aynan ushbu zamon ishlatildi?")}
+                  >
+                    💡 Nega bu zamon?
+                  </button>
+                  <button
+                    className="quick-prompt-chip"
+                    onClick={() => handleSendChatMessage("Shunga o'xshash 2 ta kundalik misol keltir.")}
+                  >
+                    💡 O'xshash 2 ta misol
+                  </button>
+                  <button
+                    className="quick-prompt-chip"
+                    onClick={() => handleSendChatMessage("Bu yerdagi iboralar va o'zak so'zlarni tushuntir.")}
+                  >
+                    💡 Iboralarni tushuntir
+                  </button>
+                </div>
+
+                {/* Chat Messages Feed */}
+                <div className="chat-messages-feed" ref={chatScrollRef}>
+                  {chatMessages.length === 0 ? (
+                    <div className="chat-empty-hint">
+                      AI Ustozga ushbu gap yuzasidan istalgan savolingizni bering!
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, mIdx) => (
+                      <div
+                        key={mIdx}
+                        className={`chat-bubble-row ${msg.role === 'User' ? 'is-user-msg' : 'is-ai-msg'}`}
+                      >
+                        <div className="chat-bubble-bubble">
+                          <span className="bubble-author">{msg.role === 'User' ? 'Siz' : 'AI Ustoz'}</span>
+                          <div className="bubble-content-text">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {isChatSending && (
+                    <div className="chat-bubble-row is-ai-msg">
+                      <div className="chat-bubble-bubble typing-bubble">
+                        <span>AI Ustoz javob yozmoqda...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input Row */}
+                <div className="chat-input-row">
+                  <input
+                    type="text"
+                    placeholder="Ushbu gap haqida savolingizni yozing..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSendChatMessage();
+                    }}
+                    className="chat-text-input"
+                    disabled={isChatSending}
+                  />
+                  <button
+                    className="chat-send-btn"
+                    onClick={() => handleSendChatMessage()}
+                    disabled={isChatSending || !chatInput.trim()}
+                  >
+                    Jo'natish
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Subtitles Transcript Section */}
+        {/* Subtitles Transcript Section (📋 Dialoglar matni) */}
         <div className="transcript-section">
           <div className="transcript-header-row">
             <div className="transcript-title">

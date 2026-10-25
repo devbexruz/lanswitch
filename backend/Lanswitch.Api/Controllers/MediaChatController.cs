@@ -163,18 +163,32 @@ public class MediaChatController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetChatHistory(long mediaId)
     {
-        // Check User auth
-        long userId;
-        var sessionIdClaim = User.FindFirst("session_id")?.Value;
-        if (string.IsNullOrEmpty(sessionIdClaim) || !long.TryParse(sessionIdClaim, out var sId))
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                           ?? User.FindFirst("id")?.Value
+                           ?? User.FindFirst("sub")?.Value;
+
+        long userId = 0;
+        if (!string.IsNullOrEmpty(userIdString) && long.TryParse(userIdString, out var parsedId))
         {
-            return Unauthorized();
+            userId = parsedId;
         }
-        var userSession = await _context.UserSessions.FindAsync(sId);
-        if (userSession == null){
+        else
+        {
+            var sessionIdClaim = User.FindFirst("session_id")?.Value;
+            if (!string.IsNullOrEmpty(sessionIdClaim) && long.TryParse(sessionIdClaim, out var sId))
+            {
+                var userSession = await _context.UserSessions.FindAsync(sId);
+                if (userSession != null && userSession.UserId > 0)
+                {
+                    userId = userSession.UserId;
+                }
+            }
+        }
+
+        if (userId <= 0)
+        {
             return Unauthorized(new { message = "Ai bilan til o'rganish uchun tizimga kiring!" });
         }
-        userId = userSession.UserId!;
 
         var messages = await _context.MediaChatMessages
             .Where(m => m.MediaId == mediaId && m.UserId == userId)

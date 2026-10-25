@@ -554,6 +554,406 @@
     gap: 4px;
 }
 
+/* Quick Summary: Translation & Short Grammar Note */
+.sub-quick-summary-box {
+    background: #F0FDF4;
+    border: 1.5px solid #BBF7D0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.summary-translation-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #166534;
+}
+
+.summary-flag {
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.summary-trans-text {
+    line-height: 1.4;
+}
+
+.summary-grammar-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: #1E293B;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #DCFCE7;
+}
+
+.summary-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.summary-grammar-text p {
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Sentence Words Chips */
+.sentence-words-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.words-section-label {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-muted, #64748B);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.words-chips-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sentence-word-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--ice-blue-card, #F8FAFC);
+    border: 1.5px solid var(--sky-border, #DBEAFE);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sentence-word-chip:hover {
+    background: #EFF6FF;
+    border-color: var(--primary-blue, #2563EB);
+    transform: translateY(-1px);
+}
+
+.chip-en-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary-blue, #2563EB);
+}
+
+.chip-uz-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted, #64748B);
+    border-left: 1px solid var(--sky-border, #DBEAFE);
+    padding-left: 6px;
+}
+
+/* Deep AI Toggle Button */
+.deep-ai-toggle-row {
+    padding-top: 4px;
+}
+
+.btn-deep-ai-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-deep-ai-toggle:hover {
+    background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-deep-ai-toggle.active {
+    background: #0F172A;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+}
+
+.ai-sparkle-icon {
+    font-size: 14px;
+}
+
+/* Deep AI Accordion Body */
+.deep-ai-accordion-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1.5px dashed var(--sky-border, #DBEAFE);
+}
+
+.pre-generated-analysis-card {
+    background: var(--ice-blue-card, #F8FAFC);
+    border: 1.5px solid var(--sky-border, #DBEAFE);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.deep-card-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.deep-card-badge {
+    background: #E0E7FF;
+    color: #3730A3;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill, 9999px);
+}
+
+.deep-card-title-row h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-navy, #0F172A);
+}
+
+.gap-focus-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary-blue, #2563EB);
+    margin-bottom: 6px;
+}
+
+.ai-markdown-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-navy, #0F172A);
+}
+
+.ai-markdown-body p {
+    margin-bottom: 8px;
+}
+
+.ai-markdown-body ul, .ai-markdown-body ol {
+    padding-left: 20px;
+    margin-bottom: 8px;
+}
+
+.ai-markdown-body strong {
+    color: var(--primary-blue, #2563EB);
+}
+
+.btn-create-analysis {
+    background: var(--primary-blue, #2563EB);
+    color: #ffffff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* Interactive AI Chat Card */
+.interactive-ai-chat-card {
+    background: #FFFFFF;
+    border: 1.5px solid var(--sky-border, #DBEAFE);
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow-subtle);
+}
+
+.chat-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chat-tutor-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tutor-avatar {
+    font-size: 22px;
+}
+
+.chat-tutor-title h5 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-navy, #0F172A);
+}
+
+.tutor-status {
+    font-size: 11px;
+    color: var(--text-muted, #64748B);
+}
+
+.quick-prompts-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.quick-prompt-chip {
+    flex-shrink: 0;
+    background: var(--ice-blue-bg, #EFF6FF);
+    border: 1px solid var(--sky-border, #DBEAFE);
+    color: var(--primary-blue, #2563EB);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: var(--radius-pill, 9999px);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.quick-prompt-chip:hover {
+    background: var(--primary-blue, #2563EB);
+    color: #ffffff;
+}
+
+.chat-messages-feed {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+}
+
+.chat-bubble-row {
+    display: flex;
+    flex-direction: column;
+    max-width: 88%;
+}
+
+.chat-bubble-row.is-user-msg {
+    align-self: flex-end;
+}
+
+.chat-bubble-row.is-ai-msg {
+    align-self: flex-start;
+}
+
+.chat-bubble-bubble {
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.is-user-msg .chat-bubble-bubble {
+    background: var(--primary-blue, #2563EB);
+    color: #ffffff;
+}
+
+.is-user-msg .bubble-author {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.is-ai-msg .chat-bubble-bubble {
+    background: var(--ice-blue-card, #F8FAFC);
+    border: 1px solid var(--sky-border, #DBEAFE);
+    color: var(--text-navy, #0F172A);
+}
+
+.is-ai-msg .bubble-author {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--primary-blue, #2563EB);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.bubble-content-text p {
+    margin: 0;
+}
+
+.chat-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-text-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--ice-blue-card, #F8FAFC);
+    border: 1px solid var(--sky-border, #DBEAFE);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text-navy, #0F172A);
+    outline: none;
+}
+
+.chat-text-input:focus {
+    border-color: var(--primary-blue, #2563EB);
+}
+
+.chat-send-btn {
+    background: var(--primary-blue, #2563EB);
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.chat-send-btn:hover:not(:disabled) {
+    background: var(--primary-blue-hover, #1D4ED8);
+}
+
+.chat-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* Transcript Section */
 .transcript-section {
     background: var(--pure-white, #FFFFFF);
