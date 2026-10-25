@@ -64,8 +64,7 @@ public class SubscriptionService : ISubscriptionService
             {
                 "3 tagacha guruhni to'liq boshqarish",
                 "Avtomatik uyga vazifalar berish va baholash",
-                "Talabalar hisoboti va jarimalar nazorati",
-                "Barcha Student Premium imkoniyatlari (kinolar, AI, lug'at)"
+                "Talabalar hisoboti va jarimalar nazorati"
             }),
             OrderIndex = 2,
             IsActive = true
@@ -85,8 +84,7 @@ public class SubscriptionService : ISubscriptionService
             {
                 "10 tagacha guruhni to'liq boshqarish",
                 "Kengaytirilgan tahlil va guruh statistikasi",
-                "Avtomatik vazifalar va monitoring",
-                "Barcha Student Premium imkoniyatlari (kinolar, AI, lug'at)"
+                "Avtomatik vazifalar va monitoring"
             }),
             OrderIndex = 3,
             IsActive = true
@@ -106,8 +104,7 @@ public class SubscriptionService : ISubscriptionService
             {
                 "20 tagacha guruhni to'liq boshqarish",
                 "Cheksiz talabalar va to'liq avtomatlashtirish",
-                "Prioritetli texnik qo'llab-quvvatlash",
-                "Barcha Student Premium imkoniyatlari (kinolar, AI, lug'at)"
+                "Prioritetli texnik qo'llab-quvvatlash"
             }),
             OrderIndex = 4,
             IsActive = true
@@ -125,6 +122,27 @@ public class SubscriptionService : ISubscriptionService
             _context.SubscriptionPlanConfigs.AddRange(DefaultPlans);
             await _context.SaveChangesAsync();
             return DefaultPlans;
+        }
+
+        // Ustoz tariflaridan Student Premium qatorini tozalash
+        bool changed = false;
+        foreach (var p in plans)
+        {
+            if (p.TargetRole == "Teacher" && !string.IsNullOrWhiteSpace(p.FeaturesJson) && p.FeaturesJson.Contains("Student Premium"))
+            {
+                try
+                {
+                    var feats = JsonSerializer.Deserialize<List<string>>(p.FeaturesJson) ?? new List<string>();
+                    var filtered = feats.Where(f => !f.Contains("Student Premium", StringComparison.OrdinalIgnoreCase)).ToList();
+                    p.FeaturesJson = JsonSerializer.Serialize(filtered);
+                    changed = true;
+                }
+                catch { }
+            }
+        }
+        if (changed)
+        {
+            await _context.SaveChangesAsync();
         }
 
         return plans;
