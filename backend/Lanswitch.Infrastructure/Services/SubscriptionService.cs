@@ -169,10 +169,15 @@ public class SubscriptionService : ISubscriptionService
                 CardHolder = "ADMINISTRATOR",
                 BankName = "Humo / Uzcard",
                 MinAmount = 15000,
+                InitialBonusAmount = 25000,
                 Instructions = "Xohlagancha pul o'tkazing, minimum 15,000 so'm. Tarifingizga mos ravishda muddat soat va minutlarigacha hisoblab qo'shiladi."
             };
             _context.CardPaymentSettings.Add(setting);
             await _context.SaveChangesAsync();
+        }
+        else if (setting.InitialBonusAmount <= 0)
+        {
+            setting.InitialBonusAmount = 25000;
         }
         return setting;
     }
@@ -190,6 +195,7 @@ public class SubscriptionService : ISubscriptionService
         setting.CardHolder = updated.CardHolder;
         setting.BankName = updated.BankName;
         setting.MinAmount = updated.MinAmount > 0 ? updated.MinAmount : 15000;
+        setting.InitialBonusAmount = updated.InitialBonusAmount > 0 ? updated.InitialBonusAmount : 25000;
         setting.Instructions = updated.Instructions;
         setting.IsActive = updated.IsActive;
 
@@ -950,6 +956,10 @@ public class SubscriptionService : ISubscriptionService
         int minsLeft = (int)((remainingSeconds % 3600) / 60);
         int secsLeft = (int)(remainingSeconds % 60);
 
+        var cardSetting = await GetCardSettingsAsync();
+        decimal bonusAmount = cardSetting.InitialBonusAmount > 0 ? cardSetting.InitialBonusAmount : 25000m;
+        decimal minAmount = cardSetting.MinAmount > 0 ? cardSetting.MinAmount : 15000m;
+
         var hasPriorSubscription = subs.Any();
         bool canClaimBonus = !user.HasReceivedInitialBonus && !hasPriorSubscription;
 
@@ -969,7 +979,8 @@ public class SubscriptionService : ISubscriptionService
             hasActiveSubscription = activeSub != null,
             canClaimBonus = canClaimBonus,
             hasReceivedInitialBonus = user.HasReceivedInitialBonus,
-            bonusAmount = 25000m,
+            bonusAmount = bonusAmount,
+            minAmount = minAmount,
             subscription = activeSub == null ? null : new
             {
                 id = activeSub.Id,
@@ -1223,7 +1234,7 @@ public class SubscriptionService : ISubscriptionService
 
         if (user.HasReceivedInitialBonus)
         {
-            throw new InvalidOperationException("Siz allaqachon 25 000 so'm boshlang'ich bonusni qabul qilgansiz.");
+            throw new InvalidOperationException("Siz allaqachon boshlang'ich bonusni qabul qilgansiz.");
         }
 
         var hasPriorSubscription = await _context.UserSubscriptions.AnyAsync(s => s.UserId == userId);
@@ -1232,7 +1243,9 @@ public class SubscriptionService : ISubscriptionService
             throw new InvalidOperationException("Boshlang'ich bonus faqat avval hech qachon obuna faollashtirmagan yangi foydalanuvchilar uchun amal qiladi.");
         }
 
-        const decimal bonusAmount = 25000m;
+        var cardSetting = await GetCardSettingsAsync();
+        decimal bonusAmount = cardSetting.InitialBonusAmount > 0 ? cardSetting.InitialBonusAmount : 25000m;
+
         user.Balance += bonusAmount;
         user.HasReceivedInitialBonus = true;
 
@@ -1245,7 +1258,7 @@ public class SubscriptionService : ISubscriptionService
             ApprovedAmount = bonusAmount,
             ReceiptImageUrl = "system://initial_bonus",
             Status = "Approved",
-            AdminNotes = "25 000 so'm yangi foydalanuvchi bonusi",
+            AdminNotes = $"{bonusAmount:N0} so'm yangi foydalanuvchi bonusi",
             CreatedAt = DateTime.UtcNow,
             ProcessedAt = DateTime.UtcNow,
             ProcessedBy = "System"
@@ -1260,9 +1273,9 @@ public class SubscriptionService : ISubscriptionService
             {
                 string host = "lanswitch.developerlogic.uz";
                 var studentUrl = $"https://{host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
-                var text = $"🎁 <b>25 000 so'm Boshlang'ich Bonus balansingizga muvaffaqiyatli qo'shildi!</b>\n\n" +
+                var text = $"🎁 <b>{bonusAmount:N0} so'm Boshlang'ich Bonus balansingizga muvaffaqiyatli qo'shildi!</b>\n\n" +
                            $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
-                           $"Siz ushbu bonus bilan Student Premium (15 kun) yoki O'qituvchi (5 kun) tariflarini bepul sinab ko'rishingiz mumkin!\n\n" +
+                           $"Siz ushbu bonus bilan Student Premium yoki O'qituvchi tariflarini bepul sinab ko'rishingiz mumkin!\n\n" +
                            $"👇 <i>Ilovaga kirib, istalgan tarifni tanlang va boshlang:</i>";
                 var kb = new InlineKeyboardMarkup(new[]
                 {
@@ -1275,9 +1288,10 @@ public class SubscriptionService : ISubscriptionService
 
         return new
         {
-            message = "Tabriklaymiz! 25 000 so'm boshlang'ich bonus balansingizga muvaffaqiyatli qo'shildi!",
+            message = $"Tabriklaymiz! {bonusAmount:N0} so'm boshlang'ich bonus balansingizga muvaffaqiyatli qo'shildi!",
             balance = user.Balance,
             liveBalance = user.Balance,
+            bonusAmount = bonusAmount,
             hasReceivedInitialBonus = true,
             canClaimBonus = false
         };

@@ -656,32 +656,68 @@ public class TelegramBotAppService : ITelegramBotAppService
         }
 
         // =====================================================================
-        // HOLAT 2: HALI OBUNA YO'Q (TARMOQLANGAN, QISQA VA ZERIKARLISIZ BOSH MENU)
+        // HOLAT 2: HALI OBUNA YO'Q YOKI MUDDATI TUGAGAN
         // =====================================================================
+        var cardSetting = await db.CardPaymentSettings.FirstOrDefaultAsync();
+        decimal bonusAmount = cardSetting?.InitialBonusAmount > 0 ? cardSetting.InitialBonusAmount : 25000m;
+        decimal minAmount = cardSetting?.MinAmount > 0 ? cardSetting.MinAmount : 15000m;
+
         bool canClaimBonus = !user.HasReceivedInitialBonus && !await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
-        string bonusPart = canClaimBonus 
-            ? "🎁 <b>Boshlang'ich bonus:</b> Siz uchun <b>25 000 so'm</b> bepul bonus tayyor!\n\n" 
-            : "";
 
-        var welcomeMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n" +
-                         $"<b>Lanswitch</b> ta'lim platformasiga xush kelibsiz.\n\n" +
-                         bonusPart +
-                         $"Platformadan qaysi maqsadda foydalanmoqchisiz? O'zingizga mos bo'limni tanlang 👇";
-
-        var branchingKeyboard = new InlineKeyboardMarkup(new[]
+        if (canClaimBonus)
         {
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData("🎓 Men O'quvchiman / Talaba", "branch:student"),
-                InlineKeyboardButton.WithCallbackData("👨‍🏫 Men O'qituvchiman", "branch:teacher")
-            },
-            new[]
-            {
-                InlineKeyboardButton.WithWebApp("🚀 To'g'ridan-to'g'ri ilovaga kirish", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl })
-            }
-        });
+            // Yangi foydalanuvchi: Tarmoqlangan qisqa kirish menyusi
+            var welcomeMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n" +
+                             $"<b>Lanswitch</b> ta'lim platformasiga xush kelibsiz.\n\n" +
+                             $"🎁 <b>Boshlang'ich bonus:</b> Yangi foydalanuvchilar uchun <b>{bonusAmount:N0} so'm</b> bepul bonus tayyor!\n\n" +
+                             $"Platformadan qaysi maqsadda foydalanmoqchisiz? O'zingizga mos bo'limni tanlang 👇";
 
-        await SendOrEditMessageAsync(chatId, messageIdToEdit, welcomeMsg, branchingKeyboard);
+            var branchingKeyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🎓 Men O'quvchiman / Talaba", "branch:student"),
+                    InlineKeyboardButton.WithCallbackData("👨‍🏫 Men O'qituvchiman", "branch:teacher")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithWebApp("🚀 To'g'ridan-to'g'ri ilovaga kirish", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl })
+                }
+            });
+
+            await SendOrEditMessageAsync(chatId, messageIdToEdit, welcomeMsg, branchingKeyboard);
+            return;
+        }
+        else
+        {
+            // Avval obuna/bonus ishlatgan, lekin hozir muddati tugagan foydalanuvchi
+            var expiredMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n\n" +
+                             $"⚠️ <b>Tarifingiz muddati yakunlangan!</b>\n\n" +
+                             $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
+                             $"Kinolarni tomosha qilish, film ichida AI Ustoz bilan muloqot qilish va o'qishni davom ettirish uchun hisobingizni minimal <b>{minAmount:N0}+ so'm</b>ga to'ldiring!\n\n" +
+                             $"💡 <i>Mablag' sekundlarigacha aniqlikda, faqat faol foydalangan vaqtingiz bo'yicha real-time sarflanadi.</i>\n\n" +
+                             $"👇 <i>Davom etish uchun quyidagilardan birini tanlang:</i>";
+
+            var expiredKb = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithWebApp($"💳 Balansni to'ldirish (Minimal {minAmount:N0} so'm)", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&open_plans=1" })
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithWebApp("🎬 Kinolarni ko'rish", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&tab=movies" }),
+                    InlineKeyboardButton.WithWebApp("📖 Lug'at", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&tab=vocabulary" })
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithWebApp("📱 Mini App'ni ochish", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl })
+                }
+            });
+
+            await SendOrEditMessageAsync(chatId, messageIdToEdit, expiredMsg, expiredKb);
+            return;
+        }
     }
 
     private async Task SendBranchDetailsAsync(long chatId, int messageId, Lanswitch.Domain.Entities.User user, string branch)
@@ -696,6 +732,8 @@ public class TelegramBotAppService : ITelegramBotAppService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         bool canClaimBonus = !user.HasReceivedInitialBonus && !await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
+        var cardSetting = await db.CardPaymentSettings.FirstOrDefaultAsync();
+        decimal bonusAmount = cardSetting?.InitialBonusAmount > 0 ? cardSetting.InitialBonusAmount : 25000m;
 
         if (branch == "student")
         {
@@ -708,7 +746,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                        $"3️⃣ <b>Guruhdagi topshiriqlar:</b>\n" +
                        $"Agar o'qituvchingiz bo'lsa, sizni dars guruhiga qo'shishi bilanoq barcha uyga vazifalar avtomatik chiqadi.\n\n" +
                        $"✨ <i>(Kelajakda: insho/esse yozib rasmga olganda AI orqali tekshirish imkoni ham bo'ladi! 🚀)</i>\n\n" +
-                       (canClaimBonus ? "🎁 <i>Sizda 25 000 so'm bepul bonus mavjud! Ilovaga kirib darhol bonusni oling.</i>\n\n" : "") +
+                       (canClaimBonus ? $"🎁 <i>Sizda {bonusAmount:N0} so'm bepul bonus mavjud! Ilovaga kirib darhol bonusni oling.</i>\n\n" : "") +
                        $"👇 <i>O'rganishni boshlash uchun tanlang:</i>";
 
             var kb = new InlineKeyboardMarkup(new[]

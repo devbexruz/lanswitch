@@ -46,6 +46,7 @@ const AdminPage: React.FC = () => {
     cardHolder: 'ADMINISTRATOR',
     bankName: 'Humo / Uzcard',
     minAmount: 15000,
+    initialBonusAmount: 25000,
     instructions: "Xohlagancha pul o'tkazing, minimum 15,000 so'm. Tarifingizga mos ravishda muddat soat va minutlarigacha hisoblab qo'shiladi.",
     isActive: true
   });
@@ -897,6 +898,17 @@ const AdminPage: React.FC = () => {
                         value={cardSettings?.minAmount || 15000}
                         onChange={e => setCardSettings({ ...cardSettings, minAmount: Number(e.target.value) })}
                         min={1000}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#cbd5e1', marginBottom: '4px' }}>🎁 Boshlang'ich bonus miqdori (so'm)</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={cardSettings?.initialBonusAmount ?? 25000}
+                        onChange={e => setCardSettings({ ...cardSettings, initialBonusAmount: Number(e.target.value) })}
+                        min={0}
+                        step={1000}
                       />
                     </div>
                   </div>

@@ -20,6 +20,8 @@ interface AuthContextType {
   hasSubscription: boolean;
   subscription: any | null;
   canClaimBonus: boolean;
+  bonusAmount: number;
+  minAmount: number;
   claimBonus: () => Promise<boolean>;
   checkSubscription: () => Promise<void>;
   login: () => void;
@@ -56,6 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const [canClaimBonus, setCanClaimBonus] = useState<boolean>(false);
+  const [bonusAmount, setBonusAmount] = useState<number>(25000);
+  const [minAmount, setMinAmount] = useState<number>(15000);
 
   const checkSubscription = async () => {
     try {
@@ -69,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isSubActive = Boolean(user?.isAdmin || (data.hasActiveSubscription && data.subscription?.isActive));
         setHasSubscription(isSubActive);
         setCanClaimBonus(Boolean(data.canClaimBonus));
+        if (data.bonusAmount) setBonusAmount(Number(data.bonusAmount));
+        if (data.minAmount) setMinAmount(Number(data.minAmount));
         if (data.user?.balance !== undefined && user) {
           if (user.balance !== data.user.balance || user.hasReceivedInitialBonus !== data.user.hasReceivedInitialBonus) {
             const updated = { 
@@ -275,6 +281,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasSubscription,
         subscription,
         canClaimBonus,
+        bonusAmount,
+        minAmount,
         claimBonus,
         checkSubscription,
         login,

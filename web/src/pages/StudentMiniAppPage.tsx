@@ -18,7 +18,7 @@ import BottomNav from '../components/BottomNav';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function StudentMiniAppPage() {
-  const { user: authUser, hasSubscription, checkSubscription, setRole, canClaimBonus, claimBonus } = useAuth();
+  const { user: authUser, hasSubscription, checkSubscription, setRole, canClaimBonus, bonusAmount, minAmount, claimBonus } = useAuth();
   const navigate = useNavigate();
 
   // Navigation: 3 Core Panels
@@ -1259,7 +1259,7 @@ export default function StudentMiniAppPage() {
                     <span style={{ fontSize: '28px' }}>🎁</span>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 900, color: '#065F46', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>25 000 so'm Boshlang'ich Bonus!</span>
+                        <span>{bonusAmount.toLocaleString('uz-UZ')} so'm Boshlang'ich Bonus!</span>
                         <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
                       </div>
                       <div style={{ fontSize: '12px', color: '#047857', marginTop: '2px', lineHeight: 1.4 }}>
@@ -1286,7 +1286,7 @@ export default function StudentMiniAppPage() {
                       flexShrink: 0
                     }}
                   >
-                    🎁 25 000 bonusni olish
+                    🎁 {bonusAmount.toLocaleString('uz-UZ')} bonusni olish
                   </button>
                 </div>
               )}
@@ -1783,8 +1783,8 @@ export default function StudentMiniAppPage() {
             <div style={{
               background: canClaimBonus 
                 ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.16) 100%)'
-                : 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.16) 100%)',
-              border: canClaimBonus ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1.5px solid rgba(245, 158, 11, 0.4)',
+                : 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.14) 100%)',
+              border: canClaimBonus ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1.5px solid rgba(245, 158, 11, 0.5)',
               borderRadius: '16px',
               padding: '14px 18px',
               display: 'flex',
@@ -1794,26 +1794,30 @@ export default function StudentMiniAppPage() {
               flexWrap: 'wrap'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: 1 }}>
-                <span style={{ fontSize: '28px' }}>{canClaimBonus ? '🎁' : '👑'}</span>
+                <span style={{ fontSize: '28px' }}>{canClaimBonus ? '🎁' : '⚠️'}</span>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>Student Premium {canClaimBonus ? "— 25 000 so'm Boshlang'ich Bonus!" : "— Kinolar & AI Ustoz"}</span>
-                    {canClaimBonus && (
-                      <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
+                    {canClaimBonus ? (
+                      <>
+                        <span>Student Premium — {bonusAmount.toLocaleString('uz-UZ')} so'm Boshlang'ich Bonus!</span>
+                        <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
+                      </>
+                    ) : (
+                      <span style={{ color: '#b45309' }}>Tarif muddati tugagan — Kinolarni tomosha qilishda davom eting!</span>
                     )}
                   </div>
                   <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                     {canClaimBonus ? (
-                      "Yangi foydalanuvchilar uchun 25 000 so'm bepul bonus mavjud! Bonusni oling va kinolarni bepul tomosha qiling."
+                      `Yangi foydalanuvchilar uchun ${bonusAmount.toLocaleString('uz-UZ')} so'm bepul bonus mavjud! Bonusni oling va kinolarni bepul tomosha qiling.`
                     ) : (
-                      <>Barcha darslar, lug'at va topshiriqlar mutlaqo bepul! Kinolarni ko'rish va film ichida AI yordamchi bilan chatlashish uchun <strong>Student Premium (50 000 so'm/oy)</strong> kerak bo'ladi.</>
+                      `Kinolarni ko'rish va AI yordamchidan foydalanish uchun balansingizni minimal ${minAmount.toLocaleString('uz-UZ')}+ so'mga to'ldiring. Mablag'ingiz daqiqasigacha tejaladi!`
                     )}
                   </div>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {canClaimBonus && (
+                {canClaimBonus ? (
                   <button
                     onClick={async () => {
                       const ok = await claimBonus();
@@ -1835,7 +1839,28 @@ export default function StudentMiniAppPage() {
                       flexShrink: 0
                     }}
                   >
-                    🎁 25 000 bonusni olish
+                    🎁 {bonusAmount.toLocaleString('uz-UZ')} bonusni olish
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsSubscriptionModalOpen(true)}
+                    style={{
+                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '8px 16px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      flexShrink: 0
+                    }}
+                  >
+                    💳 Balansni to'ldirish ({minAmount.toLocaleString('uz-UZ')}+)
                   </button>
                 )}
                 <button
@@ -1856,7 +1881,7 @@ export default function StudentMiniAppPage() {
                     flexShrink: 0
                   }}
                 >
-                  👑 Obunani ko'rish
+                  👑 Obuna & Balans
                 </button>
               </div>
             </div>
@@ -1924,7 +1949,7 @@ export default function StudentMiniAppPage() {
                           alignItems: 'center',
                           gap: '3px'
                         }}>
-                          {canClaimBonus ? '🎁 25 000 bonus' : '👑 Premium'}
+                          {canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonus` : '👑 Premium'}
                         </span>
                       </div>
                     )}

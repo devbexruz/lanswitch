@@ -51,6 +51,8 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
 
   const [canClaimBonus, setCanClaimBonus] = useState<boolean>(false);
   const [claimingBonus, setClaimingBonus] = useState<boolean>(false);
+  const [bonusAmount, setBonusAmount] = useState<number>(25000);
+  const [minAmount, setMinAmount] = useState<number>(15000);
 
   // 1-Step Switch / Start Confirmation
   const [confirmSwitchPlan, setConfirmSwitchPlan] = useState<Plan | null>(null);
@@ -93,13 +95,18 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         setUserData(myData.user);
         setMySubscription(myData.subscription);
         setCanClaimBonus(Boolean(myData.canClaimBonus));
+        if (myData.bonusAmount) setBonusAmount(Number(myData.bonusAmount));
+        if (myData.minAmount) setMinAmount(Number(myData.minAmount));
 
         if (myData.user) {
           setLiveBalance(myData.user.liveBalance ?? myData.user.balance ?? 0);
         }
       }
       if (cardRes.ok) {
-        setCardSettings(await cardRes.json());
+        const cSettings = await cardRes.json();
+        setCardSettings(cSettings);
+        if (cSettings.initialBonusAmount) setBonusAmount(Number(cSettings.initialBonusAmount));
+        if (cSettings.minAmount) setMinAmount(Number(cSettings.minAmount));
       }
     } catch (e) {
       console.error("Tarif ma'lumotlarini yuklashda xatolik:", e);
@@ -123,7 +130,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
       });
       const data = await res.json();
       if (res.ok) {
-        setSuccessMessage("🎁 Tabriklaymiz! 25 000 so'm boshlang'ich bonus balansingizga qo'shildi!");
+        setSuccessMessage(`🎁 Tabriklaymiz! ${bonusAmount.toLocaleString('uz-UZ')} so'm boshlang'ich bonus balansingizga qo'shildi!`);
         setCanClaimBonus(false);
         await loadData();
         if (onSubscriptionUpdated) onSubscriptionUpdated();
@@ -429,11 +436,11 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
               </div>
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 900, color: '#FEF3C7', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>25 000 so'm Boshlang'ich Bonus!</span>
+                  <span>{bonusAmount.toLocaleString('uz-UZ')} so'm Boshlang'ich Bonus!</span>
                   <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
                 </div>
                 <div style={{ fontSize: '12.5px', color: '#CBD5E1', marginTop: '2px', lineHeight: 1.4 }}>
-                  Siz hali obuna faollashtirmagansiz. 25 000 so'm bonusni oling va istalgan tarifni sinab ko'ring!
+                  Siz hali obuna faollashtirmagansiz. {bonusAmount.toLocaleString('uz-UZ')} so'm bonusni oling va istalgan tarifni sinab ko'ring!
                 </div>
               </div>
             </div>
@@ -458,7 +465,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                 flexShrink: 0
               }}
             >
-              <span>{claimingBonus ? "Yuklanmoqda..." : "🎁 25 000 bonusni olish"}</span>
+              <span>{claimingBonus ? "Yuklanmoqda..." : `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonusni olish`}</span>
             </button>
           </div>
         )}
@@ -486,6 +493,15 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                     <span className="status-expiry">({new Date(mySubscription.endDate).toLocaleDateString('uz-UZ')} gacha)</span>
                   )}
                 </>
+              ) : !canClaimBonus ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '2px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800 }}>
+                    ⚠️ Tarif muddati tugagan
+                  </span>
+                  <span className="status-welcome-sub" style={{ color: '#fca5a5' }}>
+                    Balansingizni minimal {minAmount.toLocaleString('uz-UZ')}+ so'mga to'ldirib kino ko'rish va boshqa imkoniyatlardan foydalanishda davom eting!
+                  </span>
+                </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span className="status-free-badge">🎓 Tarifsiz rejim</span>
@@ -495,12 +511,29 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             </div>
           </div>
 
-          <button 
-            className="compact-topup-btn"
-            onClick={() => openPayment()}
-          >
-            <span>➕</span> Balansni to'ldirish
-          </button>
+          {canClaimBonus ? (
+            <button 
+              className="compact-topup-btn"
+              style={{
+                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                color: '#fff',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                border: 'none',
+                cursor: claimingBonus ? 'wait' : 'pointer'
+              }}
+              onClick={handleClaimBonus}
+              disabled={claimingBonus}
+            >
+              <span>🎁</span> {claimingBonus ? "Olinmoqda..." : `${bonusAmount.toLocaleString('uz-UZ')} bonusni olish`}
+            </button>
+          ) : (
+            <button 
+              className="compact-topup-btn"
+              onClick={() => openPayment()}
+            >
+              <span>➕</span> Balansni to'ldirish
+            </button>
+          )}
         </div>
 
         {/* Alerts */}
@@ -595,7 +628,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                 <div className="notice-text">
                   To'lov rekvizitlari Telegram botingizga (<strong>@lanswitchbot</strong>) yuborildi!
                   <div className="notice-sub">
-                    O'tkazma summasini o'zingiz belgilaysiz (minimum 15 000 so'm). To'lov chekini botga rasm shaklida yuboring.
+                    O'tkazma summasini o'zingiz belgilaysiz (minimum {minAmount.toLocaleString('uz-UZ')} so'm). To'lov chekini botga rasm shaklida yuboring.
                   </div>
                 </div>
               </div>
@@ -637,7 +670,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                     step={1000}
                   />
                   <div className="compact-pills-row">
-                    <button type="button" onClick={() => setPaymentAmount(15000)}>15 000</button>
+                    <button type="button" onClick={() => setPaymentAmount(minAmount)}>{minAmount.toLocaleString('uz-UZ')}</button>
                     <button type="button" onClick={() => setPaymentAmount(getPlanPrice(selectedPlanForPayment))}>
                       1 oylik ({getPlanPrice(selectedPlanForPayment).toLocaleString('uz-UZ')})
                     </button>
@@ -761,7 +794,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                         onClick={() => handleClaimBonusAndStart(plan)}
                         disabled={claimingBonus}
                       >
-                        🎁 25 000 bonus bilan boshlash
+                        🎁 {bonusAmount.toLocaleString('uz-UZ')} bonus bilan boshlash
                       </button>
                     ) : !mySubscription && liveBalance > 0 ? (
                       <button

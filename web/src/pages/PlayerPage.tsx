@@ -64,7 +64,7 @@ const PlayerPage: React.FC = () => {
   const { mediaId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, canClaimBonus, claimBonus } = useAuth();
+  const { user, canClaimBonus, bonusAmount, minAmount, claimBonus } = useAuth();
 
   const [media, setMedia] = useState<Media | null>(null);
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
@@ -918,18 +918,25 @@ const PlayerPage: React.FC = () => {
       <main className="player-layout-container">
         {!hasSubscription ? (
           <div className="player-premium-lock-card">
-            <div className="premium-lock-badge" style={canClaimBonus ? { background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff' } : {}}>
-              {canClaimBonus ? "🎁 25 000 so'm Bepul Bonus" : "👑 Student Premium"}
+            <div 
+              className="premium-lock-badge" 
+              style={
+                canClaimBonus 
+                  ? { background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff' } 
+                  : { background: 'linear-gradient(135deg, #EF4444, #DC2626)', color: '#fff' }
+              }
+            >
+              {canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} so'm Bepul Bonus` : "⚠️ Tarif muddati tugagan"}
             </div>
             <h2 className="premium-lock-title">
               {canClaimBonus 
-                ? "25 000 so'm bonus bilan kinoni bepul boshlang!" 
-                : "Kinolarni ko'rish uchun Student Premium talab etiladi"}
+                ? `${bonusAmount.toLocaleString('uz-UZ')} so'm bonus bilan kinoni bepul boshlang!` 
+                : "Tarif muddati tugagan — Kinoni ko'rishda davom eting!"}
             </h2>
             <p className="premium-lock-desc">
               {canClaimBonus 
-                ? "Sizda yangi foydalanuvchi sifatida 25 000 so'm boshlang'ich bonus mavjud! Bonusni oling va filmni darhol tomosha qilishni boshlang."
-                : "Talabalar uchun barcha darslar, lug'at va guruh topshiriqlari mutlaqo bepul! Faqat sevimli filmlarni tomosha qilish va film ichidagi AI ustoz bilan muloqot qilish uchun Student Premium faollashtirilishi kerak."}
+                ? `Sizda yangi foydalanuvchi sifatida ${bonusAmount.toLocaleString('uz-UZ')} so'm boshlang'ich bonus mavjud! Bonusni oling va filmni darhol tomosha qilishni boshlang.`
+                : `Kinolarni tomosha qilish va AI yordamchidan foydalanish uchun balansingizni minimal ${minAmount.toLocaleString('uz-UZ')}+ so'mga to'ldiring. Mablag'ingiz faqat ko'rgan daqiqalaringizgacha sarflanadi!`}
             </p>
 
             <div className="premium-lock-features">
@@ -950,8 +957,16 @@ const PlayerPage: React.FC = () => {
               <div className="lock-feature-item">
                 <span>{canClaimBonus ? '🎁' : '💳'}</span>
                 <div>
-                  <strong>{canClaimBonus ? "25 000 so'm Bepul Bonus" : "50 000 so'm / oy (Real-time sarf)"}</strong>
-                  <p>{canClaimBonus ? "Bonus bilan 15 kun bepul ko'ring — minutigacha hisoblab beriladi" : "Istalgan summa bilan to'ldiring — minutigacha hisoblab beriladi"}</p>
+                  <strong>
+                    {canClaimBonus 
+                      ? `${bonusAmount.toLocaleString('uz-UZ')} so'm Bepul Bonus` 
+                      : `Balansni to'ldirish (Minimal ${minAmount.toLocaleString('uz-UZ')} so'm)`}
+                  </strong>
+                  <p>
+                    {canClaimBonus 
+                      ? "Bonus bilan bepul ko'ring — minutigacha hisoblab beriladi" 
+                      : "Istalgan summa bilan to'ldiring — minutigacha hisoblab beriladi"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -969,14 +984,15 @@ const PlayerPage: React.FC = () => {
                     setIsSubscriptionModalOpen(true);
                   }}
                 >
-                  🎁 25 000 bonusni olish va boshlash
+                  🎁 {bonusAmount.toLocaleString('uz-UZ')} bonusni olish va boshlash
                 </button>
               ) : (
                 <button 
                   className="btn-unlock-premium"
+                  style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)' }}
                   onClick={() => setIsSubscriptionModalOpen(true)}
                 >
-                  👑 Student Premium faollashtirish
+                  💳 Balansni to'ldirish ({minAmount.toLocaleString('uz-UZ')}+)
                 </button>
               )}
               <button 
