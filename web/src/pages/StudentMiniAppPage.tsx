@@ -9,7 +9,7 @@ import {
   BookOpen, CheckCircle2, XCircle, AlertTriangle, 
   Send, ChevronLeft, ChevronRight, Volume2, Sparkles, 
   Clock, Trophy, X, Check, RefreshCw, Film, Library, Play, Search, ArrowLeft,
-  Trash2, ExternalLink, FileText, ChevronDown, Users, Maximize2, Minimize2
+  Trash2, ExternalLink, ChevronDown, Users, Maximize2, Minimize2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -26,8 +26,8 @@ export default function StudentMiniAppPage() {
     return (saved === 'movies' || saved === 'vocabulary' || saved === 'homework') ? saved : 'homework';
   });
 
-  // Homework 3 Core Sub-Tabs: 'todo' | 'notes' | 'penalties' | 'all'
-  const [homeworkSubTab, setHomeworkSubTab] = useState<'todo' | 'notes' | 'penalties' | 'all'>('todo');
+  // Homework 4 Core Sub-Tabs: 'all' | 'todo' | 'penalties' | 'completed'
+  const [homeworkSubTab, setHomeworkSubTab] = useState<'all' | 'todo' | 'penalties' | 'completed'>('all');
   const [showPenaltyHistoryModal, setShowPenaltyHistoryModal] = useState(false);
 
   // Student ID
@@ -38,7 +38,6 @@ export default function StudentMiniAppPage() {
   const [groups, setGroups] = useState<StudentGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<StudentGroup | null>(null);
   const [showGroupDrawer, setShowGroupDrawer] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'All' | 'Completed' | 'Penalty' | 'Unchecked' | 'Pending'>('All');
   const [assignments, setAssignments] = useState<AssignmentDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [preparingUploadItemId, setPreparingUploadItemId] = useState<number | null>(null);
@@ -257,14 +256,7 @@ export default function StudentMiniAppPage() {
     setSelectedGroup(g);
     localStorage.setItem('lanswitch_student_selected_group_id', g.id.toString());
     setShowGroupDrawer(false);
-    await loadAssignments(g.id, activeFilter, studentId);
-  };
-
-  const handleFilterChange = async (filter: 'All' | 'Completed' | 'Penalty' | 'Unchecked' | 'Pending') => {
-    setActiveFilter(filter);
-    if (selectedGroup) {
-      await loadAssignments(selectedGroup.id, filter, studentId);
-    }
+    await loadAssignments(g.id, 'All', studentId);
   };
 
   // Text-To-Speech for pronunciation
@@ -453,7 +445,7 @@ export default function StudentMiniAppPage() {
     try {
       await api.deleteAttachment(attachmentId);
       if (selectedGroup) {
-        await loadAssignments(selectedGroup.id, activeFilter, studentId);
+        await loadAssignments(selectedGroup.id, 'All', studentId);
       }
     } catch (err) {
       alert("Faylni o'chirishda xatolik yuz berdi");
@@ -514,20 +506,18 @@ export default function StudentMiniAppPage() {
     }, 0);
   }, [todoAssignments]);
 
-  // 2. Reading / Notes items:
-  const notesItems = useMemo(() => {
-    const list: Array<{ assignment: AssignmentDetail; item: AssignmentItemDetail }> = [];
-    assignments.forEach(a => {
-      a.items.forEach(it => {
-        if (it.itemType === 'TextReminder' || (it.instructions && it.instructions.trim().length > 0)) {
-          list.push({ assignment: a, item: it });
-        }
-      });
+  // 2. Completed items / assignments:
+  const completedAssignments = useMemo(() => {
+    return assignments.filter(a => {
+      return a.items.some(it => it.mySubmissionStatus === 1 || it.mySubmissionStatus === 2);
     });
-    return list;
   }, [assignments]);
 
-  const notesItemsCount = notesItems.length;
+  const completedItemsCount = useMemo(() => {
+    return assignments.reduce((acc, a) => {
+      return acc + a.items.filter(it => it.mySubmissionStatus === 1 || it.mySubmissionStatus === 2).length;
+    }, 0);
+  }, [assignments]);
 
   // 3. Active Penalties (Jazolar):
   const activePenalties = useMemo(() => {
@@ -556,24 +546,6 @@ export default function StudentMiniAppPage() {
     });
     return list;
   }, [assignments]);
-
-  // Filtered assignments display helper
-  const filteredAssignments = assignments.filter(assignment => {
-    if (activeFilter === 'All') return true;
-    if (activeFilter === 'Completed') {
-      return assignment.items.every(it => it.mySubmissionStatus === 1 || it.mySubmissionStatus === 2);
-    }
-    if (activeFilter === 'Penalty') {
-      return assignment.items.some(it => it.mySubmissionStatus === 0);
-    }
-    if (activeFilter === 'Unchecked') {
-      return assignment.items.some(it => it.mySubmissionStatus === null && it.mySubmittedAt);
-    }
-    if (activeFilter === 'Pending') {
-      return assignment.items.some(it => it.mySubmissionStatus === null && !it.mySubmittedAt);
-    }
-    return true;
-  });
 
   // Filtered movies
   const filteredMovies = movies.filter(m => {
@@ -1214,10 +1186,10 @@ export default function StudentMiniAppPage() {
             scrollbarWidth: 'none'
           }}>
             {[
+              { key: 'all', label: `Barchasi (${assignments.length})`, bg: '#F1F5F9', activeBg: 'var(--primary-blue)', color: 'var(--text-navy)', activeColor: '#fff' },
               { key: 'todo', label: `📌 Bajarilishi kerak (${todoItemsCount})`, bg: '#EFF6FF', activeBg: 'var(--primary-blue)', color: 'var(--primary-blue)', activeColor: '#fff' },
-              { key: 'notes', label: `📖 Eslatmalar (${notesItemsCount})`, bg: '#F0FDF4', activeBg: '#16A34A', color: '#15803D', activeColor: '#fff' },
-              { key: 'penalties', label: `❌ Jazolar (${activePenaltiesCount})`, bg: '#FEF2F2', activeBg: '#DC2626', color: '#B91C1C', activeColor: '#fff' },
-              { key: 'all', label: `Barchasi (${assignments.length})`, bg: '#F1F5F9', activeBg: 'var(--text-navy)', color: 'var(--text-navy)', activeColor: '#fff' },
+              { key: 'penalties', label: `❌ Jarimalar (${activePenaltiesCount})`, bg: '#FEF2F2', activeBg: '#DC2626', color: '#B91C1C', activeColor: '#fff' },
+              { key: 'completed', label: `✅ Bajarilganlar (${completedItemsCount})`, bg: '#F0FDF4', activeBg: '#16A34A', color: '#15803D', activeColor: '#fff' },
             ].map(tab => {
               const isActive = homeworkSubTab === tab.key;
               return (
@@ -1255,8 +1227,79 @@ export default function StudentMiniAppPage() {
                 }} />
                 <div style={{ fontWeight: 700 }}>Vazifalar yuklanmoqda...</div>
               </div>
+            ) : homeworkSubTab === 'all' ? (
+              /* TAB 1: BARCHASI (ALL ASSIGNMENTS) - NO SECONDARY FILTERS */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {assignments.length === 0 ? (
+                  <div style={{
+                    background: 'var(--pure-white)',
+                    borderRadius: 'var(--radius-card)',
+                    padding: '40px 24px',
+                    textAlign: 'center',
+                    border: '2px dashed var(--sky-border)',
+                    marginTop: '10px'
+                  }}>
+                    <div style={{ fontSize: '42px', marginBottom: '12px' }}>📭</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '6px' }}>
+                      Vazifalar mavjud emas
+                    </div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                      Ushbu guruh uchun e'lon qilingan topshiriqlar mavjud emas.
+                    </div>
+                  </div>
+                ) : (
+                  assignments.map(assignment => (
+                    <div
+                      key={assignment.id}
+                      style={{
+                        background: 'var(--pure-white)',
+                        borderRadius: 'var(--radius-card)',
+                        border: '2px solid var(--sky-border)',
+                        boxShadow: 'var(--shadow-card)',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <div style={{
+                        background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1D4ED8 100%)',
+                        padding: '18px 20px',
+                        color: 'var(--pure-white)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.3px' }}>
+                            📅 {assignment.title}
+                          </div>
+                          <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '2px' }}>
+                            {assignment.groupTitle}
+                          </div>
+                        </div>
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.2)',
+                          backdropFilter: 'blur(8px)',
+                          padding: '6px 14px',
+                          borderRadius: 'var(--radius-pill)',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <Clock size={14} />
+                          <span>{assignment.items.length} ta qism</span>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             ) : homeworkSubTab === 'todo' ? (
-              /* TAB 1: BAJARILISHI KERAK */
+              /* TAB 2: BAJARILISHI KERAK */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {todoAssignments.length === 0 ? (
                   <div style={{
@@ -1317,73 +1360,6 @@ export default function StudentMiniAppPage() {
                       </div>
                     );
                   })
-                )}
-              </div>
-            ) : homeworkSubTab === 'notes' ? (
-              /* TAB 2: ESLATMALAR */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {notesItems.length === 0 ? (
-                  <div style={{
-                    background: 'var(--pure-white)',
-                    borderRadius: 'var(--radius-card)',
-                    padding: '40px 24px',
-                    textAlign: 'center',
-                    border: '2px dashed var(--sky-border)',
-                    marginTop: '10px'
-                  }}>
-                    <div style={{ fontSize: '38px', marginBottom: '10px' }}>📖</div>
-                    <div style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px' }}>
-                      Hozircha eslatmalar yo'q
-                    </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      O'qituvchi tomonidan kiritilgan o'qish va qoidalar eslatmalari shu yerda ko'rinadi.
-                    </div>
-                  </div>
-                ) : (
-                  notesItems.map((n, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        background: 'var(--pure-white)',
-                        borderRadius: '16px',
-                        border: '1.5px solid var(--sky-border)',
-                        padding: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px',
-                        boxShadow: 'var(--shadow-card)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary-blue)', background: 'var(--ice-blue-bg)', padding: '4px 10px', borderRadius: 'var(--radius-pill)' }}>
-                          📅 {n.assignment.title}
-                        </span>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {n.assignment.groupTitle}
-                        </span>
-                      </div>
-
-                      <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FileText size={18} color="var(--primary-blue)" />
-                        <span>{n.item.title}</span>
-                      </div>
-
-                      {n.item.instructions && (
-                        <div style={{
-                          background: '#F8FAFC',
-                          borderRadius: '12px',
-                          padding: '12px 14px',
-                          border: '1px solid var(--sky-border)',
-                          fontSize: '14px',
-                          color: '#334155',
-                          lineHeight: 1.5,
-                          whiteSpace: 'pre-wrap'
-                        }}>
-                          {n.item.instructions}
-                        </div>
-                      )}
-                    </div>
-                  ))
                 )}
               </div>
             ) : homeworkSubTab === 'penalties' ? (
@@ -1480,112 +1456,64 @@ export default function StudentMiniAppPage() {
                 )}
               </div>
             ) : (
-              /* TAB 4: BARCHASI (ALL ASSIGNMENTS) */
+              /* TAB 4: BAJARILGANLAR */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Secondary Filters for All */}
-                <div style={{
-                  overflowX: 'auto',
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  gap: '8px',
-                  scrollbarWidth: 'none',
-                  paddingBottom: '4px'
-                }}>
-                  {[
-                    { key: 'All', label: 'Barchasi' },
-                    { key: 'Completed', label: '✅ Bajarilgan' },
-                    { key: 'Penalty', label: '❌ Jarima' },
-                    { key: 'Unchecked', label: '⏳ Tekshirilmoqda' },
-                    { key: 'Pending', label: '📌 Kutilmoqda' }
-                  ].map(tab => {
-                    const isActive = activeFilter === tab.key;
-                    return (
-                      <button
-                        key={tab.key}
-                        onClick={() => handleFilterChange(tab.key as any)}
-                        style={{
-                          padding: '8px 14px',
-                          borderRadius: 'var(--radius-pill)',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          border: isActive ? '2px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                          background: isActive ? 'var(--primary-blue)' : 'var(--pure-white)',
-                          color: isActive ? 'var(--pure-white)' : 'var(--text-navy)',
-                          flexShrink: 0
-                        }}
-                      >
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {filteredAssignments.length === 0 ? (
+                {completedAssignments.length === 0 ? (
                   <div style={{
                     background: 'var(--pure-white)',
                     borderRadius: 'var(--radius-card)',
                     padding: '40px 24px',
                     textAlign: 'center',
-                    border: '2px dashed var(--sky-border)'
+                    border: '2px dashed #86EFAC',
+                    marginTop: '10px'
                   }}>
                     <div style={{ fontSize: '42px', marginBottom: '12px' }}>🎉</div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '6px' }}>
-                      Ushbu bo'limda vazifa yo'q!
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#15803D', marginBottom: '6px' }}>
+                      Bajarilgan vazifalar hali yo'q
                     </div>
                     <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                      Tanlangan filtr bo'yicha topshiriqlar mavjud emas.
+                      Topshiriqlarni bajarib topshirganingizdan so'ng, ular bu yerda ko'rinadi.
                     </div>
                   </div>
                 ) : (
-                  filteredAssignments.map(assignment => (
-                    <div
-                      key={assignment.id}
-                      style={{
-                        background: 'var(--pure-white)',
-                        borderRadius: 'var(--radius-card)',
-                        border: '2px solid var(--sky-border)',
-                        boxShadow: 'var(--shadow-card)',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      <div style={{
-                        background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1D4ED8 100%)',
-                        padding: '18px 20px',
-                        color: 'var(--pure-white)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <div>
-                          <div style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.3px' }}>
-                            📅 {assignment.title}
-                          </div>
-                          <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '2px' }}>
-                            {assignment.groupTitle}
-                          </div>
-                        </div>
+                  completedAssignments.map(assignment => {
+                    const completedItems = assignment.items.filter(it => it.mySubmissionStatus === 1 || it.mySubmissionStatus === 2);
+                    if (completedItems.length === 0) return null;
+
+                    return (
+                      <div
+                        key={assignment.id}
+                        style={{
+                          background: 'var(--pure-white)',
+                          borderRadius: 'var(--radius-card)',
+                          border: '2px solid #BBF7D0',
+                          boxShadow: 'var(--shadow-card)',
+                          overflow: 'hidden'
+                        }}
+                      >
                         <div style={{
-                          background: 'rgba(255, 255, 255, 0.2)',
-                          backdropFilter: 'blur(8px)',
-                          padding: '6px 14px',
-                          borderRadius: 'var(--radius-pill)',
-                          fontSize: '12px',
-                          fontWeight: 800,
+                          background: 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
+                          padding: '16px 20px',
+                          color: '#fff',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '6px'
+                          justifyContent: 'space-between'
                         }}>
-                          <Clock size={14} />
-                          <span>{assignment.items.length} ta qism</span>
+                          <div>
+                            <div style={{ fontSize: '17px', fontWeight: 900 }}>📅 {assignment.title}</div>
+                            <div style={{ fontSize: '12px', opacity: 0.9 }}>{assignment.groupTitle}</div>
+                          </div>
+                          <span style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: '12px', fontWeight: 800 }}>
+                            ✅ {completedItems.length} ta bajarildi • {assignment.items.length} ta qism
+                          </span>
+                        </div>
+
+                        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                          {completedItems.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
                         </div>
                       </div>
-
-                      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                        {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}

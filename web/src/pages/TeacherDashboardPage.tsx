@@ -2584,6 +2584,220 @@ export default function TeacherDashboardPage() {
                   </div>
                 )}
 
+                {/* Overall Summary Stats Cards (ONLY on 'all' tab before student cards) */}
+                {reportFilter === 'all' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {/* Stat Cards Grid */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                      gap: '12px'
+                    }}>
+                      {/* Card 1: Jami o'quvchilar */}
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        border: '1.5px solid var(--sky-border)',
+                        boxShadow: 'var(--shadow-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: '#EFF6FF',
+                          color: 'var(--primary-blue)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <Users size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-navy)', lineHeight: 1.1 }}>
+                            {allStudents.length}
+                          </div>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginTop: '3px' }}>
+                            Jami o'quvchilar
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 2: To'liq bajardi (Full done) */}
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        border: '1.5px solid #BBF7D0',
+                        boxShadow: '0 2px 8px rgba(22, 163, 74, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: '#DCFCE7',
+                          color: '#16A34A',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <CheckCircle2 size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '22px', fontWeight: 900, color: '#15803D', lineHeight: 1.1 }}>
+                            {fullCount}
+                          </div>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#16A34A', marginTop: '3px' }}>
+                            To'liq bajardi
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 3: Jarima (Punishment) */}
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        border: '1.5px solid #FECACA',
+                        boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: '#FEE2E2',
+                          color: '#DC2626',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <XCircle size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '22px', fontWeight: 900, color: '#B91C1C', lineHeight: 1.1 }}>
+                            {punishmentCount}
+                          </div>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#DC2626', marginTop: '3px' }}>
+                            Jarima qo'llandi
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 4: Jarima bajarildi (Punished) */}
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        border: '1.5px solid #FDE68A',
+                        boxShadow: '0 2px 8px rgba(217, 119, 6, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: '#FEF3C7',
+                          color: '#D97706',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <AlertTriangle size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '22px', fontWeight: 900, color: '#B45309', lineHeight: 1.1 }}>
+                            {punishedCount}
+                          </div>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#D97706', marginTop: '3px' }}>
+                            Jarima bajarildi
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 5: Kutilmoqda (Pending) */}
+                      <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        border: '1.5px solid #BAE6FD',
+                        boxShadow: '0 2px 8px rgba(2, 132, 199, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: '#E0F2FE',
+                          color: '#0284C7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <Clock size={22} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '22px', fontWeight: 900, color: '#0369A1', lineHeight: 1.1 }}>
+                            {pendingCount}
+                          </div>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#0284C7', marginTop: '3px' }}>
+                            Kutilmoqda
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Percentage Banner */}
+                    <div style={{
+                      background: '#FFFFFF',
+                      borderRadius: '14px',
+                      padding: '12px 16px',
+                      border: '1.5px solid var(--sky-border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '10px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)' }}>
+                          📊 Topshirish ko'rsatkichi:
+                        </span>
+                        <span style={{
+                          fontSize: '13px',
+                          fontWeight: 900,
+                          color: fullCount === allStudents.length ? '#16A34A' : 'var(--primary-blue)',
+                          background: fullCount === allStudents.length ? '#DCFCE7' : 'var(--ice-blue-bg)',
+                          padding: '2px 8px',
+                          borderRadius: 'var(--radius-pill)'
+                        }}>
+                          {allStudents.length > 0 ? Math.round((fullCount / allStudents.length) * 100) : 0}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                        {fullCount} / {allStudents.length} o'quvchi to'liq yakunladi
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Cards List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {filteredStudents.length === 0 ? (
