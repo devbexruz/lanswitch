@@ -13,10 +13,22 @@ const AdminPage: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [editingMedia, setEditingMedia] = useState<any>(null);
   const [isCreatingMedia, setIsCreatingMedia] = useState(false);
-  const [activeTab, setActiveTab] = useState<'media' | 'users' | 'categories' | 'grammar'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'subscriptions' | 'users' | 'categories' | 'grammar'>('media');
   const [categories, setCategories] = useState<any[]>([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
+
+  // Subscriptions state
+  const [subscriptionsList, setSubscriptionsList] = useState<any[]>([]);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [plansList, setPlansList] = useState<any[]>([]);
+  const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
+  const [grantUserId, setGrantUserId] = useState<number | ''>('');
+  const [grantPlanId, setGrantPlanId] = useState('student_monthly');
+  const [grantDurationDays, setGrantDurationDays] = useState(30);
+  const [grantIsTrial, setGrantIsTrial] = useState(false);
+  const [grantNotes, setGrantNotes] = useState('');
+  const [grantingSub, setGrantingSub] = useState(false);
 
   // Grammar state
   const [grammarList, setGrammarList] = useState<any[]>([]);
@@ -46,7 +58,85 @@ const AdminPage: React.FC = () => {
     fetchUsers();
     fetchCategories();
     fetchGrammar();
+    fetchSubscriptions();
+    fetchPlans();
   }, []);
+
+  const fetchSubscriptions = async () => {
+    setLoadingSubscriptions(true);
+    try {
+      const res = await fetch('/api/subscription/admin/all', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        setSubscriptionsList(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingSubscriptions(false);
+    }
+  };
+
+  const fetchPlans = async () => {
+    try {
+      const res = await fetch('/api/subscription/plans');
+      if (res.ok) setPlansList(await res.json());
+    } catch (e) { console.error(e); }
+  };
+
+  const handleGrantSubscription = async () => {
+    if (!grantUserId) {
+      alert("Foydalanuvchini tanlang");
+      return;
+    }
+    setGrantingSub(true);
+    try {
+      const res = await fetch('/api/subscription/admin/grant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          userId: Number(grantUserId),
+          planId: grantPlanId,
+          durationDays: Number(grantDurationDays),
+          isTrial: grantIsTrial,
+          notes: grantNotes.trim() || null
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || "Obuna muvaffaqiyatli berildi!");
+        setIsGrantModalOpen(false);
+        setGrantNotes('');
+        fetchSubscriptions();
+      } else {
+        alert(data.message || data || "Xatolik yuz berdi");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Tarmoq xatosi");
+    } finally {
+      setGrantingSub(false);
+    }
+  };
+
+  const handleCancelSubscription = async (id: number) => {
+    if (!window.confirm("Ushbu obunani bekor qilishga ishonchingiz komilmi?")) return;
+    try {
+      const res = await fetch(`/api/subscription/admin/cancel/${id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        fetchSubscriptions();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchMedia = async () => {
     try {
@@ -246,6 +336,15 @@ const AdminPage: React.FC = () => {
             Media
           </button>
           <button
+            className={`btn ${activeTab === 'subscriptions' ? 'btn-primary' : 'btn-outline-light'}`}
+            onClick={() => {
+              setActiveTab('subscriptions');
+              fetchSubscriptions();
+            }}
+          >
+            👑 Tariflar & Obunalar
+          </button>
+          <button
             className={`btn ${activeTab === 'categories' ? 'btn-primary' : 'btn-outline-light'}`}
             onClick={() => setActiveTab('categories')}
           >
@@ -329,6 +428,122 @@ const AdminPage: React.FC = () => {
           </table>
             )}
           </>
+        )}
+
+        {/* ===== SUBSCRIPTIONS & PLANS TAB ===== */}
+        {activeTab === 'subscriptions' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem' }}>👑 Tariflar va Obunalar boshqaruvi</h3>
+                <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                  Barcha foydalanuvchilarning aktiv obunalari va sinov muddatlarini nazorat qilish
+                </p>
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setGrantUserId('');
+                  setGrantPlanId('student_monthly');
+                  setGrantDurationDays(30);
+                  setGrantIsTrial(false);
+                  setGrantNotes('');
+                  setIsGrantModalOpen(true);
+                }}
+              >
+                + Foydalanuvchiga Obuna Berish
+              </button>
+            </div>
+
+            {/* Plans Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+              {plansList.map(p => (
+                <div key={p.id} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase' }}>{p.badge}</div>
+                  <h4 style={{ margin: '4px 0 8px 0', fontSize: '1.05rem', color: '#fff' }}>{p.name}</h4>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', marginBottom: '6px' }}>{p.formattedPrice}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>
+                    {p.targetRole === 'Student' ? 'Talabalar rejimi' : `${p.maxGroups} tagacha guruh`}
+                    {p.hasTrial && ' • 14 kun bepul sinov'}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Subscriptions Table */}
+            {loadingSubscriptions ? (
+              <div className="flex-center" style={{ padding: '40px' }}>Yuklanmoqda...</div>
+            ) : (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Foydalanuvchi</th>
+                    <th>Telegram ID</th>
+                    <th>Tarif</th>
+                    <th>Turi</th>
+                    <th>Muddat</th>
+                    <th>Holat</th>
+                    <th>Amallar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptionsList.map(sub => (
+                    <tr key={sub.id}>
+                      <td>{sub.id}</td>
+                      <td>
+                        <strong>{sub.userFullName}</strong>
+                        {sub.userUsername && <div style={{ fontSize: '0.78rem', opacity: 0.7 }}>@{sub.userUsername}</div>}
+                      </td>
+                      <td>{sub.userTelegramId}</td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: '#38bdf8' }}>{sub.planName}</span>
+                      </td>
+                      <td>
+                        {sub.isTrial ? (
+                          <span style={{ background: '#f59e0b', color: '#000', padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                            14 kunlik sinov
+                          </span>
+                        ) : (
+                          <span style={{ background: '#10b981', color: '#fff', padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                            Pullik
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ fontSize: '0.85rem' }}>
+                        {new Date(sub.startDate).toLocaleDateString('uz-UZ')} — {new Date(sub.endDate).toLocaleDateString('uz-UZ')}
+                      </td>
+                      <td>
+                        {sub.isCurrentlyActive ? (
+                          <span style={{ color: '#4ade80', fontWeight: 700 }}>● Faol</span>
+                        ) : (
+                          <span style={{ color: '#ef4444', fontWeight: 600 }}>● {sub.status === 'Cancelled' ? 'Bekor qilingan' : 'Tugagan'}</span>
+                        )}
+                      </td>
+                      <td>
+                        {sub.status === 'Active' && (
+                          <button
+                            className="btn btn-danger"
+                            style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                            onClick={() => handleCancelSubscription(sub.id)}
+                          >
+                            Bekor qilish
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {subscriptionsList.length === 0 && (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '30px', opacity: 0.5 }}>
+                        Hali obunalar mavjud emas
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
 
         {activeTab === 'users' && (
@@ -690,6 +905,98 @@ const AdminPage: React.FC = () => {
             </div>
             <div className="modal-body markdown-body" style={{ marginTop: '20px', color: 'var(--text-primary)', lineHeight: '1.75' }}>
               <ReactMarkdown>{previewGrammar.content}</ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grant Subscription Modal */}
+      {isGrantModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsGrantModalOpen(false)}>
+          <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()} style={{ width: '560px', maxWidth: '92vw' }}>
+            <div className="modal-header">
+              <h2>👑 Foydalanuvchiga Obuna Berish</h2>
+              <button className="icon-btn" onClick={() => setIsGrantModalOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Foydalanuvchi tanlang <span style={{ color: '#ef4444' }}>*</span></label>
+                <select
+                  className="form-control"
+                  value={grantUserId}
+                  onChange={e => setGrantUserId(e.target.value ? Number(e.target.value) : '')}
+                >
+                  <option value="">-- Foydalanuvchini tanlang --</option>
+                  {usersList.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.fullName} (ID: {u.id}{u.telegramId ? `, @${u.telegramId}` : ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Tarif tanlang</label>
+                <select
+                  className="form-control"
+                  value={grantPlanId}
+                  onChange={e => setGrantPlanId(e.target.value)}
+                >
+                  {plansList.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.formattedPrice})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Muddat (kunlarda)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={grantDurationDays}
+                    onChange={e => setGrantDurationDays(Number(e.target.value))}
+                    min={1}
+                    max={730}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '24px' }}>
+                  <input
+                    type="checkbox"
+                    id="grantIsTrial"
+                    checked={grantIsTrial}
+                    onChange={e => setGrantIsTrial(e.target.checked)}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="grantIsTrial" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                    🎁 Bepul sinov statusi
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Izoh (ixtiyoriy)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={grantNotes}
+                  onChange={e => setGrantNotes(e.target.value)}
+                  placeholder="Masalan: Maxsus chegirma yoki sovg'a"
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+                <button className="btn btn-outline-light" onClick={() => setIsGrantModalOpen(false)}>Bekor qilish</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleGrantSubscription}
+                  disabled={grantingSub || !grantUserId}
+                >
+                  {grantingSub ? 'Faollashtirilmoqda...' : 'Obunani Faollashtirish'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

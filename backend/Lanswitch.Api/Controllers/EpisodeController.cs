@@ -57,7 +57,29 @@ public class EpisodeController : ControllerBase
         _context.Episodes.Add(episode);
         await _context.SaveChangesAsync();
         
-        return Ok(new { episode.Id, episode.EpisodeNumber, episode.Title });
+        return Ok(new { episode.Id, episode.EpisodeNumber, episode.Title, episode.VideoUrl });
+    }
+
+    public class UpdateEpisodeRequest
+    {
+        public string? Title { get; set; }
+        public int? EpisodeNumber { get; set; }
+        public string? VideoUrl { get; set; }
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateEpisode(long id, [FromBody] UpdateEpisodeRequest request)
+    {
+        var ep = await _context.Episodes.FindAsync(id);
+        if (ep == null) return NotFound();
+
+        if (!string.IsNullOrWhiteSpace(request.Title)) ep.Title = request.Title;
+        if (request.EpisodeNumber.HasValue) ep.EpisodeNumber = request.EpisodeNumber.Value;
+        if (request.VideoUrl != null) ep.VideoUrl = request.VideoUrl;
+
+        await _context.SaveChangesAsync();
+        return Ok(ep);
     }
 
     [HttpDelete("{id}")]
@@ -79,4 +101,5 @@ public class CreateEpisodeRequest
     public long MediaId { get; set; }
     public string? Title { get; set; }
     public int? EpisodeNumber { get; set; }
+    public string? VideoUrl { get; set; }
 }

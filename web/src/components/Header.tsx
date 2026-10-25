@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationsModal from './NotificationsModal';
+import SubscriptionPlansModal from './SubscriptionPlansModal';
 
 interface HeaderProps {
   isSidebarExpanded: boolean;
@@ -13,6 +14,7 @@ const Header: React.FC<HeaderProps> = ({ isSidebarExpanded }) => {
   const { learningLanguage, setLearningLanguage, activeLearningLanguages } = useLanguage();
   const { user, isAuthenticated, requireAuth } = useAuth();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isPlansOpen, setIsPlansOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const navigate = useNavigate();
 
@@ -85,6 +87,34 @@ const Header: React.FC<HeaderProps> = ({ isSidebarExpanded }) => {
             </button>
           )}
         </div>
+
+        {/* Tariflar / Obuna Button */}
+        <button
+          className="btn"
+          onClick={() => setIsPlansOpen(true)}
+          style={{
+            background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.3))',
+            border: '1px solid rgba(234, 179, 8, 0.5)',
+            color: '#fef08a',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            marginRight: '6px'
+          }}
+          title="Tariflar va Obuna"
+        >
+          <span>👑</span> Tariflar
+        </button>
+
+        <SubscriptionPlansModal
+          isOpen={isPlansOpen}
+          onClose={() => setIsPlansOpen(false)}
+        />
 
         {isAuthenticated ? (
           <>

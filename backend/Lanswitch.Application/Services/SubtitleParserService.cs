@@ -11,36 +11,83 @@ public class SubtitleParserService : ISubtitleParserService
 {
     public List<Subtitle> ParseSrt(string srtContent, long mediaId)
     {
+        return ParseSubtitles(srtContent, mediaId, null);
+    }
+
+    public List<Subtitle> ParseSubtitles(string content, long? mediaId, long? episodeId)
+    {
         var subtitles = new List<Subtitle>();
         
-        if (string.IsNullOrWhiteSpace(srtContent))
+        if (string.IsNullOrWhiteSpace(content))
             return subtitles;
 
-        var blocks = srtContent.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+        // Clean WebVTT header if present
+        var cleanContent = content;
+        if (cleanContent.StartsWith("WEBVTT", StringComparison.OrdinalIgnoreCase))
+        {
+            var firstBlankLine = cleanContent.IndexOf("\n\n");
+            if (firstBlankLine == -1) firstBlankLine = cleanContent.IndexOf("\r\n\r\n");
+            if (firstBlankLine != -1)
+            {
+                cleanContent = cleanContent.Substring(firstBlankLine).Trim();
+            }
+        }
+
+        var blocks = cleanContent.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+        int autoIndex = 1;
 
         foreach (var block in blocks)
         {
-            var lines = block.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            if (lines.Length >= 3)
-            {
-                if (!int.TryParse(lines[0], out int index))
-                    continue;
+            var lines = block.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0) continue;
 
-                var timeMatch = Regex.Match(lines[1], @"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})");
+            int timeLineIndex = -1;
+            int cueIndex = autoIndex;
+
+            // Check if first line is a numeric cue or time
+            if (Regex.IsMatch(lines[0], @"-->"))
+            {
+                timeLineIndex = 0;
+            }
+            else if (lines.Length > 1 && Regex.IsMatch(lines[1], @"-->"))
+            {
+                timeLineIndex = 1;
+                if (int.TryParse(lines[0].Trim(), out var parsedIndex))
+                {
+                    cueIndex = parsedIndex;
+                }
+            }
+
+            if (timeLineIndex != -1 && lines.Length > timeLineIndex + 1)
+            {
+                var timeLine = lines[timeLineIndex];
+                var timeMatch = Regex.Match(timeLine, @"(?:(\d{2}:)?(\d{2}:\d{2}[,\.]\d{3}))\s*-->\s*(?:(\d{2}:)?(\d{2}:\d{2}[,\.]\d{3}))");
                 if (timeMatch.Success)
                 {
-                    var startTime = ParseSrtTime(timeMatch.Groups[1].Value);
-                    var endTime = ParseSrtTime(timeMatch.Groups[2].Value);
-                    var text = string.Join(" ", lines.Skip(2)).Trim();
+                    var startTimeStr = timeLine.Substring(0, timeLine.IndexOf("-->")).Trim();
+                    var endTimePart = timeLine.Substring(timeLine.IndexOf("-->") + 3).Trim();
+                    var endTimeStr = endTimePart.Split(' ')[0].Trim();
 
-                    subtitles.Add(new Subtitle
+                    var startTime = ParseFlexibleTime(startTimeStr);
+                    var endTime = ParseFlexibleTime(endTimeStr);
+
+                    var textLines = lines.Skip(timeLineIndex + 1);
+                    var text = string.Join(" ", textLines).Trim();
+                    text = Regex.Replace(text, "<.*?>", string.Empty).Trim();
+
+                    if (!string.IsNullOrWhiteSpace(text))
                     {
-                        MediaId = mediaId,
-                        Index = index,
-                        StartTime = startTime,
-                        EndTime = endTime,
-                        Text = text
-                    });
+                        subtitles.Add(new Subtitle
+                        {
+                            MediaId = mediaId ?? 0,
+                            EpisodeId = episodeId,
+                            Index = cueIndex,
+                            StartTime = startTime,
+                            EndTime = endTime,
+                            Text = text
+                        });
+                        autoIndex++;
+                    }
                 }
             }
         }
@@ -51,10 +98,8 @@ public class SubtitleParserService : ISubtitleParserService
     public List<string> ExtractUniqueWords(List<Subtitle> subtitles)
     {
         var allText = string.Join(" ", subtitles.Select(s => s.Text));
-        // Remove HTML tags if any (like <i> or </i>)
         allText = Regex.Replace(allText, "<.*?>", string.Empty);
         
-        // Extract words (only alphabetic, handling apostrophes)
         var matches = Regex.Matches(allText.ToLowerInvariant(), @"\b[a-z']+\b");
         
         return matches.Select(m => m.Value)
@@ -63,10 +108,18 @@ public class SubtitleParserService : ISubtitleParserService
             .ToList();
     }
 
-    private TimeSpan ParseSrtTime(string srtTime)
+    private TimeSpan ParseFlexibleTime(string timeStr)
     {
-        // Format: hh:mm:ss,fff
-        if (TimeSpan.TryParse(srtTime.Replace(',', '.'), out var time))
+        // Replace comma with dot
+        var normalized = timeStr.Replace(',', '.').Trim();
+        // Format could be: mm:ss.fff or hh:mm:ss.fff
+        var parts = normalized.Split(':');
+        if (parts.Length == 2)
+        {
+            normalized = "00:" + normalized;
+        }
+
+        if (TimeSpan.TryParse(normalized, out var time))
         {
             return time;
         }

@@ -107,7 +107,7 @@ public class MediaController : ControllerBase
         return Ok(new { message = "Media deleted successfully" });
     }
 
-    public record CreateMediaRequest(string Title, string Description, bool IsFilm, string ThumbnailUrl, long? LanguageId, string? Level, System.Collections.Generic.List<long>? CategoryIds);
+    public record CreateMediaRequest(string Title, string Description, bool IsFilm, string ThumbnailUrl, long? LanguageId, string? Level, System.Collections.Generic.List<long>? CategoryIds, string? VideoUrl = null);
 
     [HttpPost]
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
@@ -121,7 +121,7 @@ public class MediaController : ControllerBase
             ThumbnailUrl = string.IsNullOrWhiteSpace(request.ThumbnailUrl) ? "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?q=80&w=3540&auto=format&fit=crop" : request.ThumbnailUrl,
             LanguageId = request.LanguageId ?? 2,
             Level = request.Level ?? "A1",
-            VideoUrl = ""
+            VideoUrl = request.VideoUrl ?? ""
         };
 
         if (request.CategoryIds != null && request.CategoryIds.Any())
@@ -155,7 +155,7 @@ public class MediaController : ControllerBase
         return Ok(new { message = "Media type toggled", isFilm = media.IsFilm });
     }
 
-    public record UpdateMediaRequest(string Title, string Description, bool IsFilm, string ThumbnailUrl, long? LanguageId, string? Level, System.Collections.Generic.List<long>? CategoryIds);
+    public record UpdateMediaRequest(string Title, string Description, bool IsFilm, string ThumbnailUrl, long? LanguageId, string? Level, System.Collections.Generic.List<long>? CategoryIds, string? VideoUrl = null);
 
     [HttpPut("{id}")]
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
@@ -172,6 +172,11 @@ public class MediaController : ControllerBase
             media.ThumbnailUrl = request.ThumbnailUrl;
         }
         
+        if (request.VideoUrl != null)
+        {
+            media.VideoUrl = request.VideoUrl;
+        }
+
         if (request.LanguageId.HasValue && request.LanguageId > 0)
         {
             media.LanguageId = request.LanguageId.Value;

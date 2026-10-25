@@ -11,6 +11,7 @@ const CreateMediaModal: React.FC<CreateMediaModalProps> = ({ onClose, onCreated 
   const [description, setDescription] = useState('');
   const [isFilm, setIsFilm] = useState(true);
   const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [languageId, setLanguageId] = useState<number>(2);
@@ -69,6 +70,7 @@ const CreateMediaModal: React.FC<CreateMediaModalProps> = ({ onClose, onCreated 
           description,
           isFilm,
           thumbnailUrl,
+          videoUrl: videoUrl.trim() || null,
           languageId,
           level
         })
@@ -122,6 +124,17 @@ const CreateMediaModal: React.FC<CreateMediaModalProps> = ({ onClose, onCreated 
           </div>
 
           <div>
+            <label style={{ display: 'block', marginBottom: '5px' }}>Video URL (MP4 / HLS / R2 URL)</label>
+            <input 
+              type="text" 
+              className="form-control" 
+              value={videoUrl}
+              onChange={e => setVideoUrl(e.target.value)}
+              placeholder="https://... (bo'sh qoldirilsa, keyinroq bot yoki havola orqali yuklanadi)"
+            />
+          </div>
+
+          <div>
             <label style={{ display: 'block', marginBottom: '5px' }}>Turi</label>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button 
@@ -156,13 +169,18 @@ const CreateMediaModal: React.FC<CreateMediaModalProps> = ({ onClose, onCreated 
             </div>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '5px' }}>Daraja</label>
-              <input 
-                type="text" 
+              <select 
                 className="form-control" 
-                placeholder="Masalan: B1, C1" 
                 value={level} 
-                onChange={(e) => setLevel(e.target.value)} 
-              />
+                onChange={(e) => setLevel(e.target.value)}
+              >
+                <option value="A1">A1 - Beginner</option>
+                <option value="A2">A2 - Elementary</option>
+                <option value="B1">B1 - Intermediate</option>
+                <option value="B2">B2 - Upper-Intermediate</option>
+                <option value="C1">C1 - Advanced</option>
+                <option value="C2">C2 - Proficiency</option>
+              </select>
             </div>
           </div>
 

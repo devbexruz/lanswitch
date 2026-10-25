@@ -48,4 +48,7 @@ public class User : BaseEntity
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual ICollection<AssignmentItemSubmission> Submissions { get; set; } = new List<AssignmentItemSubmission>();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public virtual ICollection<UserSubscription> Subscriptions { get; set; } = new List<UserSubscription>();
 }

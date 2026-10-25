@@ -7,5 +7,6 @@ namespace Lanswitch.Application.Interfaces;
 public interface ISubtitleParserService
 {
     List<Subtitle> ParseSrt(string srtContent, long mediaId);
+    List<Subtitle> ParseSubtitles(string content, long? mediaId, long? episodeId);
     List<string> ExtractUniqueWords(List<Subtitle> subtitles);
 }

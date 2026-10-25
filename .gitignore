@@ -3,4 +3,5 @@
 *.pem
 publish_release/
 cloudflared.log
+backend/publish/
 tools/

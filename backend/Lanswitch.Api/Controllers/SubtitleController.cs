@@ -18,15 +18,18 @@ public class SubtitleController : ControllerBase
     private readonly IGenericRepository<Subtitle> _subtitleRepository;
     private readonly AppDbContext _context;
     private readonly IGeminiAiService _geminiService;
+    private readonly ISubtitleParserService _subtitleParser;
 
     public SubtitleController(
         IGenericRepository<Subtitle> subtitleRepository,
         AppDbContext context,
-        IGeminiAiService geminiService)
+        IGeminiAiService geminiService,
+        ISubtitleParserService subtitleParser)
     {
         _subtitleRepository = subtitleRepository;
         _context = context;
         _geminiService = geminiService;
+        _subtitleParser = subtitleParser;
     }
 
     [HttpGet]
@@ -160,7 +163,6 @@ public class SubtitleController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [ApiKey]
     public async Task<IActionResult> DeleteSubtitle(long id)
     {
         var subtitle = await _subtitleRepository.GetByIdAsync(id);
@@ -168,5 +170,58 @@ public class SubtitleController : ControllerBase
 
         _subtitleRepository.Remove(subtitle);
         return Ok("Subtitle deleted successfully");
+    }
+
+    public record UploadSubtitleTextRequest(long? MediaId, long? EpisodeId, string Content, bool ReplaceExisting = true);
+
+    [HttpPost("upload-text")]
+    public async Task<IActionResult> UploadSubtitleText([FromBody] UploadSubtitleTextRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Content))
+            return BadRequest("Subtitr matni bo'sh bo'lishi mumkin emas");
+
+        var parsed = _subtitleParser.ParseSubtitles(request.Content, request.MediaId, request.EpisodeId);
+        if (parsed.Count == 0)
+            return BadRequest("Subtitrlar formatini aniqlab bo'lmadi (.srt yoki .vtt tekshiring)");
+
+        if (request.ReplaceExisting)
+        {
+            var old = _context.Subtitles.Where(s => 
+                (request.EpisodeId.HasValue && s.EpisodeId == request.EpisodeId.Value) ||
+                (!request.EpisodeId.HasValue && request.MediaId.HasValue && s.MediaId == request.MediaId.Value && s.EpisodeId == null));
+            _context.Subtitles.RemoveRange(old);
+        }
+
+        _context.Subtitles.AddRange(parsed);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { count = parsed.Count, message = $"{parsed.Count} ta subtitr muvaffaqiyatli saqlandi!" });
+    }
+
+    [HttpPost("upload-file")]
+    public async Task<IActionResult> UploadSubtitleFile([FromForm] Microsoft.AspNetCore.Http.IFormFile file, [FromForm] long? mediaId, [FromForm] long? episodeId, [FromForm] bool replaceExisting = true)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest("Fayl tanlanmagan");
+
+        using var reader = new System.IO.StreamReader(file.OpenReadStream());
+        var content = await reader.ReadToEndAsync();
+
+        var parsed = _subtitleParser.ParseSubtitles(content, mediaId, episodeId);
+        if (parsed.Count == 0)
+            return BadRequest("Subtitrlar formatini aniqlab bo'lmadi (.srt yoki .vtt tekshiring)");
+
+        if (replaceExisting)
+        {
+            var old = _context.Subtitles.Where(s => 
+                (episodeId.HasValue && s.EpisodeId == episodeId.Value) ||
+                (!episodeId.HasValue && mediaId.HasValue && s.MediaId == mediaId.Value && s.EpisodeId == null));
+            _context.Subtitles.RemoveRange(old);
+        }
+
+        _context.Subtitles.AddRange(parsed);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { count = parsed.Count, message = $"{parsed.Count} ta subtitr muvaffaqiyatli yuklandi!" });
     }
 }

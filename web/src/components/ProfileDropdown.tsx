@@ -3,8 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Check, LogOut, Film, BookOpen, 
-  ChevronDown, ArrowRightLeft
+  ChevronDown, ArrowRightLeft, Crown
 } from 'lucide-react';
+import SubscriptionPlansModal from './SubscriptionPlansModal';
 
 interface ProfileDropdownProps {
   onNavigateTab?: (tab: string) => void;
@@ -15,6 +16,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
   const { user, isAuthenticated, logout, setRole, login } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [isPlansOpen, setIsPlansOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -249,6 +251,36 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
             </div>
           </div>
 
+          {/* Tariflar / Obunalar (14 kun bepul) */}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              setIsPlansOpen(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '11px 12px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(245, 158, 11, 0.25))',
+              border: '1.5px solid rgba(234, 179, 8, 0.4)',
+              color: '#92400e',
+              fontSize: '13px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 2px 8px rgba(234, 179, 8, 0.15)'
+            }}
+          >
+            <Crown size={18} color="#b45309" />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#78350f', fontWeight: 900 }}>Tariflar va Obuna</span>
+              <span style={{ fontSize: '10.5px', color: '#047857', fontWeight: 700 }}>🎁 14 kun bepul sinov</span>
+            </div>
+          </button>
+
           {/* Navigation Quick Links */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <button
@@ -369,6 +401,11 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           </div>
         </div>
       )}
+
+      <SubscriptionPlansModal
+        isOpen={isPlansOpen}
+        onClose={() => setIsPlansOpen(false)}
+      />
     </div>
   );
 }

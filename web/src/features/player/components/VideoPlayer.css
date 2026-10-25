@@ -11,7 +11,18 @@
 }
 
 .custom-video-container.fullscreen {
-    border-radius: 0;
+    border-radius: 0 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    z-index: 99999 !important;
+    background: #000 !important;
+    margin: 0 !important;
 }
 
 .video-element {
@@ -109,6 +120,33 @@
 .control-btn svg {
     width: 24px;
     height: 24px;
+}
+
+.analysis-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 6px 14px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    transition: all 0.2s;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.analysis-btn:hover, .analysis-btn.active {
+    background: #6366f1;
+    color: white;
+    transform: none;
+}
+
+.analysis-btn svg {
+    width: 20px;
+    height: 20px;
 }
 
 .fullscreen-btn {

@@ -45,9 +45,21 @@ public class AppDbContext : DbContext
     public DbSet<BookUnit> BookUnits { get; set; }
     public DbSet<BookWord> BookWords { get; set; }
 
+    // Obunalar va Tariflar (Subscriptions & Plans)
+    public DbSet<UserSubscription> UserSubscriptions { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // UserSubscription
+        modelBuilder.Entity<UserSubscription>(entity =>
+        {
+            entity.HasOne(s => s.User)
+                .WithMany(u => u.Subscriptions)
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
         // Word indeksi
         modelBuilder.Entity<Word>()
