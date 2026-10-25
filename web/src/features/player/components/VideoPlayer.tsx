@@ -91,8 +91,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         targetEndTimeRef.current = endTime;
       }
     };
+
+    const handleSeekToTime = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { time } = customEvent.detail;
+      if (videoRef.current) {
+        videoRef.current.currentTime = time;
+        videoRef.current.play().catch(err => console.log(err));
+        setIsPlaying(true);
+        targetEndTimeRef.current = null;
+      }
+    };
+
     window.addEventListener('play-segment', handlePlaySegment);
-    return () => window.removeEventListener('play-segment', handlePlaySegment);
+    window.addEventListener('seek-to-time', handleSeekToTime);
+    return () => {
+      window.removeEventListener('play-segment', handlePlaySegment);
+      window.removeEventListener('seek-to-time', handleSeekToTime);
+    };
   }, []);
 
   const skipForward = (e: React.MouseEvent) => {

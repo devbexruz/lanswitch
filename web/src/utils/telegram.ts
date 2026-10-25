@@ -131,3 +131,48 @@ export function toggleAppFullscreen(
   }
 }
 
+/**
+ * Telegram WebApp BackButton boshqarish
+ * - showTelegramBackButton(callback): Telegram chap yuqoridagi 'X' ni '<-' ga aylantiradi va bosilganda callback chaqiradi
+ * - hideTelegramBackButton(): '<-' tugmasini yashirib, qaytadan 'X' ga aylantiradi
+ */
+let currentBackHandler: (() => void) | null = null;
+
+export function showTelegramBackButton(onClick: () => void) {
+  if (typeof window === 'undefined') return;
+  const tg = (window as any).Telegram?.WebApp;
+  if (!tg?.BackButton) return;
+
+  try {
+    if (currentBackHandler) {
+      tg.BackButton.offClick(currentBackHandler);
+    }
+    currentBackHandler = () => {
+      try {
+        onClick();
+      } catch (err) {
+        console.error('BackButton callback error:', err);
+      }
+    };
+    tg.BackButton.onClick(currentBackHandler);
+    tg.BackButton.show();
+  } catch (e) {
+    console.warn('Telegram BackButton show error:', e);
+  }
+}
+
+export function hideTelegramBackButton() {
+  if (typeof window === 'undefined') return;
+  const tg = (window as any).Telegram?.WebApp;
+  if (!tg?.BackButton) return;
+
+  try {
+    if (currentBackHandler) {
+      tg.BackButton.offClick(currentBackHandler);
+      currentBackHandler = null;
+    }
+    tg.BackButton.hide();
+  } catch (e) {
+    console.warn('Telegram BackButton hide error:', e);
+  }
+}

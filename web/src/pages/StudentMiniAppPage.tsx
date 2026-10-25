@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react';
 import { api, openTelegramBotChat } from '../utils/api';
-import { autoFullscreenOnDesktop, toggleAppFullscreen } from '../utils/telegram';
+import { autoFullscreenOnDesktop, toggleAppFullscreen, showTelegramBackButton, hideTelegramBackButton } from '../utils/telegram';
 import type { 
   StudentGroup, AssignmentDetail, AssignmentItemDetail, 
   BookWord, QuizQuestion, Book, BookPart, BookUnit 
@@ -151,6 +151,31 @@ export default function StudentMiniAppPage() {
   const toggleFullscreen = () => {
     toggleAppFullscreen(isFullscreen, setIsFullscreen);
   };
+
+  // Telegram Native BackButton synchronization
+  useEffect(() => {
+    if (previewMedia) {
+      showTelegramBackButton(() => setPreviewMedia(null));
+    } else if (vocabModalOpen) {
+      showTelegramBackButton(() => setVocabModalOpen(false));
+    } else if (showGroupDrawer) {
+      showTelegramBackButton(() => setShowGroupDrawer(false));
+    } else if (showPenaltyHistoryModal) {
+      showTelegramBackButton(() => setShowPenaltyHistoryModal(false));
+    } else if (mainTab === 'vocabulary' && vocabStep === 'units') {
+      showTelegramBackButton(() => setVocabStep('parts'));
+    } else if (mainTab === 'vocabulary' && vocabStep === 'parts') {
+      showTelegramBackButton(() => setVocabStep('books'));
+    } else if (mainTab !== 'homework') {
+      showTelegramBackButton(() => setMainTab('homework'));
+    } else {
+      hideTelegramBackButton();
+    }
+
+    return () => {
+      hideTelegramBackButton();
+    };
+  }, [previewMedia, vocabModalOpen, showGroupDrawer, showPenaltyHistoryModal, mainTab, vocabStep]);
 
   useEffect(() => {
     if (!initialLoadedRef.current) {
@@ -1591,7 +1616,7 @@ export default function StudentMiniAppPage() {
               {filteredMovies.map(movie => (
                 <div
                   key={movie.id}
-                  onClick={() => navigate(`/legacy/player/${movie.id}`)}
+                  onClick={() => navigate(`/player/${movie.id}`)}
                   style={{
                     background: 'var(--pure-white)',
                     borderRadius: '16px',

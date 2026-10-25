@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, openTelegramBotChat } from '../utils/api';
-import { autoFullscreenOnDesktop, toggleAppFullscreen } from '../utils/telegram';
+import { autoFullscreenOnDesktop, toggleAppFullscreen, showTelegramBackButton, hideTelegramBackButton } from '../utils/telegram';
 import type { 
   TeacherGroup, CreateAssignmentPayload, AssignmentSummary, 
   AssignmentReport, GroupMember, StudentTimelineAssignment,
@@ -207,6 +207,39 @@ export default function TeacherDashboardPage() {
   const toggleFullscreen = () => {
     toggleAppFullscreen(isFullscreen, setIsFullscreen);
   };
+
+  // Telegram Native BackButton synchronization
+  useEffect(() => {
+    if (penaltyModal) {
+      showTelegramBackButton(() => setPenaltyModal(null));
+    } else if (resolvePenaltyStudent) {
+      showTelegramBackButton(() => setResolvePenaltyStudent(null));
+    } else if (detailReviewStudent) {
+      showTelegramBackButton(() => setDetailReviewStudent(null));
+    } else if (showReportModal) {
+      showTelegramBackButton(() => setShowReportModal(false));
+    } else if (showCreateModal) {
+      showTelegramBackButton(() => setShowCreateModal(false));
+    } else if (showTimelineModal) {
+      showTelegramBackButton(() => setShowTimelineModal(false));
+    } else if (showGroupDrawer) {
+      showTelegramBackButton(() => setShowGroupDrawer(false));
+    } else if (selectedGroup) {
+      showTelegramBackButton(() => setSelectedGroup(null));
+    } else if (mainTab !== 'classroom') {
+      showTelegramBackButton(() => setMainTab('classroom'));
+    } else {
+      hideTelegramBackButton();
+    }
+
+    return () => {
+      hideTelegramBackButton();
+    };
+  }, [
+    penaltyModal, resolvePenaltyStudent, detailReviewStudent, 
+    showReportModal, showCreateModal, showTimelineModal, 
+    showGroupDrawer, selectedGroup, mainTab
+  ]);
 
   useEffect(() => {
     if (user?.role === 'Student') {
@@ -1292,7 +1325,7 @@ export default function TeacherDashboardPage() {
                     {filteredMovies.map(movie => (
                       <div
                         key={movie.id}
-                        onClick={() => navigate(`/legacy/player/${movie.id}`)}
+                        onClick={() => navigate(`/player/${movie.id}`)}
                         style={{
                           background: 'var(--pure-white)',
                           borderRadius: '18px',

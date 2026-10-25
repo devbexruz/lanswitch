@@ -2,9 +2,9 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import VideoPlayer from '../features/player/components/VideoPlayer';
 import CommentsSection from '../features/player/components/CommentsSection';
-import { parseTimeSpanToSeconds } from '../utils/timeUtils';
+import { parseTimeSpanToSeconds, formatSecondsToMMSS } from '../utils/timeUtils';
 import { useAuth } from '../context/AuthContext';
-import ReactMarkdown from 'react-markdown';
+import { showTelegramBackButton, hideTelegramBackButton } from '../utils/telegram';
 import './PlayerPage.css';
 
 interface Episode {
@@ -22,6 +22,8 @@ interface Media {
   description: string;
   videoUrl: string | null;
   isFilm: boolean;
+  level?: string;
+  durationalMinutes?: number;
   thumbnailUrl?: string;
   episodes?: Episode[];
 }
@@ -32,12 +34,10 @@ interface Subtitle {
   startTimeSeconds: number;
   endTimeSeconds: number;
   index: number;
-  gaps?: any[];
   words?: any[];
 }
 
 const PlayerPage: React.FC = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
   const { mediaId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,16 +51,42 @@ const PlayerPage: React.FC = () => {
 
   const [currentEpisodeId, setCurrentEpisodeId] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
-  const [mediaType, setMediaType] = useState<'film' | 'serial'>('film');
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
 
-  // Subtitle selection & Analysis tab state
+  // Subtitle selection & Fullscreen drawer state
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<'qoidalar' | 'sozlar' | 'ai'>('qoidalar');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isFullscreenDrawerOpen, setIsFullscreenDrawerOpen] = useState(false);
+  const [subSearchQuery, setSubSearchQuery] = useState('');
 
-  // Context menu for translation
+  // Mobile detection (screen width <= 768px)
+  const [isMobile, setIsMobile] = useState<boolean>(() => 
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Telegram Native BackButton handling
+  useEffect(() => {
+    showTelegramBackButton(() => {
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/student');
+      }
+    });
+
+    return () => {
+      hideTelegramBackButton();
+    };
+  }, [navigate]);
+
+  // Translation Tooltip state
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -74,21 +100,16 @@ const PlayerPage: React.FC = () => {
   const timeoutRef = useRef<any>(null);
   const isUserBrowsingSubsRef = useRef<boolean>(false);
   const browsingTimeoutRef = useRef<any>(null);
-
-  // AI Chat state
-  const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
-  const drawerChatScrollRef = useRef<HTMLDivElement>(null);
+  const activeSubScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const mediaRes = await fetch(`/api/media/${mediaId}`);
         if (mediaRes.ok) {
           const found = await mediaRes.json();
           setMedia(found);
-          setMediaType(found.isFilm ? 'film' : 'serial');
 
           let targetEpisodeId: number | null = null;
 
@@ -121,6 +142,7 @@ const PlayerPage: React.FC = () => {
             setVideoUrl(found.videoUrl || '');
           }
 
+          // Fetch Subtitles
           const subUrl = targetEpisodeId
             ? `/api/subtitle?episodeId=${targetEpisodeId}`
             : `/api/subtitle?mediaId=${mediaId}`;
@@ -134,27 +156,13 @@ const PlayerPage: React.FC = () => {
               index: s.index,
               startTimeSeconds: parseTimeSpanToSeconds(s.startTime),
               endTimeSeconds: parseTimeSpanToSeconds(s.endTime),
-              gaps: s.gaps || [],
               words: s.words || []
             }));
             setSubtitles(formattedSubs);
           }
-
-          // Get Chat Session
-          if (!targetEpisodeId) {
-            const chatRes = await fetch(`/api/MediaChat/media/${mediaId}`);
-            if (chatRes.ok) {
-              setChatMessages(await chatRes.json());
-            }
-          } else {
-            const chatRes = await fetch(`/api/EpisodeChat/episode/${targetEpisodeId}`);
-            if (chatRes.ok) {
-              setChatMessages(await chatRes.json());
-            }
-          }
         }
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching media:', err);
       } finally {
         setLoading(false);
       }
@@ -186,7 +194,7 @@ const PlayerPage: React.FC = () => {
   // Track active subtitle based on currentTime
   const activeSubtitles = useMemo(() => {
     return subtitles.filter(
-      (sub) => currentTime >= sub.startTimeSeconds && currentTime <= Math.max(sub.endTimeSeconds, sub.startTimeSeconds + 3.0)
+      (sub) => currentTime >= sub.startTimeSeconds && currentTime <= Math.max(sub.endTimeSeconds, sub.startTimeSeconds + 2.5)
     );
   }, [subtitles, currentTime]);
 
@@ -219,58 +227,29 @@ const PlayerPage: React.FC = () => {
     }
   };
 
-  const handleSendChatMessage = async () => {
-    if (!chatInput.trim() || !media) return;
-
-    const message = chatInput;
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'User', content: message }]);
-    setIsChatLoading(true);
-
-    try {
-      const endpoint = mediaType === 'film' ? '/api/MediaChat' : '/api/EpisodeChat';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          episodeId: currentEpisodeId || (media.episodes && media.episodes.length > 0 ? media.episodes[0].id : 0),
-          subtitleId: subtitles[selectedSubtitleIndex]?.id,
-          mediaId: media.id,
-          message: message
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setChatMessages(prev => [...prev, { role: 'AI', content: data.response }]);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsChatLoading(false);
-      setTimeout(() => {
-        if (chatScrollRef.current) {
-          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-        }
-        if (drawerChatScrollRef.current) {
-          drawerChatScrollRef.current.scrollTop = drawerChatScrollRef.current.scrollHeight;
-        }
-      }, 100);
-    }
-  };
-
-  const handleWordRightClick = async (e: React.MouseEvent, word: string) => {
-    e.preventDefault();
+  const handleWordClick = async (e: React.MouseEvent, word: string) => {
     e.stopPropagation();
+    e.preventDefault();
 
-    const cleanWord = word.replace(/[^a-zA-Zа-яА-ЯёЁ']/g, '');
+    const cleanWord = word.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’]/g, "").trim();
     if (!cleanWord) return;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
 
-    setContextMenu({ visible: true, x: e.clientX, y: e.clientY - 40, text: cleanWord, meaning: null });
+    const targetEl = e.currentTarget as HTMLElement;
+    const rect = targetEl ? targetEl.getBoundingClientRect() : null;
+
+    let posX = e.clientX || window.innerWidth / 2;
+    let posY = (e.clientY ? e.clientY - 45 : 100);
+
+    if (rect) {
+      posX = Math.min(Math.max(16, rect.left + rect.width / 2), window.innerWidth - 140);
+      posY = Math.max(16, rect.top - 46);
+    }
+
+    setContextMenu({ visible: true, x: posX, y: posY, text: cleanWord, meaning: null });
 
     try {
       const res = await fetch(`/api/word/translate?text=${encodeURIComponent(cleanWord)}`);
@@ -278,14 +257,14 @@ const PlayerPage: React.FC = () => {
         const data = await res.json();
         setContextMenu(prev => ({ ...prev, meaning: data.translation }));
       } else {
-        setContextMenu(prev => ({ ...prev, meaning: "Topilmadi" }));
+        setContextMenu(prev => ({ ...prev, meaning: "Tarjima topilmadi" }));
       }
-    } catch (error) {
-      setContextMenu(prev => ({ ...prev, meaning: "Xatolik yuz berdi" }));
+    } catch {
+      setContextMenu(prev => ({ ...prev, meaning: "Tarjima topilmadi" }));
     } finally {
       timeoutRef.current = setTimeout(() => {
         setContextMenu(prev => ({ ...prev, visible: false }));
-      }, 3500);
+      }, 4000);
     }
   };
 
@@ -303,14 +282,22 @@ const PlayerPage: React.FC = () => {
     if (browsingTimeoutRef.current) clearTimeout(browsingTimeoutRef.current);
     browsingTimeoutRef.current = setTimeout(() => {
       isUserBrowsingSubsRef.current = false;
-    }, 15000); // 15 seconds after user manual interaction, resume auto-following
+    }, 12000);
   };
 
   const handlePlaySubtitleSegment = (sub: Subtitle) => {
     window.dispatchEvent(new CustomEvent('play-segment', {
       detail: {
         startTime: sub.startTimeSeconds,
-        endTime: sub.endTimeSeconds + 0.5
+        endTime: sub.endTimeSeconds + 0.4
+      }
+    }));
+  };
+
+  const handleSeekToSubtitle = (sub: Subtitle) => {
+    window.dispatchEvent(new CustomEvent('seek-to-time', {
+      detail: {
+        time: sub.startTimeSeconds
       }
     }));
   };
@@ -318,41 +305,41 @@ const PlayerPage: React.FC = () => {
   const handleSubtitleOverlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isFullscreen) {
-      setIsFullscreenDrawerOpen(true);
+      setIsFullscreenDrawerOpen(prev => !prev);
     }
   };
 
-  const handleNextEpisode = () => {
-    if (media && !media.isFilm && media.episodes) {
-      const currentIndex = media.episodes.findIndex(e => e.id === currentEpisodeId);
-      if (currentIndex !== -1 && currentIndex < media.episodes.length - 1) {
-        navigate(`/player/${media.id}?episodeId=${media.episodes[currentIndex + 1].id}`);
-      }
-    }
+  const currentSub = subtitles[selectedSubtitleIndex] || (subtitles.length > 0 ? subtitles[0] : null);
+
+  // Filtered subtitles for transcript search
+  const filteredSubtitles = useMemo(() => {
+    if (!subSearchQuery.trim()) return subtitles;
+    const q = subSearchQuery.toLowerCase();
+    return subtitles.filter(s => s.text.toLowerCase().includes(q));
+  }, [subtitles, subSearchQuery]);
+
+  // Current Episode Details
+  const currentEpisode = useMemo(() => {
+    if (!media || media.isFilm || !media.episodes) return null;
+    return media.episodes.find(e => e.id === currentEpisodeId) || media.episodes[0] || null;
+  }, [media, currentEpisodeId]);
+
+  const currentIndex = media?.episodes?.findIndex(ep => ep.id === currentEpisodeId) ?? -1;
+  const prevEpisode = media?.episodes?.[currentIndex - 1];
+  const nextEpisode = media?.episodes?.[currentIndex + 1];
+
+  const handleSwitchEpisode = (episodeId: number) => {
+    setCurrentEpisodeId(episodeId);
+    navigate(`/player/${media?.id}?episodeId=${episodeId}`, { replace: true });
   };
 
-  if (loading) {
-    return <div className="player-loading">Yuklanmoqda...</div>;
-  }
-
-  if (!media) {
+  /**
+   * Subtitle Analysis Panel Body (Focused, clean without clutter)
+   */
+  const renderAnalysisBody = (isDrawer = false) => {
     return (
-      <div className="player-error">
-        <h2>Video topilmadi</h2>
-        <button onClick={() => navigate('/movies')}>Ortga qaytish</button>
-      </div>
-    );
-  }
-
-  const currentSub = subtitles[selectedSubtitleIndex];
-  const isNearEnd = duration > 0 && currentTime >= duration - 20;
-  const hasNextEpisode = !media.isFilm && media.episodes && media.episodes.findIndex(e => e.id === currentEpisodeId) < media.episodes.length - 1;
-
-  // Shared Subtitle Analysis Content Component
-  const renderAnalysisBody = (inDrawer: boolean = false) => {
-    return (
-      <div className="analysis-inner-container">
-        {/* Selected Subtitle Box */}
+      <div className={`analysis-body-content ${isDrawer ? 'drawer-mode' : ''}`}>
+        {/* Active / Selected Subtitle Focus Card */}
         <div className="current-sub-box">
           <div className="sub-box-header">
             <span className="sub-box-badge">
@@ -371,9 +358,9 @@ const PlayerPage: React.FC = () => {
                 <button
                   className="sub-play-btn"
                   onClick={() => handlePlaySubtitleSegment(currentSub)}
-                  title="Ushbu gapni qayta eshitish"
+                  title="Ushbu gapni qayta tinglash"
                 >
-                  ▶ Eshitish
+                  ▶ Tinglash
                 </button>
               )}
               <button
@@ -393,325 +380,343 @@ const PlayerPage: React.FC = () => {
                 <span
                   key={i}
                   className="subtitleWord clickable-word"
-                  onClick={(e) => handleWordRightClick(e, w)}
-                  onContextMenu={(e) => handleWordRightClick(e, w)}
-                  title="Tarjimasini ko'rish uchun bosing"
+                  onClick={(e) => handleWordClick(e, w)}
+                  onContextMenu={(e) => handleWordClick(e, w)}
+                  title="So'z tarjimasi uchun bosing"
                 >
                   {w}{' '}
                 </span>
               ))
             ) : (
-              <span style={{ opacity: 0.6 }}>Subtitr mavjud emas</span>
+              <span style={{ opacity: 0.6 }}>Subtitrlar mavjud emas</span>
             )}
+          </div>
+          <div className="sub-hint-text">
+            💡 So'zlar ustiga bosib tarjimasini ko'rishingiz mumkin
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="analysis-tabs">
-          <button
-            className={`analysis-tab ${activeTab === 'qoidalar' ? 'active' : ''}`}
-            onClick={() => setActiveTab('qoidalar')}
-          >
-            📖 Qoidalar
-          </button>
-          <button
-            className={`analysis-tab ${activeTab === 'sozlar' ? 'active' : ''}`}
-            onClick={() => setActiveTab('sozlar')}
-          >
-            📝 So'zlar
-          </button>
-          <button
-            className={`analysis-tab ${activeTab === 'ai' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ai')}
-          >
-            🤖 AI Ustoz
-          </button>
-        </div>
-
-        {/* Tab Content */}
-        <div className="analysis-content-area">
-          {activeTab === 'qoidalar' && (
-            <div className="rules-content animate-fade-in">
-              {currentSub?.gaps && currentSub.gaps.length > 0 ? (
-                currentSub.gaps.map((gap: any) => (
-                  <div key={gap.id} className="grammar-card">
-                    <h4 className="grammar-gap-title">🎯 {gap.text}</h4>
-                    <div className="grammar-analysis-markdown">
-                      <ReactMarkdown>{gap.aiAnalysis || "Ushbu ibora grammatikasi tahlil qilinmoqda..."}</ReactMarkdown>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-analysis-state">
-                  <div className="empty-icon">📖</div>
-                  <h4>Grammatik tahlil</h4>
-                  <p>
-                    Ushbu subtitr uchun maxsus grammatik qoida biriktirilmagan.
-                    Iboralar va zamonlar haqida <strong>"AI Ustoz"</strong> tabida to'liq so'rashingiz mumkin!
-                  </p>
-                </div>
-              )}
+        {/* Subtitles Transcript Section */}
+        <div className="transcript-section">
+          <div className="transcript-header-row">
+            <div className="transcript-title">
+              <span>📋 Dialoglar matni</span>
+              <span className="transcript-count">{subtitles.length} ta</span>
             </div>
-          )}
 
-          {activeTab === 'sozlar' && (
-            <div className="words-content animate-fade-in">
-              {currentSub?.words && currentSub.words.length > 0 ? (
-                <div className="words-chips-grid">
-                  {currentSub.words.map((w: any, idx: number) => (
-                    <div key={idx} className="word-card-chip">
-                      <span className="word-chip-original">{w.text}</span>
-                      {w.translation && (
-                        <span className="word-chip-trans">— {w.translation}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-analysis-state">
-                  <div className="empty-icon">📝</div>
-                  <h4>So'zlar ro'yxati</h4>
-                  <p>
-                    Yuqoridagi har qanday so'zni ustiga bossangiz, uning tarjimasini ko'rishingiz mumkin!
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'ai' && (
-            <div className="ai-chat-container animate-fade-in">
-              <div
-                className="ai-messages-scroll"
-                ref={inDrawer ? drawerChatScrollRef : chatScrollRef}
-              >
-                {chatMessages.length === 0 && (
-                  <div className="empty-chat-state">
-                    <div className="empty-icon">🤖</div>
-                    <h4>AI Ustoz yordamga tayyor</h4>
-                    <p>Ushbu videodagi yangi so'zlar, iboralar yoki grammatika haqida savol bering!</p>
-                  </div>
-                )}
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`ai-message-row ${msg.role === 'User' ? 'user-side' : 'ai-side'}`}>
-                    <div className={`ai-message-bubble ${msg.role === 'User' ? 'user-bubble' : 'ai-bubble'}`}>
-                      {msg.role === 'User' ? msg.content : <ReactMarkdown>{msg.content}</ReactMarkdown>}
-                    </div>
-                  </div>
-                ))}
-                {isChatLoading && (
-                  <div className="ai-message-row ai-side">
-                    <div className="ai-message-bubble ai-bubble loading-dots">
-                      <span>•</span><span>•</span><span>•</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="ai-input-wrap">
+            {subtitles.length > 5 && (
+              <div className="sub-search-input-wrap">
                 <input
                   type="text"
-                  className="ai-input-field"
-                  placeholder="AI ga savol bering..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
+                  placeholder="Matndan qidirish..."
+                  value={subSearchQuery}
+                  onChange={(e) => setSubSearchQuery(e.target.value)}
+                  className="sub-search-input"
                 />
-                <button
-                  className="ai-send-btn"
-                  onClick={handleSendChatMessage}
-                  disabled={isChatLoading || !chatInput.trim()}
-                >
-                  Jo'natish
-                </button>
+                {subSearchQuery && (
+                  <button className="sub-search-clear" onClick={() => setSubSearchQuery('')}>
+                    ✕
+                  </button>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <div className="transcript-list-scroll" ref={activeSubScrollRef}>
+            {filteredSubtitles.length === 0 ? (
+              <div className="transcript-empty">Hech qanday subtitr topilmadi</div>
+            ) : (
+              filteredSubtitles.map((sub, idx) => {
+                const isActive = activeSubtitleIndex !== -1 && subtitles[activeSubtitleIndex]?.id === sub.id;
+                const isSelected = subtitles[selectedSubtitleIndex]?.id === sub.id;
+
+                return (
+                  <div
+                    key={sub.id || idx}
+                    className={`transcript-item ${isActive ? 'is-active-line' : ''} ${isSelected ? 'is-selected-line' : ''}`}
+                    onClick={() => {
+                      const realIndex = subtitles.findIndex(s => s.id === sub.id);
+                      if (realIndex !== -1) handleSelectSubtitle(realIndex);
+                      handleSeekToSubtitle(sub);
+                    }}
+                  >
+                    <div className="transcript-time-badge">
+                      {formatSecondsToMMSS(sub.startTimeSeconds)}
+                    </div>
+                    <div className="transcript-text">
+                      {sub.text.split(' ').map((w, wi) => (
+                        <span
+                          key={wi}
+                          className="clickable-sub-word"
+                          onClick={(e) => handleWordClick(e, w)}
+                        >
+                          {w}{' '}
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      className="transcript-play-btn"
+                      title="Shu daqiqadan o'ynatish"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSeekToSubtitle(sub);
+                      }}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     );
   };
 
+  if (loading) {
+    return (
+      <div className="player-loading-container">
+        <div className="player-loading-spinner"></div>
+        <p>Kino yuklanmoqda...</p>
+      </div>
+    );
+  }
+
+  if (!media) {
+    return (
+      <div className="player-error-container">
+        <h3>Film yoki serial topilmadi</h3>
+        <button onClick={() => navigate(-1)} className="btn-return">
+          Ortga qaytish
+        </button>
+      </div>
+    );
+  }
+
+  // Condition to render subtitle overlay inside video:
+  // When mobile and NOT fullscreen: do NOT render inside player (as requested by user).
+  // In fullscreen or on desktop: DO render.
+  const shouldShowVideoSubtitles = (isFullscreen || !isMobile) && activeSubtitles.length > 0;
+
   return (
-    <div className="player-page-container" onClick={closeContextMenu}>
-      <div className="player-main-layout">
-        {/* Top Header Bar */}
-        <div className="player-top-bar">
-          <button className="player-back-btn" onClick={() => navigate(-1)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px' }}>
-              <line x1="19" y1="12" x2="5" y2="12"></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-            Ortga
-          </button>
-          <h2 className="player-title">
-            {media.title}
-            {!media.isFilm && currentEpisodeId && (
-              <span className="episode-title-badge">
-                - {media.episodes?.find(e => e.id === currentEpisodeId)?.episodeNumber}-qism
-              </span>
-            )}
-          </h2>
+    <div className="player-page-root" onClick={closeContextMenu}>
+      {/* Top Header Bar with Clean Back Button and Title */}
+      <header className="player-system-top-bar">
+        <button
+          className="player-back-nav-btn"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/student');
+            }
+          }}
+          title="Ortga qaytish"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="back-arrow-icon">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Ortga</span>
+        </button>
+
+        <div className="player-header-title-box">
+          <h1 className="player-media-title">{media.title}</h1>
+          {!media.isFilm && currentEpisode && (
+            <span className="player-episode-badge">
+              {currentEpisode.episodeNumber}-qism: {currentEpisode.title}
+            </span>
+          )}
+          {media.level && (
+            <span className="player-level-badge">{media.level}</span>
+          )}
         </div>
+      </header>
 
-        {/* Main Content: Desktop Side-by-Side / Mobile Vertical */}
-        <div className="player-content-wrapper">
-          {/* Left Column: Video Player + Episodes List */}
-          <div className="player-video-column">
-            <div className="video-section">
-              <VideoPlayer
-                src={videoUrl}
-                onTimeUpdate={handleTimeUpdate}
-                onDurationChange={setDuration}
-                onToggleAnalysis={() => setIsFullscreenDrawerOpen(prev => !prev)}
-                isAnalysisOpen={isFullscreenDrawerOpen}
-                onFullscreenChange={setIsFullscreen}
-              >
-                {/* Active Subtitle Overlay on Video */}
-                {activeSubtitles.length > 0 && (
-                  <div className="video-subtitle-overlay" onClick={handleSubtitleOverlayClick}>
-                    <div className="subtitle-stack">
-                      {activeSubtitles.map((activeSub) => (
-                        <div key={activeSub.id} className="video-subtitle-text subtitle-animate">
-                          {activeSub.text.split(' ').map((w, i) => (
-                            <span
-                              key={i}
-                              className="subtitleWord"
-                              onClick={(e) => handleWordRightClick(e, w)}
-                              onContextMenu={(e) => handleWordRightClick(e, w)}
-                              title="Tarjimasini ko'rish uchun bosing"
-                            >
-                              {w}{' '}
-                            </span>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
+      {/* Main Container */}
+      <main className="player-layout-container">
+        {/* Video Player Column */}
+        <section className="player-video-section">
+          <div className="video-player-frame">
+            <VideoPlayer
+              src={videoUrl}
+              poster={media.thumbnailUrl}
+              onTimeUpdate={handleTimeUpdate}
+              onDurationChange={setDuration}
+              onToggleAnalysis={() => setIsFullscreenDrawerOpen(prev => !prev)}
+              isAnalysisOpen={isFullscreenDrawerOpen}
+              onFullscreenChange={setIsFullscreen}
+            >
+              {/* Subtitles Overlay inside Video (Hidden on mobile non-fullscreen) */}
+              {shouldShowVideoSubtitles && (
+                <div className="video-subtitle-overlay" onClick={handleSubtitleOverlayClick}>
+                  <div className="subtitle-stack">
+                    {activeSubtitles.map((activeSub) => (
+                      <div key={activeSub.id} className="video-subtitle-text subtitle-animate">
+                        {activeSub.text.split(' ').map((w, i) => (
+                          <span
+                            key={i}
+                            className="subtitleWord"
+                            onClick={(e) => handleWordClick(e, w)}
+                            onContextMenu={(e) => handleWordClick(e, w)}
+                            title="So'z tarjimasi"
+                          >
+                            {w}{' '}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Translation Context Tooltip */}
-                {contextMenu.visible && (
+              {/* Floating Translation Tooltip */}
+              {contextMenu.visible && (
+                <div
+                  className="player-translation-tooltip"
+                  style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+                >
+                  <span className="tooltip-word">{contextMenu.text}</span>
+                  <span className="tooltip-sep">—</span>
+                  <span className="tooltip-meaning">{contextMenu.meaning || "Izlanmoqda..."}</span>
+                </div>
+              )}
+
+              {/* Fullscreen YouTube-Style Subtitles Drawer */}
+              {isFullscreen && isFullscreenDrawerOpen && (
+                <>
                   <div
-                    className="player-translation-tooltip"
-                    style={{ top: contextMenu.y, left: contextMenu.x }}
-                  >
-                    <strong style={{ color: '#60a5fa' }}>{contextMenu.text}</strong> — {contextMenu.meaning || "Izlanmoqda..."}
-                  </div>
-                )}
-
-                {/* Video Ending Action Overlay */}
-                {isNearEnd && (
-                  <div className="player-ending-overlay">
-                    {hasNextEpisode ? (
-                      <button className="btn btn-primary ending-btn" onClick={handleNextEpisode}>
-                        Keyingi qism ⏭
-                      </button>
-                    ) : (
-                      <button className="btn btn-glass ending-btn" onClick={() => window.location.reload()}>
-                        Qayta ko'rish 🔄
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* YouTube-style Fullscreen Slide-in Drawer */}
-                {isFullscreen && (
-                  <>
-                    <div
-                      className={`player-drawer-backdrop ${isFullscreenDrawerOpen ? 'active' : ''}`}
-                      onClick={() => setIsFullscreenDrawerOpen(false)}
-                    />
-                    <div
-                      className={`player-fullscreen-drawer ${isFullscreenDrawerOpen ? 'open' : ''}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="drawer-header">
-                        <div className="drawer-title-wrap">
-                          <span className="drawer-badge">YouTube uslubida</span>
-                          <h3 className="drawer-title">📖 Subtitr Tahlili</h3>
-                        </div>
-                        <button
-                          className="drawer-close-btn"
-                          onClick={() => setIsFullscreenDrawerOpen(false)}
-                          title="Yopish"
-                        >
-                          ✕
-                        </button>
+                    className="player-drawer-backdrop"
+                    onClick={() => setIsFullscreenDrawerOpen(false)}
+                  />
+                  <div className="player-fullscreen-drawer animate-slide-left">
+                    <div className="drawer-header">
+                      <div className="drawer-title-group">
+                        <span className="drawer-eyebrow">Tahlil</span>
+                        <h3 className="drawer-title">Subtitrlar</h3>
                       </div>
-                      <div className="drawer-scroll-body">
-                        {renderAnalysisBody(true)}
-                      </div>
+                      <button
+                        className="drawer-close-btn"
+                        onClick={() => setIsFullscreenDrawerOpen(false)}
+                        title="Yopish"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  </>
-                )}
-              </VideoPlayer>
-            </div>
+                    <div className="drawer-scroll-body">
+                      {renderAnalysisBody(true)}
+                    </div>
+                  </div>
+                </>
+              )}
+            </VideoPlayer>
+          </div>
 
-            {/* Serial Episodes List under Video (if serial) */}
-            {!media.isFilm && media.episodes && (
-              <div className="player-episodes-under-video glass-panel">
-                <div className="episodes-header-row">
-                  <h3 className="episodes-title">Qismlar ({media.episodes.length} ta)</h3>
-                  <button
-                    className="episodes-toggle-btn"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                  >
-                    {isExpanded ? "Yashirish ▲" : "Ko'rsatish ▼"}
-                  </button>
+          {/* Episodes List (Right below Video on both mobile and desktop if multiple episodes exist) */}
+          {!media.isFilm && media.episodes && media.episodes.length > 1 && (
+            <div className="player-episodes-panel">
+              <div className="episodes-panel-header">
+                <div className="episodes-title-wrap">
+                  <h3>🎬 Qismlar</h3>
+                  <span className="episodes-count-pill">{media.episodes.length} ta qism</span>
                 </div>
 
-                {isExpanded && (
-                  <div className="episodes-scroll-list">
-                    {media.episodes.map(ep => {
-                      const isActive = ep.id === currentEpisodeId;
-                      return (
-                        <button
-                          key={ep.id}
-                          className={`episode-card-item ${isActive ? 'active' : ''}`}
-                          onClick={() => navigate(`/player/${media.id}?episodeId=${ep.id}`)}
-                        >
-                          <div className="episode-thumbnail-wrap">
-                            <img
-                              src={ep.thumbnailUrl || media.thumbnailUrl || "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=400&q=80"}
-                              alt={ep.title}
-                            />
-                            {isActive && <div className="now-playing-badge">Ijroda</div>}
-                          </div>
-                          <div className="episode-info-meta">
-                            <span className="episode-meta-num">{ep.episodeNumber}-qism</span>
-                            <span className="episode-meta-title">{ep.title}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="episodes-quick-nav">
+                  <button
+                    className="ep-nav-btn"
+                    disabled={!prevEpisode}
+                    onClick={() => prevEpisode && handleSwitchEpisode(prevEpisode.id)}
+                    title="Oldingi qism"
+                  >
+                    ◀ Oldingi
+                  </button>
+                  <button
+                    className="ep-nav-btn"
+                    disabled={!nextEpisode}
+                    onClick={() => nextEpisode && handleSwitchEpisode(nextEpisode.id)}
+                    title="Keyingi qism"
+                  >
+                    Keyingi ▶
+                  </button>
+                </div>
+              </div>
+
+              <div className="episodes-scroll-track">
+                {media.episodes.map(ep => {
+                  const isActive = ep.id === currentEpisodeId;
+                  return (
+                    <button
+                      key={ep.id}
+                      className={`episode-chip-card ${isActive ? 'is-active-ep' : ''}`}
+                      onClick={() => handleSwitchEpisode(ep.id)}
+                    >
+                      <div className="episode-thumb-box">
+                        <img
+                          src={ep.thumbnailUrl || media.thumbnailUrl || "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=400&q=80"}
+                          alt={ep.title}
+                        />
+                        {isActive && <div className="now-playing-pill">Ijroda</div>}
+                      </div>
+                      <div className="episode-meta-text">
+                        <span className="ep-num-label">{ep.episodeNumber}-qism</span>
+                        <span className="ep-title-label">{ep.title}</span>
+                        {ep.durationalMinutes > 0 && (
+                          <span className="ep-duration-label">{ep.durationalMinutes} daq</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* On Mobile: Subtitle Analysis comes RIGHT AFTER episodes and BEFORE description */}
+          {isMobile && (
+            <div className="player-mobile-analysis-card">
+              <div className="analysis-card-title">
+                <h3>📝 Subtitr tahlili</h3>
+              </div>
+              {renderAnalysisBody(false)}
+            </div>
+          )}
+
+          {/* Media Description (Tavsif) */}
+          <div className="player-details-card">
+            <div className="details-header">
+              <h3>ℹ️ Tavsif</h3>
+              <div className="details-badges">
+                {media.isFilm ? (
+                  <span className="badge-film">Film</span>
+                ) : (
+                  <span className="badge-serial">Serial</span>
+                )}
+                {media.durationalMinutes && media.durationalMinutes > 0 && (
+                  <span className="badge-duration">{media.durationalMinutes} daqiqa</span>
                 )}
               </div>
-            )}
-
-            {/* Media Description and Comments */}
-            <div className="player-details-section">
-              <div className="media-description glass-panel">
-                <h3>Tavsif</h3>
-                <p>{media.description}</p>
-              </div>
-              <CommentsSection mediaId={media.id} />
             </div>
+            <p className="details-description-text">{media.description || "Ushbu film uchun batafsil tavsif kiritilmagan."}</p>
           </div>
 
-          {/* Right Column: Subtitle Analysis Panel (Desktop: side-by-side / Mobile: below video) */}
-          <div className="player-side-analysis-panel">
-            <div className="analysis-panel-header">
-              <div className="analysis-title-group">
-                <span className="analysis-eyebrow">Jonli Tahlil</span>
-                <h3 className="analysis-panel-title">Subtitr va Grammatika</h3>
-              </div>
+          {/* Comments Section */}
+          <div className="player-comments-wrapper">
+            <CommentsSection mediaId={media.id} />
+          </div>
+        </section>
+
+        {/* Desktop Side Analysis Column (Hidden on mobile because it's rendered inline above) */}
+        {!isMobile && (
+          <aside className="player-desktop-side-panel">
+            <div className="side-panel-header">
+              <span className="side-panel-eyebrow">Jonli Tahlil</span>
+              <h3 className="side-panel-title">Subtitrlar</h3>
             </div>
             {renderAnalysisBody(false)}
-          </div>
-        </div>
-      </div>
+          </aside>
+        )}
+      </main>
     </div>
   );
 };

@@ -57,13 +57,16 @@ function App() {
         <Route path="/teacher" element={<TeacherDashboardPage />} />
         <Route path="/student" element={<StudentMiniAppPage />} />
 
+        {/* Movie Player Routes (Standalone, no legacy Sidebar/Header) */}
+        <Route path="/player/:mediaId" element={<PlayerPage />} />
+        <Route path="/legacy/player/:mediaId" element={<PlayerPage />} />
+
         {/* Legacy Routes */}
         <Route path="/landing" element={<HomePage />} />
         <Route path="/auth/login" element={<MagicLoginPage />} />
         <Route path="/legacy" element={<MainLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="movies" element={<MoviesPage />} />
-          <Route path="player/:mediaId" element={<PlayerPage />} />
           <Route path="vocabulary" element={<VocabularyPage />} />
           <Route path="grammar" element={<GrammarPage />} />
           <Route path="profile" element={<ProfilePage />} />
