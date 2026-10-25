@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -87,7 +88,10 @@ public class GeminiAiService : IGeminiAiService
                             }
                         }
                     },
-                    generationConfig = new { temperature = 0.1 }
+                    generationConfig = new { 
+                        temperature = 0.1,
+                        thinkingConfig = new { thinkingBudget = 0 }
+                    }
                 };
                 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
@@ -284,7 +288,7 @@ Return ONLY a JSON array of objects. Each object must have: 'StartTime' (string 
     VAZIFA:
     1. Ushbu matnni to'liq o'qing va uni mantiqiy tugallangan gaplarga ajrating (bir nechta subtitr bitta gap bo'lishi mumkin, bitta subtitleda bir nechta gap bo'lishi mumkin).
     2. Har bir ajratilgan to'liq gap qaysi Subtitle ID'ga eng ko'p mos kelsa, o'sha Subtitle ID ni ko'rsating.
-    3. Har bir gap uchun uning ma'nosini va eng muhim grammatik qoidasini sodda, tushunarli qilib O'ZBEK tilida Markdown formatida yozing.
+    3. Har bir gap uchun uning tabiiy ma'nosi, SO'ZMA-SO'Z arxitekturasi (har bir qismning qat'iy ma'nosi va sintaktik roli) va eng muhim grammatik qoidasini sodda, tushunarli qilib O'ZBEK tilida Markdown formatida yozing.
     4. Har bir gapdan asosiy o'zak so'zlarni (Root words) va ularning o'zbek tilidagi aniq tarjimasini ajratib oling.
     5. GRAMMATIK QOIDALAR da berilgan qoidalardan tashqari boshqa qoidalarni ishlating shart emas, faqat berilgan qoidalardan foydalaning.
     6. Har bir gap Aynan qaysi qoidaga mos kelsa yoki bir nechtasining aralashmasiga mos kelsa, o'sha qoidalarning ID'larini [1,2..] ko'rsating. Odatda eng mos bittasi bo'ladi. agar biror bir qoidaga mos kelmasa, [] deb ko'rsating.
@@ -292,9 +296,8 @@ Return ONLY a JSON array of objects. Each object must have: 'StartTime' (string 
     Natijalar FAKAT JSON array formatida bo'lishi shart. Har bir obyekt quyidagi formatda bo'lsin:
     - ""subtitleId"": (raqam) Ushbu gap qaysi subtitrga tegishli ekanligi.
     - ""sentenceText"": (string) Ajratib olingan inglizcha gap.
-    - ""aiAnalysis"": (string) Shu gapning tarjimasi va grammatik tahlili (Markdown formatida, misollar bilan).
+    - ""aiAnalysis"": (string) Shu gapning tabiiy tarjimasi, so'zma-so'z arxitekturasi va grammatik tahlili (Markdown formatida).
     - ""rootWords"": (array) Obyektlar ro'yxati, har bir obyektda ""word"" (inglizcha o'zak so'z) va ""translation"" (o'zbekcha tarjimasi).
-    - ""grammarContextIds"": (array of integers) Obyektlar ro'yxati, har bir obyektda ""grammarContextId"" (inglizcha grammatik qoida ID'si) va ""translation"" (o'zbekcha tarjimasi).
     - ""grammarContextIds"": (array of integers) Gap mos keladigan qoidalarning faqat ID raqamlari massivi. Masalan: [1, 2]. Agar to'g'ri kelmasa [] yozing. Ichiga string yoki obyekt yozmang!
     Hech qanday qo'shimcha matn qo'shmang, faqat toza JSON array qaytaring.";
 
@@ -306,7 +309,8 @@ Return ONLY a JSON array of objects. Each object must have: 'StartTime' (string 
             },
             generationConfig = new { 
                 temperature = 0.2,
-                responseMimeType = "application/json" // gemini-1.5-flash buni v1 da qo'llab-quvvatlaydi
+                responseMimeType = "application/json",
+                thinkingConfig = new { thinkingBudget = 0 }
             }
         };
 
@@ -439,126 +443,83 @@ public async Task<float[]> GenerateEmbeddingAsync(string text)
 
     public async Task<string> ChatWithContextAsync(string userMessage, List<EpisodeChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz")
     {
-        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
-            return "Gemini API kaliti kiritilmagan.";
-
-        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
-        
-        var contents = new List<object>();
-        
-        // System context + Subtitles
-        var sb = new StringBuilder();
-        sb.AppendLine($"Siz foydalanuvchiga videodagi iboralar va grammatikani tushunishga yordam beradigan ustozsiz. Foydalanuvchi {targetLanguage} tilini o'rganmoqda.");
-        sb.AppendLine("Quyida foydalanuvchi tanlagan va undan oldingi subtitrlar konteksti keltirilgan:");
-        foreach (var sub in contextSubtitles)
-        {
-            if (currentSubtitleId.HasValue && sub.Id == currentSubtitleId.Value)
-            {
-                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}] (BU HOZIRGI TANLANGAN SUBTITR): {sub.Text}");
-            }
-            else
-            {
-                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}]: {sub.Text}");
-            }
-        }
-        sb.AppendLine("\nUshbu kontekst asosida foydalanuvchining savoliga Markdown formatida, juda qisqa (maksimal 2-3 ta gap), aniq va lo'nda javob bering. Javobingiz faqat 'HOZIRGI TANLANGAN SUBTITR' dagi ma'noga qaratilsin, ortiqcha ma'lumot yozmang.");
-        
-        contents.Add(new {
-            role = "user",
-            parts = new[] { new { text = sb.ToString() } }
-        });
-        contents.Add(new {
-            role = "model",
-            parts = new[] { new { text = "Tushundim, tayyorman!" } }
-        });
-
-        // Chat History
-        foreach (var msg in history)
-        {
-            contents.Add(new {
-                role = msg.Role == "User" ? "user" : "model",
-                parts = new[] { new { text = msg.Content } }
-            });
-        }
-        
-        // Current Message
-        contents.Add(new {
-            role = "user",
-            parts = new[] { new { text = userMessage } }
-        });
-
-        var requestBody = new { contents = contents };
-        var requestContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.PostAsync(url, requestContent);
-        if (response.IsSuccessStatusCode)
-        {
-            var responseJson = await response.Content.ReadAsStringAsync();
-            using var jsonDoc = JsonDocument.Parse(responseJson);
-            var textResult = jsonDoc.RootElement
-                .GetProperty("candidates")[0]
-                .GetProperty("content")
-                .GetProperty("parts")[0]
-                .GetProperty("text").GetString();
-                
-            return textResult ?? "Kechirasiz, javobni shakllantirib bo'lmadi.";
-        }
-        
-        var error = await response.Content.ReadAsStringAsync();
-        Console.WriteLine($"Chat API Error: {error}");
-        return "Xatolik yuz berdi, iltimos qayta urinib ko'ring.";
+        var historyPairs = history?.Select(m => (m.Role, m.Content)) ?? Enumerable.Empty<(string Role, string Content)>();
+        return await ExecuteChatWithContextAsync(userMessage, historyPairs, contextSubtitles, currentSubtitleId, targetLanguage);
     }
+
     public async Task<string> ChatWithContextAsync(string userMessage, List<MediaChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz")
+    {
+        var historyPairs = history?.Select(m => (m.Role, m.Content)) ?? Enumerable.Empty<(string Role, string Content)>();
+        return await ExecuteChatWithContextAsync(userMessage, historyPairs, contextSubtitles, currentSubtitleId, targetLanguage);
+    }
+
+    private async Task<string> ExecuteChatWithContextAsync(string userMessage, IEnumerable<(string Role, string Content)> history, List<Subtitle> contextSubtitles, long? currentSubtitleId, string targetLanguage)
     {
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
             return "Gemini API kaliti kiritilmagan.";
 
-        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
         
+        var systemInstruction = $@"Siz ingliz tili arxitekturasi va grammatikasi bo'yicha aniq, chuqur va o'ta ixcham AI ustozsiz. Foydalanuvchi {targetLanguage} tilini o'rganmoqda.
+ASOSIY TALABLAR (TOKEN TEJASH VA ANIQLIK):
+1. Kam token sarflash: Ortiqcha salom-alik, umumiy kirish yoki xulosalarsiz, to'g'ridan-to'g'ri, lo'nda va ixcham javob bering.
+2. So'zma-so'z arxitektura: Faqat umumiy ma'no bilan cheklanmang! Foydalanuvchiga ingliz tili sintaktik arxitekturasini tushunishga yordam berish uchun gapning SO'ZMA-SO'Z (literal) ma'nosi va strukturaviy tuzilishini aniq ko'rsating.
+3. Javob strukturasi:
+   - 🎯 **Tabiiy ma'nosi**: Gapning kontekstdagi erkin, tabiiy tarjimasi.
+   - 🧩 **So'zma-so'z arxitekturasi**: Gapdagi har bir so'z/birikmaning qat'iy so'zma-so'z ma'nosi va ularning bir-biriga bog'lanishi (fe'l shakli, predlog, zamon).
+   - 💡 **Arxitektura mantiqi**: Nega ingliz tilida aynan shu konstruksiya ishlatilgani haqida 1-2 qisqa jumla.";
+
         var contents = new List<object>();
-        
-        // System context + Subtitles
-        var sb = new StringBuilder();
-        sb.AppendLine($"Siz foydalanuvchiga videodagi iboralar va grammatikani tushunishga yordam beradigan ustozsiz. Foydalanuvchi {targetLanguage} tilini o'rganmoqda.");
-        sb.AppendLine("Quyida foydalanuvchi tanlagan va undan oldingi subtitrlar konteksti keltirilgan:");
-        foreach (var sub in contextSubtitles)
+
+        // Past conversation history (truncated to recent messages by controller)
+        foreach (var (role, content) in history)
         {
-            if (currentSubtitleId.HasValue && sub.Id == currentSubtitleId.Value)
-            {
-                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}] (BU HOZIRGI TANLANGAN SUBTITR): {sub.Text}");
-            }
-            else
-            {
-                sb.AppendLine($"[Vaqt: {sub.StartTime} - {sub.EndTime}]: {sub.Text}");
-            }
+            contents.Add(new {
+                role = role == "User" ? "user" : "model",
+                parts = new[] { new { text = content } }
+            });
         }
-        sb.AppendLine("\nUshbu kontekst asosida foydalanuvchining savoliga Markdown formatida, juda qisqa (maksimal 2-3 ta gap), aniq va lo'nda javob bering. Javobingiz faqat 'HOZIRGI TANLANGAN SUBTITR' dagi ma'noga qaratilsin, ortiqcha ma'lumot yozmang.");
-        
+
+        // Current message with context
+        var sb = new StringBuilder();
+        if (contextSubtitles != null && contextSubtitles.Count > 0)
+        {
+            sb.AppendLine("KONTEKST (Subtitrlar):");
+            foreach (var sub in contextSubtitles)
+            {
+                if (currentSubtitleId.HasValue && sub.Id == currentSubtitleId.Value)
+                {
+                    sb.AppendLine($"📍 [TANLANGAN GAP]: \"{sub.Text}\"");
+                }
+                else
+                {
+                    sb.AppendLine($"   \"{sub.Text}\"");
+                }
+            }
+            sb.AppendLine();
+        }
+        sb.AppendLine($"Foydalanuvchi savoli: {userMessage}");
+
         contents.Add(new {
             role = "user",
             parts = new[] { new { text = sb.ToString() } }
         });
-        contents.Add(new {
-            role = "model",
-            parts = new[] { new { text = "Tushundim, tayyorman!" } }
-        });
 
-        // Chat History
-        foreach (var msg in history)
+        var requestBody = new
         {
-            contents.Add(new {
-                role = msg.Role == "User" ? "user" : "model",
-                parts = new[] { new { text = msg.Content } }
-            });
-        }
-        
-        // Current Message
-        contents.Add(new {
-            role = "user",
-            parts = new[] { new { text = userMessage } }
-        });
+            systemInstruction = new
+            {
+                parts = new[] { new { text = systemInstruction } }
+            },
+            contents = contents,
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.2,
+                maxOutputTokens = 450
+            }
+        };
 
-        var requestBody = new { contents = contents };
         var requestContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
         var response = await _httpClient.PostAsync(url, requestContent);
@@ -585,14 +546,18 @@ public async Task<float[]> GenerateEmbeddingAsync(string text)
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(word))
             return word;
 
-        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
         
         var requestBody = new
         {
             contents = new[] {
-                new { parts = new[] { new { text = $"Faqatgina ushbu inglizcha so'zning o'zbekcha tarjimasini qaytaring. Ortiqcha gap, belgi va tushuntirish kerak emas. So'z: {word}" } } }
+                new { parts = new[] { new { text = $"Ushbu inglizcha so'zning o'zbekcha eng asosiy aniq tarjimasini qaytaring. Faqat tarjimaning o'zini yozing, hech qanday qo'shimcha so'z yoki belgi bo'lmasin. So'z: {word}" } } }
             },
-            generationConfig = new { temperature = 0.1 }
+            generationConfig = new { 
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.1,
+                maxOutputTokens = 30
+            }
         };
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");

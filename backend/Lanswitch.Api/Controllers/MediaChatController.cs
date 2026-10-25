@@ -118,11 +118,12 @@ public class MediaChatController : ControllerBase
         // Ensure chronological order for Gemini context
         contextSubtitles = contextSubtitles.OrderBy(s => s.Index).ToList();
 
-        // Get past chat history for LangChain-style context injection
+        // Get past chat history for context injection (oxirgi 6 ta xabar - token tejash uchun)
         var chatHistory = await _context.MediaChatMessages
             .Where(m => m.MediaId == request.MediaId && m.UserId == userId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(6)
             .OrderBy(m => m.CreatedAt)
-            .Take(20) // Last 20 messages
             .ToListAsync();
 
         // Fetch language title for AI context
