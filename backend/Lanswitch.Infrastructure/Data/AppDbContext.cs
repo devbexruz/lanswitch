@@ -47,6 +47,10 @@ public class AppDbContext : DbContext
 
     // Obunalar va Tariflar (Subscriptions & Plans)
     public DbSet<UserSubscription> UserSubscriptions { get; set; }
+    public DbSet<SubscriptionPlanConfig> SubscriptionPlanConfigs { get; set; }
+    public DbSet<SubscriptionPaymentRequest> SubscriptionPaymentRequests { get; set; }
+    public DbSet<SubscriptionLog> SubscriptionLogs { get; set; }
+    public DbSet<CardPaymentSetting> CardPaymentSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +62,22 @@ public class AppDbContext : DbContext
             entity.HasOne(s => s.User)
                 .WithMany(u => u.Subscriptions)
                 .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SubscriptionPaymentRequest>(entity =>
+        {
+            entity.HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SubscriptionLog>(entity =>
+        {
+            entity.HasOne(l => l.User)
+                .WithMany()
+                .HasForeignKey(l => l.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

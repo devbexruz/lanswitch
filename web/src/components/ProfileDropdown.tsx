@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Check, LogOut, Film, BookOpen, 
-  ChevronDown, ArrowRightLeft, Crown
+  ChevronDown, ArrowRightLeft, Crown, ShieldCheck
 } from 'lucide-react';
 import SubscriptionPlansModal from './SubscriptionPlansModal';
 
@@ -280,6 +280,37 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
               <span style={{ fontSize: '10.5px', color: '#047857', fontWeight: 700 }}>🎁 14 kun bepul sinov</span>
             </div>
           </button>
+
+          {/* Admin Panel (Faqat Adminlar uchun) */}
+          {user?.isAdmin && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                navigate('/admin');
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '11px 12px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(99, 102, 241, 0.2))',
+                border: '1.5px solid rgba(79, 70, 229, 0.35)',
+                color: '#3730a3',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <ShieldCheck size={18} color="#4f46e5" />
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ color: '#312e81', fontWeight: 900 }}>🛡️ Admin Panel</span>
+                <span style={{ fontSize: '10.5px', color: '#4f46e5', fontWeight: 700 }}>Tariflar, Cheklar va Boshqaruv</span>
+              </div>
+            </button>
+          )}
 
           {/* Navigation Quick Links */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

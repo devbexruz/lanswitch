@@ -61,6 +61,9 @@ function App() {
         <Route path="/player/:mediaId" element={<PlayerPage />} />
         <Route path="/legacy/player/:mediaId" element={<PlayerPage />} />
 
+        {/* Standalone Admin Panel */}
+        <Route path="/admin" element={<AdminPage />} />
+
         {/* Legacy Routes */}
         <Route path="/landing" element={<HomePage />} />
         <Route path="/auth/login" element={<MagicLoginPage />} />

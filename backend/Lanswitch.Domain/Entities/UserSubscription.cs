@@ -15,6 +15,8 @@ public class UserSubscription : BaseEntity
     public DateTime EndDate { get; set; }
     public string Status { get; set; } = "Active"; // "Active", "Expired", "Cancelled"
     public string? Notes { get; set; }
+    public DateTime? LastActivatedAt { get; set; }
+    public decimal TotalPaidAmount { get; set; } = 0;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual User? User { get; set; }

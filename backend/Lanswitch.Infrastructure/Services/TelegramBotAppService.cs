@@ -665,8 +665,15 @@ public class TelegramBotAppService : ITelegramBotAppService
 
     private async Task ShowAdminMenuAsync(long chatId)
     {
+        string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+        var adminUrl = $"https://{frontendHost}/admin";
+
         var keyboard = new InlineKeyboardMarkup(new[]
         {
+            new[]
+            {
+                InlineKeyboardButton.WithWebApp("🛡️ WebApp Admin Panel", new WebAppInfo { Url = adminUrl })
+            },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData("🎬 Kino qo'shish", "admin_add_movie")
@@ -682,7 +689,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                 InlineKeyboardButton.WithCallbackData("❌ Bekor qilish", "admin_cancel")
             }
         });
-        await _botClient.SendMessage(chatId, "🛠 *Admin Panel*\nNima qilamiz?", parseMode: ParseMode.Markdown, replyMarkup: keyboard);
+        await _botClient.SendMessage(chatId, "🛠 *Admin Panel*\nWebApp orqali to'liq boshqarish yoki quyidagi menyudan foydalaning:", parseMode: ParseMode.Markdown, replyMarkup: keyboard);
     }
 
     private async Task HandleCallbackQueryAsync(CallbackQuery callbackQuery)
@@ -691,6 +698,45 @@ public class TelegramBotAppService : ITelegramBotAppService
         var data = callbackQuery.Data;
         
         var user = await GetOrCreateUserAsync(callbackQuery.From);
+
+        // To'lov chekini botdan tasdiqlash yoki bekor qilish
+        if (data != null && data.StartsWith("pay_approve:"))
+        {
+            if (long.TryParse(data.Replace("pay_approve:", ""), out var reqId))
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var subService = scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
+                try
+                {
+                    await subService.ApprovePaymentRequestAsync(reqId, null, null, user.FullName);
+                    await _botClient.AnswerCallbackQuery(callbackQuery.Id, "✅ To'lov muvaffaqiyatli tasdiqlandi!");
+                }
+                catch (Exception ex)
+                {
+                    await _botClient.AnswerCallbackQuery(callbackQuery.Id, $"❌ Xatolik: {ex.Message}", showAlert: true);
+                }
+                return;
+            }
+        }
+
+        if (data != null && data.StartsWith("pay_reject:"))
+        {
+            if (long.TryParse(data.Replace("pay_reject:", ""), out var reqId))
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var subService = scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
+                try
+                {
+                    await subService.RejectPaymentRequestAsync(reqId, "Soxta chek yoki to'lov hisobga tushmagan", user.FullName);
+                    await _botClient.AnswerCallbackQuery(callbackQuery.Id, "❌ To'lov rad etildi!");
+                }
+                catch (Exception ex)
+                {
+                    await _botClient.AnswerCallbackQuery(callbackQuery.Id, $"❌ Xatolik: {ex.Message}", showAlert: true);
+                }
+                return;
+            }
+        }
 
         // 1. O'quvchi tomonidan faylni tasdiqlash yoki bekor qilish
         if (data != null && data.StartsWith("confirm_sub_"))
