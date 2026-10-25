@@ -662,11 +662,12 @@ public class TelegramBotAppService : ITelegramBotAppService
         decimal bonusAmount = cardSetting?.InitialBonusAmount > 0 ? cardSetting.InitialBonusAmount : 25000m;
         decimal minAmount = cardSetting?.MinAmount > 0 ? cardSetting.MinAmount : 15000m;
 
-        bool canClaimBonus = !user.HasReceivedInitialBonus && !await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
+        bool hasPriorSubscription = await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
+        bool canClaimBonus = !user.HasReceivedInitialBonus && !hasPriorSubscription;
 
-        if (canClaimBonus)
+        if (canClaimBonus || !hasPriorSubscription)
         {
-            // Yangi foydalanuvchi: Tarmoqlangan qisqa kirish menyusi
+            // Yangi foydalanuvchi yoki hali tarif belgilanmagan: Tarmoqlangan qisqa kirish menyusi
             var welcomeMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n" +
                              $"<b>Lanswitch</b> ta'lim platformasiga xush kelibsiz.\n\n" +
                              $"🎁 <b>Boshlang'ich bonus:</b> Yangi foydalanuvchilar uchun <b>{bonusAmount:N0} so'm</b> bepul bonus tayyor!\n\n" +
@@ -731,7 +732,8 @@ public class TelegramBotAppService : ITelegramBotAppService
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        bool canClaimBonus = !user.HasReceivedInitialBonus && !await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
+        bool hasPriorSubscription = await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
+        bool canClaimBonus = !user.HasReceivedInitialBonus && !hasPriorSubscription;
         var cardSetting = await db.CardPaymentSettings.FirstOrDefaultAsync();
         decimal bonusAmount = cardSetting?.InitialBonusAmount > 0 ? cardSetting.InitialBonusAmount : 25000m;
 

@@ -977,6 +977,7 @@ public class SubscriptionService : ISubscriptionService
                 canClaimBonus = canClaimBonus
             },
             hasActiveSubscription = activeSub != null,
+            hasPriorSubscription = hasPriorSubscription,
             canClaimBonus = canClaimBonus,
             hasReceivedInitialBonus = user.HasReceivedInitialBonus,
             bonusAmount = bonusAmount,

@@ -50,6 +50,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [canClaimBonus, setCanClaimBonus] = useState<boolean>(false);
+  const [hasPriorSubscription, setHasPriorSubscription] = useState<boolean>(false);
   const [claimingBonus, setClaimingBonus] = useState<boolean>(false);
   const [bonusAmount, setBonusAmount] = useState<number>(25000);
   const [minAmount, setMinAmount] = useState<number>(15000);
@@ -95,6 +96,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         setUserData(myData.user);
         setMySubscription(myData.subscription);
         setCanClaimBonus(Boolean(myData.canClaimBonus));
+        setHasPriorSubscription(Boolean(myData.hasPriorSubscription));
         if (myData.bonusAmount) setBonusAmount(Number(myData.bonusAmount));
         if (myData.minAmount) setMinAmount(Number(myData.minAmount));
 
@@ -404,7 +406,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         {/* ======================================================== */}
         {/* 25 000 SO'M INITIAL BONUS BANNER                        */}
         {/* ======================================================== */}
-        {canClaimBonus && (
+        {(canClaimBonus || !hasPriorSubscription) && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.28) 100%)',
             border: '2px solid #F59E0B',
@@ -493,7 +495,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                     <span className="status-expiry">({new Date(mySubscription.endDate).toLocaleDateString('uz-UZ')} gacha)</span>
                   )}
                 </>
-              ) : !canClaimBonus ? (
+              ) : hasPriorSubscription && !canClaimBonus ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '2px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800 }}>
                     ⚠️ Tarif muddati tugagan
@@ -505,13 +507,17 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span className="status-free-badge">🎓 Tarifsiz rejim</span>
-                  <span className="status-welcome-sub">Barcha darslar, lug'at va vazifalar bepul. Faqat kinolar uchun Student Premium talab etiladi.</span>
+                  <span className="status-welcome-sub">
+                    {canClaimBonus || !hasPriorSubscription
+                      ? `${bonusAmount.toLocaleString('uz-UZ')} so'm bonusni oling va istalgan tarifni bepul sinab ko'ring!`
+                      : "Barcha darslar, lug'at va vazifalar bepul. Faqat kinolar uchun Student Premium talab etiladi."}
+                  </span>
                 </div>
               )}
             </div>
           </div>
 
-          {canClaimBonus ? (
+          {(canClaimBonus || !hasPriorSubscription) ? (
             <button 
               className="compact-topup-btn"
               style={{
@@ -787,7 +793,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                       <button className="btn-current" disabled>
                         ✓ Joriy faol tarif
                       </button>
-                    ) : canClaimBonus ? (
+                    ) : (canClaimBonus || !hasPriorSubscription) ? (
                       <button
                         className="btn-start"
                         style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: '#fff', fontWeight: 900 }}

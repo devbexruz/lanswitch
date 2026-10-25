@@ -18,6 +18,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   hasSubscription: boolean;
+  hasPriorSubscription: boolean;
   subscription: any | null;
   canClaimBonus: boolean;
   bonusAmount: number;
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
     return false;
   });
+  const [hasPriorSubscription, setHasPriorSubscription] = useState<boolean>(false);
 
   const [canClaimBonus, setCanClaimBonus] = useState<boolean>(false);
   const [bonusAmount, setBonusAmount] = useState<number>(25000);
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSubscription(data.subscription || null);
         const isSubActive = Boolean(user?.isAdmin || (data.hasActiveSubscription && data.subscription?.isActive));
         setHasSubscription(isSubActive);
+        setHasPriorSubscription(Boolean(data.hasPriorSubscription));
         setCanClaimBonus(Boolean(data.canClaimBonus));
         if (data.bonusAmount) setBonusAmount(Number(data.bonusAmount));
         if (data.minAmount) setMinAmount(Number(data.minAmount));
@@ -279,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated: !!user,
         hasSubscription,
+        hasPriorSubscription,
         subscription,
         canClaimBonus,
         bonusAmount,

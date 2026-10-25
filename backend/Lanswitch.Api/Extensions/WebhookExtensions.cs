@@ -36,6 +36,8 @@ namespace Lanswitch.Api.Extensions
                 {
                     dbContext.Database.ExecuteSqlRaw(@"
                         ALTER TABLE ""CardPaymentSettings"" ADD COLUMN IF NOT EXISTS ""InitialBonusAmount"" numeric NOT NULL DEFAULT 25000;
+                        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""HasReceivedInitialBonus"" boolean NOT NULL DEFAULT false;
+                        ALTER TABLE ""Users"" ALTER COLUMN ""HasReceivedInitialBonus"" SET DEFAULT false;
                     ");
                 }
                 catch { }
