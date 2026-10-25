@@ -13,7 +13,7 @@ interface ProfileDropdownProps {
 }
 
 export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps) {
-  const { user, isAuthenticated, logout, setRole, login } = useAuth();
+  const { user, isAuthenticated, logout, setRole, login, hasSubscription, subscription, checkSubscription } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isPlansOpen, setIsPlansOpen] = useState(false);
@@ -74,47 +74,79 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           alignItems: 'center',
           gap: '10px',
           padding: '6px 12px 6px 8px',
-          background: 'var(--pure-white)',
-          border: '1.5px solid var(--sky-border)',
+          background: hasSubscription 
+            ? 'linear-gradient(135deg, #FFFFFF 0%, #FEF9C3 100%)' 
+            : 'var(--pure-white)',
+          border: hasSubscription 
+            ? '1.5px solid #F59E0B' 
+            : '1.5px solid var(--sky-border)',
           borderRadius: 'var(--radius-pill)',
           cursor: 'pointer',
           transition: 'all 0.15s ease',
-          boxShadow: 'var(--shadow-subtle)'
+          boxShadow: hasSubscription 
+            ? '0 0 14px rgba(245, 158, 11, 0.28), 0 2px 6px rgba(0,0,0,0.06)' 
+            : 'var(--shadow-subtle)'
         }}
       >
         {user?.profileImage ? (
           <img
             src={user.profileImage}
             alt={user.fullName}
-            style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }}
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: hasSubscription ? '2px solid #F59E0B' : 'none',
+              boxShadow: hasSubscription ? '0 0 8px rgba(245, 158, 11, 0.45)' : 'none'
+            }}
           />
         ) : (
           <div style={{
             width: '34px',
             height: '34px',
             borderRadius: '50%',
-            background: 'var(--primary-blue)',
+            background: hasSubscription 
+              ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' 
+              : 'var(--primary-blue)',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '13px',
-            fontWeight: 800
+            fontWeight: 800,
+            border: hasSubscription ? '1.5px solid #FEF08A' : 'none',
+            boxShadow: hasSubscription ? '0 0 8px rgba(245, 158, 11, 0.4)' : 'none'
           }}>
             {getInitials(user?.fullName)}
           </div>
         )}
 
-        <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '95px' }}>
+        <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '105px' }}>
           <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {user?.fullName || 'Foydalanuvchi'}
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--primary-blue)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-            {currentRole === 'Teacher' ? "👨‍🏫 O'qituvchi" : '🎓 Talaba'}
+          <span style={{
+            fontSize: '10.5px',
+            color: hasSubscription ? '#B45309' : 'var(--primary-blue)',
+            fontWeight: 800,
+            whiteSpace: 'nowrap',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px'
+          }}>
+            {hasSubscription ? (
+              <>
+                <span>👑</span>
+                <span>{subscription?.planName ? subscription.planName.replace('Ustoz - ', '') : (user?.isAdmin ? 'Admin' : 'Premium')}</span>
+              </>
+            ) : (
+              currentRole === 'Teacher' ? "👨‍🏫 O'qituvchi" : '🎓 Talaba'
+            )}
           </span>
         </div>
 
-        <ChevronDown size={16} color="var(--text-muted)" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+        <ChevronDown size={16} color={hasSubscription ? '#D97706' : 'var(--text-muted)'} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
       </button>
 
       {/* Dropdown Menu (Underneath profile button) */}
@@ -123,11 +155,13 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           position: 'absolute',
           top: 'calc(100% + 8px)',
           right: 0,
-          width: '290px',
+          width: '300px',
           background: 'var(--pure-white)',
-          border: '2px solid var(--sky-border)',
+          border: hasSubscription ? '2px solid rgba(245, 158, 11, 0.5)' : '2px solid var(--sky-border)',
           borderRadius: '18px',
-          boxShadow: 'var(--shadow-modal)',
+          boxShadow: hasSubscription 
+            ? '0 16px 40px -8px rgba(0, 0, 0, 0.2), 0 0 25px rgba(245, 158, 11, 0.18)' 
+            : 'var(--shadow-modal)',
           zIndex: 1000,
           padding: '16px',
           display: 'flex',
@@ -141,37 +175,84 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
             alignItems: 'center',
             gap: '12px',
             paddingBottom: '12px',
-            borderBottom: '1px solid var(--sky-border)'
+            borderBottom: hasSubscription ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid var(--sky-border)'
           }}>
             {user?.profileImage ? (
               <img
                 src={user.profileImage}
                 alt={user.fullName}
-                style={{ width: '46px', height: '46px', borderRadius: '50%', objectFit: 'cover' }}
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: hasSubscription ? '2.5px solid #F59E0B' : 'none',
+                  boxShadow: hasSubscription ? '0 0 10px rgba(245, 158, 11, 0.4)' : 'none'
+                }}
               />
             ) : (
               <div style={{
                 width: '46px',
                 height: '46px',
                 borderRadius: '50%',
-                background: 'var(--primary-blue)',
+                background: hasSubscription 
+                  ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' 
+                  : 'var(--primary-blue)',
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '16px',
-                fontWeight: 900
+                fontWeight: 900,
+                border: hasSubscription ? '2px solid #FEF08A' : 'none',
+                boxShadow: hasSubscription ? '0 0 10px rgba(245, 158, 11, 0.35)' : 'none'
               }}>
                 {getInitials(user?.fullName)}
               </div>
             )}
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <div style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.fullName || 'Profil'}
+              <div style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span>{user?.fullName || 'Profil'}</span>
+                {hasSubscription && <span title="Premium A'zo" style={{ fontSize: '13px' }}>👑</span>}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 ID: {user?.id || '—'} {user?.telegramId ? `• @${user.telegramId}` : ''}
               </div>
+              {hasSubscription ? (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+                  border: '1px solid #F59E0B',
+                  color: '#92400E',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: '10.5px',
+                  fontWeight: 900,
+                  marginTop: '4px'
+                }}>
+                  <span>👑</span>
+                  <span>{subscription?.planName || (user?.isAdmin ? 'Administrator (VIP)' : 'Student Premium')}</span>
+                </div>
+              ) : (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'var(--ice-blue-bg)',
+                  border: '1px solid var(--sky-border)',
+                  color: 'var(--text-muted)',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  marginTop: '4px'
+                }}>
+                  <span>🎓</span>
+                  <span>Tarifsiz rejim</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -251,7 +332,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
             </div>
           </div>
 
-          {/* Tariflar / Obunalar (14 kun bepul) */}
+          {/* Tariflar / Obunalar */}
           <button
             onClick={() => {
               setIsOpen(false);
@@ -263,21 +344,31 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
               gap: '10px',
               padding: '11px 12px',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(245, 158, 11, 0.25))',
-              border: '1.5px solid rgba(234, 179, 8, 0.4)',
-              color: '#92400e',
+              background: hasSubscription 
+                ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.26))' 
+                : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.14))',
+              border: hasSubscription ? '1.5px solid #F59E0B' : '1.5px solid rgba(245, 158, 11, 0.35)',
+              color: '#92400E',
               fontSize: '13px',
               fontWeight: 800,
               cursor: 'pointer',
               textAlign: 'left',
               transition: 'all 0.15s ease',
-              boxShadow: '0 2px 8px rgba(234, 179, 8, 0.15)'
+              boxShadow: hasSubscription ? '0 4px 14px rgba(245, 158, 11, 0.2)' : 'none'
             }}
           >
-            <Crown size={18} color="#b45309" />
+            <Crown size={18} color="#D97706" />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#78350f', fontWeight: 900 }}>Tariflar va Balans</span>
-              <span style={{ fontSize: '10.5px', color: '#047857', fontWeight: 700 }}>🎁 25 000 so'm bonus</span>
+              <span style={{ color: '#78350F', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>👑</span> Tariflar va Balans
+              </span>
+              <span style={{ fontSize: '11px', color: hasSubscription ? '#047857' : '#B45309', fontWeight: 800 }}>
+                {hasSubscription ? (
+                  subscription?.formattedRemainingTime ? `⏳ ${subscription.formattedRemainingTime}` : '✨ Obuna faol'
+                ) : (
+                  "Hisobni to'ldirish & boshlash"
+                )}
+              </span>
             </div>
           </button>
 
@@ -436,6 +527,9 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
       <SubscriptionPlansModal
         isOpen={isPlansOpen}
         onClose={() => setIsPlansOpen(false)}
+        onSubscriptionUpdated={() => {
+          checkSubscription();
+        }}
       />
     </div>
   );

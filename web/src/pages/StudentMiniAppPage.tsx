@@ -18,7 +18,7 @@ import BottomNav from '../components/BottomNav';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function StudentMiniAppPage() {
-  const { user: authUser } = useAuth();
+  const { user: authUser, hasSubscription, checkSubscription } = useAuth();
   const navigate = useNavigate();
 
   // Navigation: 3 Core Panels
@@ -1596,51 +1596,53 @@ export default function StudentMiniAppPage() {
             ))}
           </div>
 
-          {/* Student Premium Info Banner */}
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.16) 100%)',
-            border: '1.5px solid rgba(245, 158, 11, 0.4)',
-            borderRadius: '16px',
-            padding: '14px 18px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            flexWrap: 'wrap'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: 1 }}>
-              <span style={{ fontSize: '24px' }}>👑</span>
-              <div>
-                <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '2px' }}>
-                  Student Premium — Kinolar & AI Ustoz
-                </div>
-                <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  Barcha darslar, lug'at va topshiriqlar mutlaqo bepul! Kinolarni ko'rish va film ichida AI yordamchi bilan chatlashish uchun <strong>Student Premium (50 000 so'm/oy)</strong> kerak bo'ladi.
+          {/* Student Premium Info Banner (Only for non-premium users) */}
+          {!hasSubscription && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.16) 100%)',
+              border: '1.5px solid rgba(245, 158, 11, 0.4)',
+              borderRadius: '16px',
+              padding: '14px 18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: 1 }}>
+                <span style={{ fontSize: '24px' }}>👑</span>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '2px' }}>
+                    Student Premium — Kinolar & AI Ustoz
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    Barcha darslar, lug'at va topshiriqlar mutlaqo bepul! Kinolarni ko'rish va film ichida AI yordamchi bilan chatlashish uchun <strong>Student Premium (50 000 so'm/oy)</strong> kerak bo'ladi.
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              onClick={() => setIsSubscriptionModalOpen(true)}
-              style={{
-                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-                color: '#000',
-                border: 'none',
-                borderRadius: '10px',
-                padding: '8px 16px',
-                fontSize: '13px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                flexShrink: 0
-              }}
-            >
-              👑 Obunani ko'rish
-            </button>
-          </div>
+              <button
+                onClick={() => setIsSubscriptionModalOpen(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  flexShrink: 0
+                }}
+              >
+                👑 Obunani ko'rish
+              </button>
+            </div>
+          )}
 
           {/* Movies Grid */}
           {isLoadingMovies ? (
@@ -1688,22 +1690,24 @@ export default function StudentMiniAppPage() {
                       )}
                     </div>
 
-                    <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
-                      <span style={{
-                        background: 'linear-gradient(135deg, #F59E0B, #D97706)',
-                        color: '#000',
-                        padding: '2px 8px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: 900,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '3px'
-                      }}>
-                        👑 Premium
-                      </span>
-                    </div>
+                    {!hasSubscription && (
+                      <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                        <span style={{
+                          background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                          color: '#000',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 900,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          👑 Premium
+                        </span>
+                      </div>
+                    )}
 
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.25)' }}>
                       <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-blue)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
@@ -2789,6 +2793,9 @@ export default function StudentMiniAppPage() {
       <SubscriptionPlansModal 
         isOpen={isSubscriptionModalOpen} 
         onClose={() => setIsSubscriptionModalOpen(false)} 
+        onSubscriptionUpdated={() => {
+          checkSubscription();
+        }}
       />
     </div>
   );

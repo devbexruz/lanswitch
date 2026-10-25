@@ -15,6 +15,9 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  hasSubscription: boolean;
+  subscription: any | null;
+  checkSubscription: () => Promise<void>;
   login: () => void;
   logout: () => void;
   setRole: (role: 'Student' | 'Teacher') => Promise<void>;
@@ -36,6 +39,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [subscription, setSubscription] = useState<any | null>(null);
+  const [hasSubscription, setHasSubscription] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('lanswitch_user');
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u?.isAdmin) return true;
+      }
+    } catch {}
+    return false;
+  });
+
+  const checkSubscription = async () => {
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
+      const res = await fetch('/api/subscription/my', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscription(data.subscription || null);
+        const isSubActive = Boolean(user?.isAdmin || (data.hasActiveSubscription && data.subscription?.isActive));
+        setHasSubscription(isSubActive);
+      } else {
+        setHasSubscription(Boolean(user?.isAdmin));
+        setSubscription(null);
+      }
+    } catch {
+      setHasSubscription(Boolean(user?.isAdmin));
+      setSubscription(null);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      if (user.isAdmin) {
+        setHasSubscription(true);
+      }
+      checkSubscription();
+    } else {
+      setHasSubscription(false);
+      setSubscription(null);
+    }
+  }, [user?.id, user?.isAdmin]);
 
   const checkAuth = async () => {
     try {
@@ -118,6 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error(e);
     }
     setUser(null);
+    setSubscription(null);
+    setHasSubscription(false);
     localStorage.removeItem('lanswitch_user');
     localStorage.removeItem('lanswitch_token');
   };
@@ -151,6 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
         user,
         isAuthenticated: !!user,
+        hasSubscription,
+        subscription,
+        checkSubscription,
         login,
         logout,
         setRole,
