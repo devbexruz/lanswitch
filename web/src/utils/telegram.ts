@@ -83,7 +83,7 @@ export function toggleAppFullscreen(
   } else {
     // 2. DESKTOP MUHIT (Telegram Desktop ilovasi va oddiy brauzerlar)
     // HTML5 DOM Fullscreen butun kompyuter monitorini 100% to'liq qamrab oladi
-    const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement || isFullscreen);
+    const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
 
     if (isDomFs) {
       // Monitor to'liq ekranidan chiqish

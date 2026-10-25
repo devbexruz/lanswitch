@@ -56,11 +56,12 @@
 
 /* Custom scrollbar for notifications */
 .notifications-list::-webkit-scrollbar {
-  width: 5px;
+  display: none !important;
+  width: 0 !important;
 }
 .notifications-list::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
-  border-radius: 5px;
+  display: none !important;
+  background: transparent !important;
 }
 
 .notification-item {

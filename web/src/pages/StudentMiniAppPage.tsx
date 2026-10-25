@@ -90,12 +90,17 @@ export default function StudentMiniAppPage() {
 
   // Initialize Telegram WebApp & Fullscreen State
   useEffect(() => {
-    const tg = (window as any).Telegram?.WebApp;
+    const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : undefined;
+    const platform = (tg?.platform || '').toLowerCase();
+    const isMobile = ['android', 'ios'].includes(platform) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 
     const updateFsState = () => {
-      const isTgFs = Boolean(tg?.isFullscreen);
-      const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
-      setIsFullscreen(isTgFs || isDomFs);
+      if (isMobile) {
+        setIsFullscreen(Boolean(tg?.isFullscreen));
+      } else {
+        const isDomFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+        setIsFullscreen(isDomFs);
+      }
     };
 
     if (tg) {
