@@ -276,8 +276,8 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           >
             <Crown size={18} color="#b45309" />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#78350f', fontWeight: 900 }}>Tariflar va Obuna</span>
-              <span style={{ fontSize: '10.5px', color: '#047857', fontWeight: 700 }}>🎁 14 kun bepul sinov</span>
+              <span style={{ color: '#78350f', fontWeight: 900 }}>Tariflar va Balans</span>
+              <span style={{ fontSize: '10.5px', color: '#047857', fontWeight: 700 }}>🎁 25 000 so'm bonus</span>
             </div>
           </button>
 

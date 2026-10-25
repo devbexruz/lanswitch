@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { showTelegramBackButton, hideTelegramBackButton } from '../utils/telegram';
 import ReactMarkdown from 'react-markdown';
 import './PlayerPage.css';
+import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 interface Episode {
   id: number;
@@ -92,6 +93,35 @@ const PlayerPage: React.FC = () => {
   const [isMobile, setIsMobile] = useState<boolean>(() => 
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
   );
+
+  // Subscription verification state (Students need Student Premium for movies)
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+
+  const checkSubscription = async () => {
+    if (user?.isAdmin) {
+      setHasSubscription(true);
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/subscription/my', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHasSubscription(Boolean(data.hasActiveSubscription && data.subscription?.isActive));
+      } else {
+        setHasSubscription(false);
+      }
+    } catch {
+      setHasSubscription(false);
+    }
+  };
+
+  useEffect(() => {
+    checkSubscription();
+  }, [user]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -824,7 +854,7 @@ const PlayerPage: React.FC = () => {
     );
   };
 
-  if (loading) {
+  if (loading || hasSubscription === null) {
     return (
       <div className="player-loading-container">
         <div className="player-loading-spinner"></div>
@@ -886,9 +916,64 @@ const PlayerPage: React.FC = () => {
 
       {/* Main Container */}
       <main className="player-layout-container">
-        {/* Video Player Column */}
-        <section className="player-video-section">
-          <div className="video-player-frame">
+        {!hasSubscription ? (
+          <div className="player-premium-lock-card">
+            <div className="premium-lock-badge">👑 Student Premium</div>
+            <h2 className="premium-lock-title">Kinolarni ko'rish uchun Student Premium talab etiladi</h2>
+            <p className="premium-lock-desc">
+              Talabalar uchun barcha darslar, lug'at va guruh topshiriqlari mutlaqo bepul! Faqat sevimli filmlarni tomosha qilish va film ichidagi AI ustoz bilan muloqot qilish uchun Student Premium faollashtirilishi kerak.
+            </p>
+
+            <div className="premium-lock-features">
+              <div className="lock-feature-item">
+                <span>🎬</span>
+                <div>
+                  <strong>Cheksiz kinolar va seriallar</strong>
+                  <p>Ingliz tilidagi eng sara filmlar va interaktiv subtitrlar</p>
+                </div>
+              </div>
+              <div className="lock-feature-item">
+                <span>🤖</span>
+                <div>
+                  <strong>AI Ustoz tahlili va Chat</strong>
+                  <p>Har bir gap bo'yicha grammatik tahlil va interaktiv suhbat</p>
+                </div>
+              </div>
+              <div className="lock-feature-item">
+                <span>💳</span>
+                <div>
+                  <strong>50 000 so'm / oy (Real-time sarf)</strong>
+                  <p>Istalgan summa bilan to'ldiring — minutigacha hisoblab beriladi</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="premium-lock-actions">
+              <button 
+                className="btn-unlock-premium"
+                onClick={() => setIsSubscriptionModalOpen(true)}
+              >
+                👑 Student Premium faollashtirish
+              </button>
+              <button 
+                className="btn-lock-back"
+                onClick={() => {
+                  if (window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigate('/student');
+                  }
+                }}
+              >
+                ← Ortga qaytish
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Video Player Column */}
+            <section className="player-video-section">
+              <div className="video-player-frame">
             <VideoPlayer
               src={videoUrl}
               poster={media.thumbnailUrl}
@@ -1066,7 +1151,18 @@ const PlayerPage: React.FC = () => {
             {renderAnalysisBody(false)}
           </aside>
         )}
+          </>
+        )}
       </main>
+
+      {/* Subscription Plans Modal */}
+      <SubscriptionPlansModal 
+        isOpen={isSubscriptionModalOpen} 
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        onSubscriptionUpdated={() => {
+          checkSubscription();
+        }}
+      />
     </div>
   );
 };

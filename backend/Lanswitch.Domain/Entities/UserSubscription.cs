@@ -13,7 +13,11 @@ public class UserSubscription : BaseEntity
     public bool IsTrial { get; set; } = false; // true if 14 days free trial
     public DateTime StartDate { get; set; } = DateTime.UtcNow;
     public DateTime EndDate { get; set; }
-    public string Status { get; set; } = "Active"; // "Active", "Expired", "Cancelled"
+    public DateTime? FinishedDate { get; set; }
+    public decimal InitialBalance { get; set; } = 0;
+    public decimal DeductedAmount { get; set; } = 0;
+    public bool IsActive { get; set; } = true;
+    public string Status { get; set; } = "Active"; // "Active", "Switched", "Expired", "Cancelled"
     public string? Notes { get; set; }
     public DateTime? LastActivatedAt { get; set; }
     public decimal TotalPaidAmount { get; set; } = 0;

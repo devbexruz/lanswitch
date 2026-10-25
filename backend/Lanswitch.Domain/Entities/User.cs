@@ -13,6 +13,8 @@ public class User : BaseEntity
     public string? AvatarUrl { get; set; } // Dinamik Telegram profile photo URL
     public string Role { get; set; } = "Student"; // "Student", "Teacher", "Admin"
     public bool IsAdmin { get; set; } = false;
+    public decimal Balance { get; set; } = 0; // Foydalanuvchi hisob balansi (so'm)
+    public bool HasReceivedInitialBonus { get; set; } = false; // 25,000 so'm boshlang'ich bonus berilganmi
     
     // Auth Magic Link
     public string? LoginToken { get; set; }

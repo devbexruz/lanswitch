@@ -15,6 +15,7 @@ import MainLayout from './layouts/MainLayout';
 import MagicLoginPage from './pages/MagicLoginPage';
 import AuthModal from './components/AuthModal';
 import PlayerPage from './pages/PlayerPage';
+import VerifyReceiptPage from './pages/VerifyReceiptPage';
 
 function SmartRoleRoute() {
   const { user } = useAuth();
@@ -61,8 +62,9 @@ function App() {
         <Route path="/player/:mediaId" element={<PlayerPage />} />
         <Route path="/legacy/player/:mediaId" element={<PlayerPage />} />
 
-        {/* Standalone Admin Panel */}
+        {/* Standalone Admin Panel & Verification */}
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/verify-receipt/:id" element={<VerifyReceiptPage />} />
 
         {/* Legacy Routes */}
         <Route path="/landing" element={<HomePage />} />

@@ -18,6 +18,7 @@ public class SubscriptionPaymentRequest : BaseEntity
     public long? AdminChatId { get; set; }
     public DateTime? ProcessedAt { get; set; }
     public string? ProcessedBy { get; set; }
+    public string? VerificationToken { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual User? User { get; set; }

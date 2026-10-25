@@ -39,23 +39,28 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   onSubscriptionUpdated
 }) => {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [userData, setUserData] = useState<any>(null);
   const [mySubscription, setMySubscription] = useState<any>(null);
+  const [liveBalance, setLiveBalance] = useState<number>(0);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+
   const [cardSettings, setCardSettings] = useState<CardSettings | null>(null);
-  const [usedStudentTrial, setUsedStudentTrial] = useState(false);
-  const [usedTeacherTrial, setUsedTeacherTrial] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activatingPlanId, setActivatingPlanId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Payment View State
+  // 1-Step Switch / Start Confirmation
+  const [confirmSwitchPlan, setConfirmSwitchPlan] = useState<Plan | null>(null);
+  const [switchingPlan, setSwitchingPlan] = useState(false);
+
+  // 1-Step Payment Modal
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<Plan | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(50000);
+  const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [copiedCard, setCopiedCard] = useState(false);
-  const [switchCalculation, setSwitchCalculation] = useState<any>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -81,88 +86,156 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
       }
       if (myRes.ok) {
         const myData = await myRes.json();
+        setUserData(myData.user);
         setMySubscription(myData.subscription);
-        setUsedStudentTrial(myData.usedStudentTrial);
-        setUsedTeacherTrial(myData.usedTeacherTrial);
+
+        if (myData.user) {
+          setLiveBalance(myData.user.liveBalance ?? myData.user.balance ?? 0);
+        }
       }
       if (cardRes.ok) {
         setCardSettings(await cardRes.json());
       }
     } catch (e) {
-      console.error(e);
+      console.error("Tarif ma'lumotlarini yuklashda xatolik:", e);
     } finally {
       setLoading(false);
     }
   };
 
+  // Real-time Balance & Duration countdown ticker
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const tick = () => {
+      if (mySubscription) {
+        const now = Date.now();
+        const startMs = new Date(mySubscription.startDate).getTime();
+        const endMs = new Date(mySubscription.endDate).getTime();
+        const monthlyPrice = mySubscription.price || 50000;
+        const perSecRate = mySubscription.perSecondRate || (monthlyPrice / (30 * 24 * 3600));
+
+        if (now >= endMs) {
+          setLiveBalance(0);
+          setRemainingSeconds(0);
+        } else {
+          const elapsedSecs = Math.max(0, (now - startMs) / 1000);
+          const initBal = mySubscription.initialBalance > 0 
+            ? mySubscription.initialBalance 
+            : (userData?.balance || 0);
+          const spent = Math.min(initBal, Math.round(elapsedSecs * perSecRate));
+          const currentBal = Math.max(0, initBal - spent);
+          setLiveBalance(currentBal);
+
+          const remSec = Math.max(0, Math.floor((endMs - now) / 1000));
+          setRemainingSeconds(remSec);
+        }
+      } else {
+        setLiveBalance(userData?.balance || 0);
+        setRemainingSeconds(0);
+      }
+    };
+
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [isOpen, mySubscription, userData]);
+
   const getPlanId = (plan: Plan) => plan.planId || plan.id || '';
   const getPlanPrice = (plan: Plan) => plan.monthlyPrice ?? plan.price ?? 50000;
 
-  const handleStartTrial = async (planId: string) => {
-    setActivatingPlanId(planId);
+  // Format clean digital countdown
+  const formatDurationClean = (totalSec: number) => {
+    if (totalSec <= 0) return "Tugagan";
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    if (days > 0) {
+      return `${days} kun, ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+    }
+    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  };
+
+  // Estimate days for target plan
+  const getEstDays = (plan: Plan) => {
+    const price = getPlanPrice(plan);
+    const perSec = price / (30 * 24 * 3600);
+    const secs = liveBalance / perSec;
+    const days = Math.floor(secs / 86400);
+    const hours = Math.floor((secs % 86400) / 3600);
+    if (days > 0) return `${days} kun ${hours > 0 ? hours + 's' : ''}`;
+    return `${hours} soat`;
+  };
+
+  // 1-Step Switch Plan / Start Plan execution
+  const handleSwitchPlan = async (targetPlanId: string) => {
+    setSwitchingPlan(true);
     setErrorMessage(null);
     try {
-      const res = await fetch('/api/subscription/start-trial', {
+      const res = await fetch('/api/subscription/switch-plan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ planId })
+        body: JSON.stringify({ targetPlanId })
       });
 
       const data = await res.json();
       if (res.ok) {
-        setSuccessMessage(data.message || "14 kunlik bepul sinov muddati faollashtirildi!");
+        setSuccessMessage("✅ Tarif muvaffaqiyatli faollashtirildi!");
+        setConfirmSwitchPlan(null);
         await loadData();
         if (onSubscriptionUpdated) onSubscriptionUpdated();
       } else {
-        setErrorMessage(data.message || data || "Xatolik yuz berdi");
+        setErrorMessage(data.message || data || "Tarifni faollashtirishda xatolik yuz berdi");
       }
     } catch (e) {
       console.error(e);
       setErrorMessage("Tarmoq xatosi yuz berdi");
     } finally {
-      setActivatingPlanId(null);
+      setSwitchingPlan(false);
     }
   };
 
-  const openPaymentForPlan = (plan: Plan) => {
-    setSelectedPlanForPayment(plan);
-    const price = getPlanPrice(plan);
-    setPaymentAmount(price);
+  // Open 1-Step Payment modal and trigger bot instruction message
+  const openPayment = async (plan?: Plan) => {
+    const target = plan || plans.find(p => p.planId === mySubscription?.planId) || plans[0] || null;
+    setSelectedPlanForPayment(target);
+    setPaymentAmount('');
     setReceiptFile(null);
     setReceiptPreview(null);
     setErrorMessage(null);
-    calculateDurationOrSwitch(getPlanId(plan), price);
-  };
+    setShowPaymentModal(true);
 
-  const calculateDurationOrSwitch = async (planId: string, amount: number) => {
     try {
-      const res = await fetch('/api/subscription/calculate-switch', {
+      await fetch('/api/subscription/request-topup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token') || localStorage.getItem('lanswitch_token')}`
         },
-        body: JSON.stringify({
-          targetPlanId: planId,
-          additionalAmount: amount || 0
-        })
+        body: JSON.stringify({ planId: target ? getPlanId(target) : null })
       });
-
-      if (res.ok) {
-        setSwitchCalculation(await res.json());
-      }
     } catch (e) {
-      console.error(e);
+      console.error("Top-up bot notification error:", e);
     }
   };
 
-  const handleAmountChange = (newAmount: number) => {
-    setPaymentAmount(newAmount);
-    if (selectedPlanForPayment) {
-      calculateDurationOrSwitch(getPlanId(selectedPlanForPayment), newAmount);
+  const handleOpenBot = () => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      try {
+        tg.openTelegramLink("https://t.me/lanswitchbot");
+      } catch {}
+      try {
+        tg.close();
+      } catch {}
+    } else {
+      window.open("https://t.me/lanswitchbot", "_blank");
     }
   };
 
@@ -186,38 +259,35 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
     }
   };
 
+  // 1-Step Submit Payment Receipt
   const handleSubmitReceipt = async () => {
     if (!selectedPlanForPayment) return;
     if (!receiptFile) {
       setErrorMessage("Iltimos, to'lov cheki screenshotini yuklang!");
       return;
     }
-    const min = cardSettings?.minAmount || 15000;
-    if (!paymentAmount || paymentAmount < min) {
-      setErrorMessage(`Minimal to'lov summasi ${min.toLocaleString('uz-UZ')} so'm!`);
-      return;
-    }
 
     setSubmittingPayment(true);
     setErrorMessage(null);
     try {
+      const amt = typeof paymentAmount === 'number' && paymentAmount > 0 ? paymentAmount : 0;
       const formData = new FormData();
       formData.append('receipt', receiptFile);
       formData.append('planId', getPlanId(selectedPlanForPayment));
-      formData.append('amount', paymentAmount.toString());
+      formData.append('amount', amt.toString());
 
       const res = await fetch('/api/subscription/submit-receipt', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token') || localStorage.getItem('lanswitch_token')}`
         },
         body: formData
       });
 
       const data = await res.json();
       if (res.ok) {
-        setSuccessMessage("✅ To'lov chekingiz tekshirish uchun yuborildi! Admin tasdiqlashi bilan Telegram botingizga xabar boradi va muddat avtomatik hisoblab qo'shiladi.");
-        setSelectedPlanForPayment(null);
+        setSuccessMessage("✅ To'lov chekingiz adminga yuborildi! Admin chekni ko'rib tasdiqlashi bilan hisobingizga qo'shiladi.");
+        setShowPaymentModal(false);
         setReceiptFile(null);
         setReceiptPreview(null);
         await loadData();
@@ -248,294 +318,331 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   return createPortal(
     <div className="subscription-modal-overlay" onClick={onClose}>
       <div className="subscription-modal-container animate-fade-in" onClick={e => e.stopPropagation()}>
-        <div className="subscription-modal-header">
+        
+        {/* Header */}
+        <div className="compact-modal-header">
           <div>
-            <div className="subscription-eyebrow">👑 Lanswitch Obunalari</div>
-            <h2 className="subscription-modal-title">Tariflar va To'lov Tizimi</h2>
-            <p className="subscription-modal-subtitle">
-              Har qanday summada to'lov qiling — muddat soat va minutlarigacha adolatli hisoblab beriladi!
+            <h2 className="compact-modal-title">👑 Obunalar va Balans</h2>
+            <p className="compact-modal-subtitle">
+              Talabalar dars va lug'atlardan bepul foydalanishadi. Student Premium faqat kinolar va AI yordamchi uchun kerak.
             </p>
           </div>
-          <button className="subscription-close-btn" onClick={onClose}>✕</button>
+          <button className="compact-close-x" onClick={onClose} title="Yopish">✕</button>
         </div>
 
-        {/* Current Active Subscription Banner */}
-        {mySubscription && (
-          <div className="current-sub-banner">
-            <div className="current-sub-icon">👑</div>
-            <div className="current-sub-info" style={{ flex: 1 }}>
-              <div className="current-sub-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span>Joriy tarifingiz: <strong>{mySubscription.planName}</strong></span>
-                {mySubscription.isTrial && <span className="trial-pill">14 kunlik sinov</span>}
-                <span style={{ fontSize: '12px', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: '10px' }}>
-                  Faol holatda
-                </span>
-              </div>
-              <div className="current-sub-expiry" style={{ marginTop: '4px', fontSize: '13px', opacity: 0.9 }}>
-                Qolgan vaqt: <strong>{mySubscription.daysLeft} kun ({mySubscription.hoursLeft} soat)</strong> •
-                Tugash vaqti: <strong>{new Date(mySubscription.endDate).toLocaleString('uz-UZ')}</strong>
-              </div>
-              {mySubscription.lastActivatedAt && (
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                  🕒 Oxirgi aktivatsiya vaqti: <strong>{new Date(mySubscription.lastActivatedAt).toLocaleString('uz-UZ')}</strong>
+        {/* ======================================================== */}
+        {/* COMPACT REALTIME BALANCE BAR                             */}
+        {/* ======================================================== */}
+        <div className="compact-balance-bar">
+          <div className="balance-info-left">
+            <div className="balance-row">
+              <span className="balance-dot"></span>
+              <span className="balance-label">Hisob balansi:</span>
+              <span className="balance-val">
+                {liveBalance.toLocaleString('uz-UZ')} <span className="currency">so'm</span>
+              </span>
+            </div>
+
+            <div className="sub-status-row">
+              {mySubscription ? (
+                <>
+                  <span className="status-plan-name">● {mySubscription.planName}</span>
+                  <span className="status-divider">•</span>
+                  <span className="status-time">⏳ {formatDurationClean(remainingSeconds)}</span>
+                  {mySubscription.endDate && (
+                    <span className="status-expiry">({new Date(mySubscription.endDate).toLocaleDateString('uz-UZ')} gacha)</span>
+                  )}
+                </>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="status-free-badge">🎓 Tarifsiz rejim</span>
+                  <span className="status-welcome-sub">Barcha darslar, lug'at va vazifalar bepul. Faqat kinolar uchun Student Premium talab etiladi.</span>
                 </div>
               )}
             </div>
           </div>
-        )}
 
+          <button 
+            className="compact-topup-btn"
+            onClick={() => openPayment()}
+          >
+            <span>➕</span> Balansni to'ldirish
+          </button>
+        </div>
+
+        {/* Alerts */}
         {successMessage && (
-          <div className="sub-success-alert" style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#6ee7b7', padding: '14px 18px', borderRadius: '14px', marginBottom: '18px', fontSize: '14px' }}>
-            <span>🎉</span> {successMessage}
+          <div className="compact-alert success">
+            <span>🎉</span>
+            <div>{successMessage}</div>
+            <button className="alert-x" onClick={() => setSuccessMessage(null)}>✕</button>
           </div>
         )}
 
         {errorMessage && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#fca5a5', padding: '14px 18px', borderRadius: '14px', marginBottom: '18px', fontSize: '14px' }}>
-            <span>⚠️</span> {errorMessage}
+          <div className="compact-alert error">
+            <span>⚠️</span>
+            <div>{errorMessage}</div>
+            <button className="alert-x" onClick={() => setErrorMessage(null)}>✕</button>
           </div>
         )}
 
-        {/* PAYMENT CHECKOUT VIEW (Karta orqali to'lov shakli) */}
-        {selectedPlanForPayment ? (
-          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1.5px solid rgba(56, 189, 248, 0.35)', borderRadius: '20px', padding: '24px', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase' }}>💳 To'lov va Aktivatsiya</span>
-                <h3 style={{ margin: '4px 0 0 0', fontSize: '20px', color: '#fff' }}>
-                  {selectedPlanForPayment.name} tarifi uchun to'lov
-                </h3>
+        {/* ======================================================== */}
+        {/* 1-STEP SWITCH / START CONFIRMATION MODAL                 */}
+        {/* ======================================================== */}
+        {confirmSwitchPlan && (
+          <div className="mini-confirm-overlay animate-fade-in" onClick={() => setConfirmSwitchPlan(null)}>
+            <div className="mini-confirm-card" onClick={e => e.stopPropagation()}>
+              <div className="mini-confirm-header">
+                <span className="mini-icon">{mySubscription ? '🔄' : '🚀'}</span>
+                <div>
+                  <h3 className="mini-title">
+                    {mySubscription ? "Tarifni almashtirish" : "Tarifni faollashtirish"}
+                  </h3>
+                  <p className="mini-sub">
+                    {mySubscription ? "1 qadamda yangi tarifga o'tish" : "Balans hisobidan darhol boshlash"}
+                  </p>
+                </div>
               </div>
-              <button 
-                onClick={() => setSelectedPlanForPayment(null)}
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px' }}
-              >
-                ← Tariflar ro'yxatiga qaytish
-              </button>
+
+              <div className="mini-confirm-body">
+                <p>
+                  <strong>{confirmSwitchPlan.name}</strong> tarifini {mySubscription ? "o'tishni" : "boshlashni"} tasdiqlaysizmi?
+                </p>
+                <div className="mini-stat-badge">
+                  💰 Hozirgi balansingiz: <strong>{liveBalance.toLocaleString('uz-UZ')} so'm</strong>
+                  <br />
+                  ⏳ Ushbu tarifda taxminan: <strong style={{ color: '#fde047' }}>{getEstDays(confirmSwitchPlan)}</strong> yetadi
+                </div>
+                <div className="mini-help-text">
+                  {mySubscription
+                    ? "* Avvalgi tarifingizdan hozirgi soniyasigacha hisob-kitob qilinadi va qolgan mablag' to'liq yangi tarifga yo'naltiriladi."
+                    : "* Balansingizdan tarifingiz bo'yicha har soniyada tejamkor tarzda sarflanib boradi."}
+                </div>
+              </div>
+
+              <div className="mini-confirm-actions">
+                <button
+                  className="mini-btn-cancel"
+                  onClick={() => setConfirmSwitchPlan(null)}
+                  disabled={switchingPlan}
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  className="mini-btn-confirm"
+                  onClick={() => handleSwitchPlan(getPlanId(confirmSwitchPlan))}
+                  disabled={switchingPlan}
+                >
+                  {switchingPlan ? "Bajarilmoqda..." : (mySubscription ? "🔄 Ha, o'tish" : "🚀 Ha, boshlash")}
+                </button>
+              </div>
             </div>
+          </div>
+        )}
 
-            {/* SWITCH TARIFF NOTIFICATION (agar boshqa tarifda bo'lsa) */}
-            {switchCalculation && switchCalculation.hasCurrentSubscription && switchCalculation.currentPlanName !== selectedPlanForPayment.name && (
-              <div style={{ background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)', borderRadius: '14px', padding: '14px 18px', marginBottom: '20px' }}>
-                <div style={{ fontWeight: 800, color: '#fde047', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>🔄</span> Tarif almashtirish (Pro-rata hisob):
+        {/* ======================================================== */}
+        {/* 1-STEP PAYMENT MODAL (Oddiy va tushunarli)               */}
+        {/* ======================================================== */}
+        {showPaymentModal && selectedPlanForPayment && (
+          <div className="mini-confirm-overlay animate-fade-in" onClick={() => setShowPaymentModal(false)}>
+            <div className="compact-payment-card" onClick={e => e.stopPropagation()}>
+              
+              <div className="payment-top-row">
+                <div>
+                  <span className="payment-tag">💳 TO'LOV VA AKTIVATSIYA</span>
+                  <h3 className="payment-heading">Balansni to'ldirish</h3>
                 </div>
-                <div style={{ fontSize: '13px', color: '#fef08a', marginTop: '6px', lineHeight: 1.5 }}>
-                  Siz hozir <strong>{switchCalculation.currentPlanName}</strong> tarifidasiz. Avvalgi tarifingizda qolgan <strong>{switchCalculation.currentRemainingHours} soat</strong> muddat (qiymati: <strong>{switchCalculation.residualValue.toLocaleString('uz-UZ')} so'm</strong>) avtomatik yangi tarifingizga hisoblanib o'tkaziladi!
+                <button className="payment-close-btn" onClick={() => setShowPaymentModal(false)}>✕</button>
+              </div>
+
+              {/* Telegram Bot Notification Box */}
+              <div className="bot-sent-notice-box">
+                <div className="notice-icon">🤖</div>
+                <div className="notice-text">
+                  To'lov rekvizitlari Telegram botingizga (<strong>@lanswitchbot</strong>) yuborildi!
+                  <div className="notice-sub">
+                    O'tkazma summasini o'zingiz belgilaysiz (minimum 15 000 so'm). To'lov chekini botga rasm shaklida yuboring.
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* CARD DETAILS BOX */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-              <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1.5px solid #3b82f6', borderRadius: '16px', padding: '18px', position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700 }}>{cardSettings?.bankName || 'Humo / Uzcard'}</span>
-                  <span style={{ fontSize: '11px', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>Rasmiy karta</span>
+              <button 
+                type="button"
+                onClick={handleOpenBot}
+                className="open-bot-action-btn"
+              >
+                <span>💬</span> Telegram Botga O'tish (@lanswitchbot)
+              </button>
+
+              {/* 1. Karta ma'lumotlari */}
+              <div className="compact-bank-card" style={{ marginTop: '14px' }}>
+                <div className="bank-meta">
+                  <span>{cardSettings?.bankName || 'Humo / Uzcard'}</span>
+                  <span className="holder">{cardSettings?.cardHolder || 'LANSWITCH ADMIN'}</span>
                 </div>
-                <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '2px', color: '#f8fafc', margin: '14px 0 6px 0', fontFamily: 'monospace' }}>
-                  {cardSettings?.cardNumber || '9860 0000 0000 0000'}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: '#cbd5e1', fontWeight: 700 }}>{cardSettings?.cardHolder || 'LANSWITCH ADMIN'}</span>
-                  <button 
-                    onClick={handleCopyCard}
-                    style={{ background: copiedCard ? '#10b981' : '#2563eb', border: 'none', color: '#fff', padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}
-                  >
-                    {copiedCard ? '✓ Nusxalandi!' : '📋 Nusxalash'}
+                <div className="bank-num-row">
+                  <span className="number">{cardSettings?.cardNumber || '9860 0000 0000 0000'}</span>
+                  <button type="button" className="copy-btn" onClick={handleCopyCard}>
+                    {copiedCard ? '✓ Nusxalandi' : '📋 Nusxalash'}
                   </button>
                 </div>
               </div>
 
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 800, marginBottom: '6px' }}>
-                  💡 Moslashuvchan to'lov:
-                </div>
-                <div style={{ fontSize: '12.5px', color: '#cbd5e1', lineHeight: 1.5 }}>
-                  {cardSettings?.instructions || "Xohlagancha pul o'tkazing, minimum 15,000 so'm. Tarifingizga mos ravishda muddat soat va minutlarigacha hisoblab qo'shiladi."}
-                </div>
-              </div>
-            </div>
+              {/* 2. Web orqali yuklash varianti */}
+              <div className="web-upload-toggle">
+                <span className="toggle-label">Yoki chekni to'g'ridan-to'g'ri shu yerda yuklang:</span>
 
-            {/* AMOUNT INPUT & LIVE CALCULATOR */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '18px', marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#e2e8f0', marginBottom: '8px' }}>
-                💰 O'tkazilgan summani kiriting (so'm):
-              </label>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <input
-                  type="number"
-                  value={paymentAmount}
-                  onChange={(e) => handleAmountChange(Number(e.target.value))}
-                  min={cardSettings?.minAmount || 15000}
-                  step={1000}
-                  placeholder="Masalan: 50000"
-                  style={{ flex: 1, minWidth: '180px', background: '#1e293b', border: '1.5px solid #475569', borderRadius: '10px', padding: '10px 14px', color: '#fff', fontSize: '16px', fontWeight: 800 }}
-                />
+                <div className="compact-form-group" style={{ marginTop: '8px' }}>
+                  <label className="form-label">To'langan summa (so'm, ixtiyoriy):</label>
+                  <input
+                    type="number"
+                    className="compact-number-input"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Chekdagi summa (ixtiyoriy, admin belgilaydi)"
+                    step={1000}
+                  />
+                  <div className="compact-pills-row">
+                    <button type="button" onClick={() => setPaymentAmount(15000)}>15 000</button>
+                    <button type="button" onClick={() => setPaymentAmount(getPlanPrice(selectedPlanForPayment))}>
+                      1 oylik ({getPlanPrice(selectedPlanForPayment).toLocaleString('uz-UZ')})
+                    </button>
+                    <button type="button" onClick={() => setPaymentAmount(getPlanPrice(selectedPlanForPayment) * 2)}>
+                      2 oylik
+                    </button>
+                    <button type="button" onClick={() => setPaymentAmount('')}>Tozalash</button>
+                  </div>
+                </div>
+
+                <div className="compact-form-group">
+                  <label className="form-label">To'lov cheki (screenshot):</label>
+                  <div className="file-upload-row">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="compact-file-input"
+                    />
+                    {receiptPreview && (
+                      <div className="receipt-thumb">
+                        <img src={receiptPreview} alt="Receipt preview" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  className="compact-submit-btn"
+                  onClick={handleSubmitReceipt}
+                  disabled={submittingPayment || !receiptFile}
+                >
+                  {submittingPayment ? "Yuborilmoqda..." : "🚀 Chekni tasdiqlash uchun yuborish"}
+                </button>
+
                 <button
                   type="button"
-                  onClick={() => handleAmountChange(15000)}
-                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                  className="compact-cancel-btn"
+                  onClick={() => setShowPaymentModal(false)}
+                  style={{
+                    marginTop: '8px',
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '10px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: '#94a3b8',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textAlign: 'center'
+                  }}
                 >
-                  Min: 15 000
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAmountChange(getPlanPrice(selectedPlanForPayment))}
-                  style={{ background: 'rgba(56, 189, 248, 0.2)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
-                >
-                  1 oylik narx ({getPlanPrice(selectedPlanForPayment).toLocaleString('uz-UZ')})
+                  Bekor qilish
                 </button>
               </div>
 
-              {/* LIVE RESULT BOX */}
-              {switchCalculation && (
-                <div style={{ marginTop: '14px', padding: '12px 14px', background: 'rgba(56, 189, 248, 0.1)', border: '1px dashed #38bdf8', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                  <div>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ushbu summa evaziga hisoblangan muddat:</span>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8' }}>
-                      ⏳ {switchCalculation.formattedDuration}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: '12px', color: '#cbd5e1' }}>
-                    1 oy = 30 kun (720 soat) me'yorida aniq soat/minutgacha
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* CRITICAL ACCURACY WARNING */}
-            <div style={{ background: 'rgba(220, 38, 38, 0.12)', border: '1.5px solid #ef4444', borderRadius: '14px', padding: '14px 18px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <span style={{ fontSize: '18px' }}>⚠️</span>
-                <div>
-                  <strong style={{ color: '#fca5a5', fontSize: '13.5px' }}>
-                    DIQQAT: Summani 1 so'migacha kvitansiyadagi (chek) bilan bir xil va to'liq kiriting!
-                  </strong>
-                  <p style={{ margin: '4px 0 0 0', color: '#fecaca', fontSize: '12.5px', lineHeight: 1.45 }}>
-                    Kiritilgan summa chekdagi haqiqiy summa bilan 100% mos kelishi shart. Agar kiritilgan summa chekdagidan farq qilsa, to'lovingiz soxta deb topilib rad etilishi yoki admin tomonidan qayta tekshiruvga yuborilishi mumkin!
-                  </p>
-                </div>
+              <div className="compact-disclaimer">
+                💡 Admin tasdiqlashi bilan pul balansingizga qo'shiladi va tarifingiz asosida real vaqtda sarflanib boradi.
               </div>
-            </div>
 
-            {/* RECEIPT SCREENSHOT UPLOAD */}
-            <div style={{ marginBottom: '22px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#e2e8f0', marginBottom: '8px' }}>
-                📸 To'lov cheki screenshotini yuklang:
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  style={{ background: '#1e293b', border: '1.5px dashed #64748b', borderRadius: '10px', padding: '10px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
-                />
-                {receiptPreview && (
-                  <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '10px', overflow: 'hidden', border: '2px solid #3b82f6' }}>
-                    <img src={receiptPreview} alt="Receipt preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                )}
-              </div>
             </div>
-
-            {/* SUBMIT BUTTON */}
-            <button
-              onClick={handleSubmitReceipt}
-              disabled={submittingPayment || !receiptFile}
-              style={{
-                width: '100%',
-                padding: '14px',
-                borderRadius: '12px',
-                border: 'none',
-                background: submittingPayment || !receiptFile ? '#475569' : 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                color: '#fff',
-                fontSize: '15px',
-                fontWeight: 900,
-                cursor: submittingPayment || !receiptFile ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
-                transition: 'all 0.2s'
-              }}
-            >
-              {submittingPayment ? "Yuklanmoqda va adminga yuborilmoqda..." : "🚀 Chekni tasdiqlash uchun yuborish"}
-            </button>
           </div>
-        ) : null}
+        )}
 
-        {/* PLANS GRID */}
+        {/* ======================================================== */}
+        {/* COMPACT PLANS GRID                                       */}
+        {/* ======================================================== */}
         {loading ? (
           <div className="subscription-loading">Tariflar yuklanmoqda...</div>
         ) : (
-          <div className="subscription-plans-grid">
+          <div className="compact-plans-grid">
             {plans.map((plan) => {
               const pId = getPlanId(plan);
               const isCurrent = mySubscription?.planId === pId;
               const isStudentPlan = plan.targetRole === 'Student';
-              const canTrial = plan.hasTrial && (isStudentPlan ? !usedStudentTrial : !usedTeacherTrial);
               const price = getPlanPrice(plan);
               const features = parseFeatures(plan);
 
               return (
                 <div
                   key={pId}
-                  className={`subscription-plan-card ${isCurrent ? 'active-plan' : ''} ${pId === 'teacher_standart' || pId === 'teacher_pro' ? 'featured-plan' : ''}`}
+                  className={`compact-plan-card ${isCurrent ? 'active-card' : ''}`}
                 >
                   {plan.badge && (
-                    <div className="plan-badge-top">
+                    <div className="compact-card-badge">
                       {plan.badge}
                     </div>
                   )}
 
-                  <div className="plan-header-block">
-                    <h3 className="plan-name">{plan.name}</h3>
-                    <div className="plan-target-role">
-                      {isStudentPlan ? '🎒 Talaba rejimi' : `👨‍🏫 O'qituvchi (${plan.maxGroups} tagacha guruh)`}
+                  <div className="compact-card-header">
+                    <h3 className="card-title">{plan.name}</h3>
+                    <div className="card-role">
+                      {isStudentPlan ? '🎒 Talaba rejimi' : `👨‍🏫 Ustoz (${plan.maxGroups} ta guruh)`}
                     </div>
-
-                    <div className="plan-price-wrap">
-                      <span className="plan-price-amount">{price.toLocaleString('uz-UZ')} so'm</span>
-                      <span className="plan-price-period">/ oy</span>
+                    <div className="card-price-row">
+                      <span className="card-price">{price.toLocaleString('uz-UZ')}</span>
+                      <span className="card-currency">so'm / oy</span>
                     </div>
-
-                    {plan.hasTrial && (
-                      <div className="plan-trial-note">
-                        🎁 {plan.trialDays || 14} kun bepul sinov muddati
-                      </div>
-                    )}
                   </div>
 
-                  <div className="plan-features-list">
-                    <div className="plan-features-label">Imkoniyatlar:</div>
-                    {features.map((feat, fIdx) => (
-                      <div key={fIdx} className="plan-feature-item">
-                        <span className="feature-check">✓</span>
-                        <span className="feature-text">{feat}</span>
-                      </div>
+                  <ul className="compact-features">
+                    {features.slice(0, 4).map((feat, fIdx) => (
+                      <li key={fIdx}>
+                        <span className="check">✓</span>
+                        <span>{feat}</span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
 
-                  <div className="plan-action-block" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {canTrial && (
+                  <div className="compact-card-actions">
+                    {/* Main 1-step action button */}
+                    {isCurrent ? (
+                      <button className="btn-current" disabled>
+                        ✓ Joriy faol tarif
+                      </button>
+                    ) : !mySubscription && liveBalance > 0 ? (
                       <button
-                        className="plan-btn plan-btn-trial"
-                        onClick={() => handleStartTrial(pId)}
-                        disabled={activatingPlanId === pId}
+                        className="btn-start"
+                        onClick={() => setConfirmSwitchPlan(plan)}
                       >
-                        {activatingPlanId === pId ? 'Faollashtirilmoqda...' : '🎁 14 kun bepul sinab ko\'rish'}
+                        🚀 Boshlash (~{getEstDays(plan)})
+                      </button>
+                    ) : mySubscription && liveBalance > 0 ? (
+                      <button
+                        className="btn-switch"
+                        onClick={() => setConfirmSwitchPlan(plan)}
+                      >
+                        🔄 O'tish (~{getEstDays(plan)})
+                      </button>
+                    ) : (
+                      <button
+                        className="btn-pay"
+                        onClick={() => openPayment(plan)}
+                      >
+                        💳 Tanlash & To'lov
                       </button>
                     )}
-
-                    <button
-                      className="plan-btn plan-btn-buy"
-                      onClick={() => openPaymentForPlan(plan)}
-                      style={{
-                        background: isCurrent 
-                          ? 'linear-gradient(135deg, #10b981, #059669)' 
-                          : 'linear-gradient(135deg, #3b82f6, #2563eb)'
-                      }}
-                    >
-                      {isCurrent ? "💳 Muddatni uzaytirish" : "💳 Kartaga to'lov qilish"}
-                    </button>
                   </div>
                 </div>
               );
@@ -543,11 +650,11 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
           </div>
         )}
 
-        <div className="subscription-footer-info">
-          <p>
-            ℹ️ <strong>Eslatma:</strong> 30 kunlik bazaviy narx asosida siz o'tkazgan summa qancha bo'lishidan qat'i nazar (minimum 15,000 so'm), vaqt soat va minutlarigacha aniq hisoblab beriladi. Agar boshqa tarifga o'tsangiz, avvalgi qolgan muddat yangi tarifingizga avtomatik konvertatsiya qilinadi.
-          </p>
+        {/* Footer */}
+        <div className="compact-footer-note">
+          💡 <strong>Qulaylik:</strong> Istalgan summada to'lov qiling — muddat soat va minutlarigacha adolatli hisoblab beriladi. Balansingiz real vaqtda sarflanib boradi va istalgan payt boshqa tarifga o'tishingiz mumkin.
         </div>
+
       </div>
     </div>,
     document.body

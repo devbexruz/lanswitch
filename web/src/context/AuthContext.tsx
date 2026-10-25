@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             if (data.accessToken) {
               localStorage.setItem('lanswitch_token', data.accessToken);
+              localStorage.setItem('token', data.accessToken);
             }
             return;
           }

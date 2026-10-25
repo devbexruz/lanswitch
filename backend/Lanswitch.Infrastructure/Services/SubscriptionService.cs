@@ -36,8 +36,8 @@ public class SubscriptionService : ISubscriptionService
             MonthlyPrice = 50000,
             Period = "1 oy",
             MaxGroups = 0,
-            HasTrial = true,
-            TrialDays = 14,
+            HasTrial = false,
+            TrialDays = 0,
             Badge = "Talabalar uchun",
             FeaturesJson = JsonSerializer.Serialize(new[]
             {
@@ -57,9 +57,9 @@ public class SubscriptionService : ISubscriptionService
             MonthlyPrice = 99000,
             Period = "1 oy",
             MaxGroups = 3,
-            HasTrial = true,
-            TrialDays = 14,
-            Badge = "1-Tarif (14 kun bepul)",
+            HasTrial = false,
+            TrialDays = 0,
+            Badge = "1-Tarif (3 ta guruh)",
             FeaturesJson = JsonSerializer.Serialize(new[]
             {
                 "3 tagacha guruhni to'liq boshqarish",
@@ -206,70 +206,102 @@ public class SubscriptionService : ISubscriptionService
         if (targetPlan == null)
             throw new ArgumentException("Tanlangan tarif topilmadi");
 
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
+
+        var now = DateTime.UtcNow;
+
         var activeSub = await _context.UserSubscriptions
-            .Where(s => s.UserId == userId && s.Status == "Active" && s.EndDate > DateTime.UtcNow)
-            .OrderByDescending(s => s.EndDate)
+            .Where(s => s.UserId == userId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
             .FirstOrDefaultAsync();
 
-        decimal residualValue = 0;
-        double remainingHours = 0;
+        bool isCurrentTrial = activeSub != null && activeSub.IsTrial;
+        decimal currentLiveBalance = user.Balance;
         string? currentPlanName = null;
+        string? trialNotice = null;
+        double remainingHours = 0;
+        int remainingDays = 0;
+        int remainingRemHours = 0;
 
         if (activeSub != null)
         {
             currentPlanName = activeSub.PlanName;
-            var remainingSeconds = Math.Max(0, (activeSub.EndDate - DateTime.UtcNow).TotalSeconds);
+            var remainingSeconds = Math.Max(0, (activeSub.EndDate - now).TotalSeconds);
             remainingHours = remainingSeconds / 3600.0;
+            remainingDays = (int)(remainingHours / 24);
+            remainingRemHours = (int)(remainingHours % 24);
 
-            var oldPlan = plans.FirstOrDefault(p => p.PlanId == activeSub.PlanId)
-                ?? DefaultPlans.FirstOrDefault(p => p.PlanId == activeSub.PlanId);
-
-            var oldMonthlyPrice = oldPlan?.MonthlyPrice ?? (activeSub.Price > 0 ? activeSub.Price : 50000);
-            
-            // 30 kun = 720 soat
-            var oldHourlyRate = oldMonthlyPrice / 720m;
-            residualValue = (decimal)remainingHours * oldHourlyRate;
+            var monthlyPrice = activeSub.Price > 0 ? activeSub.Price : 50000m;
+            var perSecRate = monthlyPrice / (30m * 24m * 3600m);
+            var elapsedSecs = Math.Max(0, (now - activeSub.StartDate).TotalSeconds);
+            var spentSoFar = Math.Round((decimal)elapsedSecs * perSecRate);
+            spentSoFar = Math.Min(user.Balance, spentSoFar);
+            currentLiveBalance = Math.Max(0, user.Balance - spentSoFar);
         }
 
-        var totalBudget = residualValue + additionalAmount;
-        var targetMonthlyPrice = targetPlan.MonthlyPrice > 0 ? targetPlan.MonthlyPrice : 50000;
-        var targetHourlyRate = targetMonthlyPrice / 720m;
+        var targetMonthlyPrice = targetPlan.MonthlyPrice > 0 ? targetPlan.MonthlyPrice : 50000m;
+        var targetPerSecRate = targetMonthlyPrice / (30m * 24m * 3600m);
 
-        decimal calculatedHours = totalBudget / targetHourlyRate;
-        int totalMinutes = (int)Math.Round(calculatedHours * 60m);
+        // 1. Avvalgi qoldiq hisobidan
+        decimal residualValue = currentLiveBalance;
+        double fromResSecs = residualValue > 0 ? (double)(residualValue / targetPerSecRate) : 0;
+        int fromResMins = (int)Math.Round(fromResSecs / 60.0);
+        int fromResDays = fromResMins / (24 * 60);
+        int fromResHours = (fromResMins % (24 * 60)) / 60;
+        int fromResMinRem = fromResMins % 60;
 
-        int days = totalMinutes / (24 * 60);
-        int remMins = totalMinutes % (24 * 60);
-        int hours = remMins / 60;
-        int mins = remMins % 60;
+        // 2. Yangi to'lov hisobidan
+        double fromPaySecs = additionalAmount > 0 ? (double)(additionalAmount / targetPerSecRate) : 0;
+        int fromPayMins = (int)Math.Round(fromPaySecs / 60.0);
+        int fromPayDays = fromPayMins / (24 * 60);
+        int fromPayHours = (fromPayMins % (24 * 60)) / 60;
+        int fromPayMinRem = fromPayMins % 60;
+
+        // 3. Jami muddat
+        double totalSecs = fromResSecs + fromPaySecs;
+        int totalMins = fromResMins + fromPayMins;
+        int totalDays = totalMins / (24 * 60);
+        int totalRemHours = (totalMins % (24 * 60)) / 60;
+        int totalRemMins = totalMins % 60;
+
+        bool isSwitchingTariff = activeSub != null && activeSub.PlanId != targetPlan.PlanId;
 
         return new
         {
             hasCurrentSubscription = activeSub != null,
+            isSwitchingTariff,
+            currentPlanId = activeSub?.PlanId,
             currentPlanName,
-            currentRemainingHours = Math.Round(remainingHours, 1),
+            isCurrentTrial,
+            trialNotice,
+            currentLiveBalance = Math.Round(currentLiveBalance, 0),
+            currentRemainingDays = remainingDays,
+            currentRemainingHours = remainingRemHours,
+            currentTotalRemainingHours = Math.Round(remainingHours, 1),
+            formattedRemainingCurrent = $"{remainingDays} kun {remainingRemHours} soat",
             residualValue = Math.Round(residualValue, 0),
+
             additionalAmount,
-            totalBudget = Math.Round(totalBudget, 0),
+            totalBudget = Math.Round(residualValue + additionalAmount, 0),
+
             targetPlanId = targetPlan.PlanId,
             targetPlanName = targetPlan.Name,
             targetMonthlyPrice,
-            calculatedDurationHours = Math.Round(calculatedHours, 2),
-            calculatedDays = days,
-            calculatedHours = hours,
-            calculatedMinutes = mins,
-            formattedDuration = $"{days} kun {hours} soat {mins} minut"
+
+            fromResidualDuration = $"{fromResDays} kun {fromResHours} soat {fromResMinRem} minut",
+            fromPaymentDuration = $"{fromPayDays} kun {fromPayHours} soat {fromPayMinRem} minut",
+            totalDuration = $"{totalDays} kun {totalRemHours} soat {totalRemMins} minut",
+
+            calculatedDays = totalDays,
+            calculatedHours = totalRemHours,
+            calculatedMinutes = totalRemMins,
+            formattedDuration = $"{totalDays} kun {totalRemHours} soat {totalRemMins} minut"
         };
     }
 
     public async Task<SubscriptionPaymentRequest> SubmitReceiptAsync(long userId, string planId, decimal amount, string receiptUrl)
     {
-        var cardSetting = await GetCardSettingsAsync();
-        if (amount < cardSetting.MinAmount)
-        {
-            throw new InvalidOperationException($"Minimal to'lov miqdori {cardSetting.MinAmount:N0} so'm!");
-        }
-
         var plans = await GetPlansAsync();
         var plan = plans.FirstOrDefault(p => p.PlanId == planId)
             ?? DefaultPlans.FirstOrDefault(p => p.PlanId == planId);
@@ -279,9 +311,10 @@ public class SubscriptionService : ISubscriptionService
         var user = await _context.Users.FindAsync(userId);
         if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
 
-        // Puliga yarasha vaqt hisoblash
+        // Puliga yarasha vaqt hisoblash (agar summa kiritilgan bo'lsa)
+        amount = Math.Max(0, amount);
         var hourlyRate = plan.MonthlyPrice / 720m;
-        var calculatedHours = amount / hourlyRate;
+        var calculatedHours = amount > 0 ? (amount / hourlyRate) : 0m;
         int totalMinutes = (int)Math.Round(calculatedHours * 60m);
 
         var request = new SubscriptionPaymentRequest
@@ -293,7 +326,8 @@ public class SubscriptionService : ISubscriptionService
             CalculatedDurationHours = calculatedHours,
             CalculatedDurationMinutes = totalMinutes,
             ReceiptImageUrl = receiptUrl,
-            Status = "Pending"
+            Status = "Pending",
+            VerificationToken = Guid.NewGuid().ToString("N")
         };
 
         _context.SubscriptionPaymentRequests.Add(request);
@@ -305,22 +339,50 @@ public class SubscriptionService : ISubscriptionService
         int hours = remMins / 60;
         int mins = remMins % 60;
 
+        var activeSub = await _context.UserSubscriptions
+            .Where(s => s.UserId == userId && s.Status == "Active" && s.EndDate > DateTime.UtcNow)
+            .OrderByDescending(s => s.EndDate)
+            .FirstOrDefaultAsync();
+
+        string switchNotice = "";
+        if (activeSub != null && activeSub.PlanId != plan.PlanId)
+        {
+            var remainingSecs = Math.Max(0, (activeSub.EndDate - DateTime.UtcNow).TotalSeconds);
+            var remH = Math.Round(remainingSecs / 3600.0, 1);
+            var oldPlan = plans.FirstOrDefault(p => p.PlanId == activeSub.PlanId)
+                ?? DefaultPlans.FirstOrDefault(p => p.PlanId == activeSub.PlanId);
+            var oldPrice = oldPlan?.MonthlyPrice ?? activeSub.Price;
+            var oldHourly = oldPrice / 720m;
+            var residualVal = (decimal)(remainingSecs / 3600.0) * oldHourly;
+
+            switchNotice = $"\n🔄 <b>Tarif almashtirish:</b> {activeSub.PlanName} ➡️ {plan.Name}\n" +
+                           $"⏱️ <b>Avvalgi qoldiq:</b> {remH} soat (~{residualVal:N0} so'm)\n" +
+                           $"<i>Tasdiqlash vaqtida qoldiq yangi tarifga avtomatik qo'shiladi!</i>\n";
+        }
+        else if (activeSub != null && activeSub.PlanId == plan.PlanId)
+        {
+            switchNotice = $"\n⏳ <b>Mavjud tarifni uzaytirish:</b> {plan.Name}\n";
+        }
+
+        var amountDisplay = amount > 0 ? $"<b>{amount:N0} so'm</b>" : "<i>Ko'rsatilmagan (Chekda)</i>";
+        var webAppVerifyUrl = $"https://lanswitch.developerlogic.uz/verify-receipt/{request.Id}?token={request.VerificationToken}";
+
         var messageText = $"🧾 <b>Yangi to'lov cheki yuborildi!</b> (№{request.Id})\n\n" +
                           $"👤 <b>Foydalanuvchi:</b> {user.FullName}\n" +
                           $"🆔 <b>Telegram ID:</b> <code>{user.TelegramId}</code>\n" +
                           $"📱 <b>Username:</b> @{user.Username ?? "mavjud emas"}\n\n" +
-                          $"📦 <b>Tarif:</b> {plan.Name}\n" +
-                          $"💰 <b>Kiritilgan summa:</b> <b>{amount:N0} so'm</b>\n" +
-                          $"⏳ <b>Hisoblangan vaqt:</b> {days} kun {hours} soat {mins} minut\n" +
-                          $"📅 <b>Vaqt:</b> {DateTime.UtcNow.AddHours(5):yyyy-MM-dd HH:mm}\n\n" +
-                          $"⚠️ <i>Iltimos, summani chekdagi bilan 1 so'migacha solishtiring!</i>";
+                          $"📦 <b>Tanlangan tarif:</b> {plan.Name}\n" +
+                          $"💰 <b>Summa:</b> {amountDisplay}\n" +
+                          (amount > 0 ? $"⏳ <b>Taxminiy vaqt:</b> {days} kun {hours} soat {mins} minut\n" : "") +
+                          switchNotice +
+                          $"\n📅 <b>Vaqt:</b> {DateTime.UtcNow.AddHours(5):yyyy-MM-dd HH:mm}\n\n" +
+                          $"👇 <i>Chekni tekshirish, summani kiritish/tasdiqlash yoki rad etish uchun quyidagi tugmani bosing:</i>";
 
         var keyboard = new InlineKeyboardMarkup(new[]
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("✅ Tasdiqlash", $"pay_approve:{request.Id}"),
-                InlineKeyboardButton.WithCallbackData("❌ Soxta / Bekor qilish", $"pay_reject:{request.Id}")
+                InlineKeyboardButton.WithWebApp("🔍 Chekni ko'rish & Tasdiqlash", new WebAppInfo { Url = webAppVerifyUrl })
             }
         });
 
@@ -381,7 +443,10 @@ public class SubscriptionService : ISubscriptionService
             .FirstOrDefaultAsync(r => r.Id == requestId);
 
         if (req == null) throw new ArgumentException("To'lov so'rovi topilmadi");
-        if (req.Status == "Approved") return req; // allaqachon tasdiqlangan
+        if (req.Status != "Pending")
+        {
+            throw new InvalidOperationException($"Ushbu to'lov so'rovi allaqachon ko'rib chiqilgan! (Holati: {req.Status}, Tasdiqlagan: {req.ProcessedBy})");
+        }
 
         var plans = await GetPlansAsync();
         var plan = plans.FirstOrDefault(p => p.PlanId == req.PlanId)
@@ -392,6 +457,11 @@ public class SubscriptionService : ISubscriptionService
         decimal finalAmount = correctedAmount.HasValue && correctedAmount.Value > 0 
             ? correctedAmount.Value 
             : req.Amount;
+
+        if (finalAmount <= 0)
+        {
+            throw new InvalidOperationException("Iltimos, chekdagi to'g'ri to'lov summasini kiriting!");
+        }
 
         req.ApprovedAmount = finalAmount;
         var hourlyRate = plan.MonthlyPrice / 720m;
@@ -405,92 +475,118 @@ public class SubscriptionService : ISubscriptionService
         req.ProcessedAt = DateTime.UtcNow;
         req.ProcessedBy = processedBy ?? "Admin";
 
-        // Foydalanuvchi obunasini yangilash
+        var user = req.User ?? await _context.Users.FindAsync(req.UserId);
+        if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
+
+        var now = DateTime.UtcNow;
+
+        // Foydalanuvchining faol obunasini aniqlash
         var activeSub = await _context.UserSubscriptions
-            .Where(s => s.UserId == req.UserId && s.Status == "Active")
-            .OrderByDescending(s => s.EndDate)
+            .Where(s => s.UserId == req.UserId && (s.Status == "Active" || s.IsActive))
+            .OrderByDescending(s => s.Id)
             .FirstOrDefaultAsync();
 
-        DateTime newStart = DateTime.UtcNow;
-        DateTime newEnd;
-        string? prevPlanId = null;
+        DateTime newEnd = now;
 
-        if (activeSub != null && activeSub.EndDate > DateTime.UtcNow)
+        if (activeSub != null && !activeSub.IsTrial)
         {
-            prevPlanId = activeSub.PlanId;
+            var monthlyPrice = activeSub.Price > 0 ? activeSub.Price : 50000m;
+            var perSecRate = monthlyPrice / (30m * 24m * 3600m);
 
-            // Agar ayni shu tarif davom ettirilayotgan bo'lsa
-            if (activeSub.PlanId == req.PlanId)
+            if (now >= activeSub.EndDate)
             {
-                newStart = activeSub.StartDate;
-                newEnd = activeSub.EndDate.AddMinutes(totalMinutes);
-                activeSub.EndDate = newEnd;
-                activeSub.LastActivatedAt = DateTime.UtcNow;
-                activeSub.TotalPaidAmount += finalAmount;
+                // Avvalgi muddat to'liq tugagan
+                activeSub.IsActive = false;
+                activeSub.Status = "Expired";
+                activeSub.FinishedDate = activeSub.EndDate;
+                user.Balance = finalAmount; // Faqat yangi to'ldirilgan summa
+
+                var newSeconds = (double)(user.Balance / perSecRate);
+                newEnd = now.AddSeconds(newSeconds);
+
+                activeSub = new UserSubscription
+                {
+                    UserId = user.Id,
+                    PlanId = activeSub.PlanId,
+                    PlanName = activeSub.PlanName,
+                    TargetRole = activeSub.TargetRole,
+                    MaxGroups = activeSub.MaxGroups,
+                    Price = monthlyPrice,
+                    IsTrial = false,
+                    StartDate = now,
+                    EndDate = newEnd,
+                    InitialBalance = user.Balance,
+                    DeductedAmount = 0,
+                    IsActive = true,
+                    Status = "Active",
+                    LastActivatedAt = now,
+                    TotalPaidAmount = finalAmount,
+                    Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm) va obuna davom ettirildi."
+                };
+                _context.UserSubscriptions.Add(activeSub);
             }
             else
             {
-                // Boshqa tarifga o'tish (pro-rata konvertatsiya)
-                var oldPlan = plans.FirstOrDefault(p => p.PlanId == activeSub.PlanId)
-                    ?? DefaultPlans.FirstOrDefault(p => p.PlanId == activeSub.PlanId);
-                var oldPrice = oldPlan?.MonthlyPrice ?? activeSub.Price;
-                var oldHourly = oldPrice / 720m;
-                var remainingSecs = (activeSub.EndDate - DateTime.UtcNow).TotalSeconds;
-                var residualVal = (decimal)(remainingSecs / 3600.0) * oldHourly;
+                // Hali muddati davom etmoqda -> StartDate dan now gacha sarflangan qismini yechamiz
+                var elapsedSecs = Math.Max(0, (now - activeSub.StartDate).TotalSeconds);
+                var spentSoFar = Math.Round((decimal)elapsedSecs * perSecRate);
+                spentSoFar = Math.Min(user.Balance, spentSoFar);
 
-                var totalCred = residualVal + finalAmount;
-                var combinedMinutes = (int)Math.Round((totalCred / hourlyRate) * 60m);
+                user.Balance = Math.Max(0, user.Balance - spentSoFar) + finalAmount;
 
-                // Eskisini yakunlaymiz
-                activeSub.Status = "Switched";
+                activeSub.DeductedAmount += spentSoFar;
+                activeSub.StartDate = now;
+                activeSub.InitialBalance = user.Balance;
 
-                // Yangi obuna
-                newEnd = DateTime.UtcNow.AddMinutes(combinedMinutes);
-                activeSub = new UserSubscription
-                {
-                    UserId = req.UserId,
-                    PlanId = plan.PlanId,
-                    PlanName = plan.Name,
-                    TargetRole = plan.TargetRole,
-                    MaxGroups = plan.MaxGroups,
-                    Price = plan.MonthlyPrice,
-                    IsTrial = false,
-                    StartDate = DateTime.UtcNow,
-                    EndDate = newEnd,
-                    Status = "Active",
-                    LastActivatedAt = DateTime.UtcNow,
-                    TotalPaidAmount = finalAmount,
-                    Notes = $"Tarif o'zgartirildi ({prevPlanId} -> {plan.PlanId})"
-                };
-                _context.UserSubscriptions.Add(activeSub);
+                var newSeconds = (double)(user.Balance / perSecRate);
+                newEnd = now.AddSeconds(newSeconds);
+                activeSub.EndDate = newEnd;
+                activeSub.LastActivatedAt = now;
+                activeSub.TotalPaidAmount += finalAmount;
+                activeSub.Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm). Yangi muddat: {newEnd:yyyy-MM-dd HH:mm} gacha.";
             }
         }
         else
         {
-            // Yangi obuna
-            newEnd = DateTime.UtcNow.AddMinutes(totalMinutes);
+            // Faol pullik obunasi yo'q (yoki sinov muddati edi)
+            if (activeSub != null && activeSub.IsTrial)
+            {
+                activeSub.IsActive = false;
+                activeSub.Status = "TrialEnded";
+                activeSub.FinishedDate = now;
+            }
+
+            user.Balance += finalAmount;
+
+            var targetPlan = plan;
+            var monthlyPrice = targetPlan.MonthlyPrice > 0 ? targetPlan.MonthlyPrice : 50000m;
+            var perSecRate = monthlyPrice / (30m * 24m * 3600m);
+            var newSeconds = (double)(user.Balance / perSecRate);
+            newEnd = now.AddSeconds(newSeconds);
+
             activeSub = new UserSubscription
             {
-                UserId = req.UserId,
-                PlanId = plan.PlanId,
-                PlanName = plan.Name,
-                TargetRole = plan.TargetRole,
-                MaxGroups = plan.MaxGroups,
-                Price = plan.MonthlyPrice,
+                UserId = user.Id,
+                PlanId = targetPlan.PlanId,
+                PlanName = targetPlan.Name,
+                TargetRole = targetPlan.TargetRole,
+                MaxGroups = targetPlan.MaxGroups,
+                Price = monthlyPrice,
                 IsTrial = false,
-                StartDate = newStart,
+                StartDate = now,
                 EndDate = newEnd,
+                InitialBalance = user.Balance,
+                DeductedAmount = 0,
+                IsActive = true,
                 Status = "Active",
-                LastActivatedAt = DateTime.UtcNow,
+                LastActivatedAt = now,
                 TotalPaidAmount = finalAmount,
-                Notes = "Karta orqali to'lov tasdiqlandi"
+                Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm) va {targetPlan.Name} tarifi faollashtirildi."
             };
             _context.UserSubscriptions.Add(activeSub);
         }
 
-        // Foydalanuvchi Teacher tarifini olsa va roli Student bo'lsa
-        var user = req.User ?? await _context.Users.FindAsync(req.UserId);
-        if (user != null && plan.TargetRole == "Teacher" && user.Role == "Student")
+        if (plan.TargetRole == "Teacher" && user.Role == "Student")
         {
             user.Role = "Teacher";
         }
@@ -499,16 +595,16 @@ public class SubscriptionService : ISubscriptionService
         var log = new SubscriptionLog
         {
             UserId = req.UserId,
-            PlanId = plan.PlanId,
-            PlanName = plan.Name,
-            ActionType = prevPlanId != null && prevPlanId != plan.PlanId ? "TariffSwitched" : "CardPaymentApproved",
+            PlanId = activeSub.PlanId,
+            PlanName = activeSub.PlanName,
+            ActionType = "CardPaymentApproved",
             AmountPaid = finalAmount,
-            DurationHours = calculatedHours,
-            PeriodStart = newStart,
+            DurationHours = (decimal)((newEnd - now).TotalHours),
+            PeriodStart = now,
             PeriodEnd = newEnd,
-            PreviousPlanId = prevPlanId,
+            PreviousPlanId = null,
             PaymentRequestId = req.Id,
-            Notes = $"Tasdiqlovchi: {req.ProcessedBy}. Summa: {finalAmount:N0} so'm. Izoh: {adminNotes}"
+            Notes = $"To'lov tasdiqlandi: {finalAmount:N0} so'm. Balans: {user.Balance:N0} so'm. Tasdiqlovchi: {req.ProcessedBy}."
         };
         _context.SubscriptionLogs.Add(log);
 
@@ -517,15 +613,18 @@ public class SubscriptionService : ISubscriptionService
         // 1. Foydalanuvchiga Telegram bot orqali xabar
         if (user != null && long.TryParse(user.TelegramId, out var userChatId))
         {
-            int d = totalMinutes / (24 * 60);
-            int rM = totalMinutes % (24 * 60);
+            var totalDurationSpan = newEnd - DateTime.UtcNow;
+            int totalMinsAll = (int)Math.Round(totalDurationSpan.TotalMinutes);
+            int d = totalMinsAll / (24 * 60);
+            int rM = totalMinsAll % (24 * 60);
             int h = rM / 60;
             int m = rM % 60;
 
             var userMsg = $"🎉 <b>To'lovingiz muvaffaqiyatli tasdiqlandi!</b>\n\n" +
-                          $"📦 <b>Tarif:</b> {plan.Name}\n" +
-                          $"💰 <b>Tasdiqlangan summa:</b> {finalAmount:N0} so'm\n" +
-                          $"⏳ <b>Qo'shilgan muddat:</b> {d} kun {h} soat {m} minut\n" +
+                          $"💰 <b>Kiritilgan summa:</b> {finalAmount:N0} so'm\n" +
+                          $"💳 <b>Yangi hisob balansingiz:</b> <b>{user.Balance:N0} so'm</b>\n" +
+                          $"📦 <b>Faol tarif:</b> {activeSub.PlanName}\n" +
+                          $"⏳ <b>Hisoblangan umumiy muddat:</b> {d} kun {h} soat {m} minut\n" +
                           $"📅 <b>Amal qilish muddati:</b> <b>{newEnd.AddHours(5):yyyy-MM-dd HH:mm}</b> gacha\n\n" +
                           $"Lanswitch xizmatlaridan maroqli foydalaning! 🚀";
 
@@ -575,10 +674,18 @@ public class SubscriptionService : ISubscriptionService
             .FirstOrDefaultAsync(r => r.Id == requestId);
 
         if (req == null) throw new ArgumentException("To'lov so'rovi topilmadi");
-        if (req.Status == "Rejected") return req;
+        if (req.Status != "Pending")
+        {
+            throw new InvalidOperationException($"Ushbu to'lov so'rovi allaqachon ko'rib chiqilgan! (Holati: {req.Status}, Bajaruvchi: {req.ProcessedBy})");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new InvalidOperationException("Iltimos, rad etish sababini ko'rsating!");
+        }
 
         req.Status = "Rejected";
-        req.AdminNotes = reason ?? "Soxta chek yoki to'lov tushmagan";
+        req.AdminNotes = reason;
         req.ProcessedAt = DateTime.UtcNow;
         req.ProcessedBy = processedBy ?? "Admin";
 
@@ -589,9 +696,8 @@ public class SubscriptionService : ISubscriptionService
         {
             var userMsg = $"❌ <b>Afsuski, to'lov chekingiz tasdiqlanmadi.</b>\n\n" +
                           $"📦 <b>Tarif:</b> {req.PlanName}\n" +
-                          $"💰 <b>Summa:</b> {req.Amount:N0} so'm\n" +
-                          $"❗ <b>Sabab:</b> {req.AdminNotes}\n\n" +
-                          $"Agar xatolik yuz bergan deb hisoblasangiz, iltimos admin bilan bog'laning.";
+                          $"❗ <b>Rad etish sababi:</b> {req.AdminNotes}\n\n" +
+                          $"<i>Iltimos, to'lov chekini qaytadan to'g'ri yuboring yoki savollaringiz bo'lsa admin bilan bog'laning.</i>";
 
             try
             {
@@ -649,10 +755,15 @@ public class SubscriptionService : ISubscriptionService
         DateTime start = DateTime.UtcNow;
         DateTime end;
 
+        var grantEquivalentValue = Math.Round((plan.MonthlyPrice / 30m) * (durationDays > 0 ? durationDays : 30), 0);
+        user.Balance = grantEquivalentValue;
+
         if (activeSub != null && activeSub.EndDate > DateTime.UtcNow && activeSub.PlanId == plan.PlanId)
         {
             end = activeSub.EndDate.AddDays(durationDays > 0 ? durationDays : 30);
             activeSub.EndDate = end;
+            activeSub.InitialBalance += grantEquivalentValue;
+            activeSub.IsActive = true;
             activeSub.LastActivatedAt = DateTime.UtcNow;
         }
         else
@@ -660,6 +771,8 @@ public class SubscriptionService : ISubscriptionService
             if (activeSub != null && activeSub.EndDate > DateTime.UtcNow)
             {
                 activeSub.Status = "Switched";
+                activeSub.IsActive = false;
+                activeSub.FinishedDate = DateTime.UtcNow;
             }
 
             end = DateTime.UtcNow.AddDays(durationDays > 0 ? durationDays : 30);
@@ -674,6 +787,8 @@ public class SubscriptionService : ISubscriptionService
                 IsTrial = false,
                 StartDate = start,
                 EndDate = end,
+                InitialBalance = grantEquivalentValue,
+                IsActive = true,
                 Status = "Active",
                 LastActivatedAt = DateTime.UtcNow,
                 Notes = notes ?? "Admin tomonidan to'g'ridan-to'g'ri berildi"
@@ -780,5 +895,241 @@ public class SubscriptionService : ISubscriptionService
             planStats,
             recentLogs = logs
         };
+    }
+
+    public async Task<object> GetUserBalanceAndSubscriptionAsync(long userId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
+
+        var now = DateTime.UtcNow;
+
+        var subs = await _context.UserSubscriptions
+            .Where(s => s.UserId == userId)
+            .OrderByDescending(s => s.Id)
+            .ToListAsync();
+
+        var activeSub = subs.FirstOrDefault(s => (s.Status == "Active" || s.IsActive) && s.EndDate >= now);
+
+        // Muddati o'tib ketgan faol obunani aniqlash va balansni 0 qilish
+        var potentiallyExpired = subs.FirstOrDefault(s => (s.Status == "Active" || s.IsActive) && s.EndDate < now);
+        if (potentiallyExpired != null)
+        {
+            potentiallyExpired.IsActive = false;
+            potentiallyExpired.Status = "Expired";
+            potentiallyExpired.FinishedDate = potentiallyExpired.EndDate;
+            potentiallyExpired.DeductedAmount += potentiallyExpired.InitialBalance > 0 ? potentiallyExpired.InitialBalance : user.Balance;
+            user.Balance = 0;
+            await _context.SaveChangesAsync();
+        }
+
+        var usedStudentTrial = subs.Any(s => s.TargetRole == "Student" && s.IsTrial);
+        var usedTeacherTrial = subs.Any(s => s.TargetRole == "Teacher" && s.IsTrial);
+
+        decimal currentLiveBalance = user.Balance;
+        double remainingSeconds = 0;
+        decimal hourlyRate = 0;
+        decimal perSecondRate = 0;
+
+        if (activeSub != null)
+        {
+            var monthlyPrice = activeSub.Price > 0 ? activeSub.Price : 50000m;
+            hourlyRate = Math.Round(monthlyPrice / 720m, 2);
+            perSecondRate = monthlyPrice / (30m * 24m * 3600m);
+
+            var elapsedSecs = Math.Max(0, (now - activeSub.StartDate).TotalSeconds);
+            var spentSoFar = Math.Round((decimal)elapsedSecs * perSecondRate);
+            spentSoFar = Math.Min(user.Balance, spentSoFar);
+
+            currentLiveBalance = Math.Max(0, user.Balance - spentSoFar);
+            remainingSeconds = Math.Max(0, (activeSub.EndDate - now).TotalSeconds);
+        }
+
+        int daysLeft = (int)(remainingSeconds / 86400);
+        int hoursLeft = (int)((remainingSeconds % 86400) / 3600);
+        int minsLeft = (int)((remainingSeconds % 3600) / 60);
+        int secsLeft = (int)(remainingSeconds % 60);
+
+        return new
+        {
+            user = new
+            {
+                id = user.Id,
+                fullName = user.FullName,
+                username = user.Username,
+                role = user.Role,
+                balance = user.Balance,
+                liveBalance = currentLiveBalance
+            },
+            hasActiveSubscription = activeSub != null,
+            subscription = activeSub == null ? null : new
+            {
+                id = activeSub.Id,
+                planId = activeSub.PlanId,
+                planName = activeSub.PlanName,
+                targetRole = activeSub.TargetRole,
+                maxGroups = activeSub.MaxGroups,
+                price = activeSub.Price,
+                hourlyRate,
+                perSecondRate,
+                isTrial = activeSub.IsTrial,
+                isActive = activeSub.IsActive,
+                status = activeSub.Status,
+                startDate = activeSub.StartDate,
+                endDate = activeSub.EndDate,
+                calculatedEndDate = activeSub.EndDate,
+                initialBalance = activeSub.InitialBalance,
+                currentLiveBalance,
+                remainingSeconds = Math.Round(remainingSeconds, 0),
+                formattedRemainingTime = $"{daysLeft} kun {hoursLeft} soat {minsLeft} minut {secsLeft} sekund",
+                daysLeft,
+                hoursLeft,
+                minsLeft,
+                secsLeft,
+                lastActivatedAt = activeSub.LastActivatedAt,
+                notes = activeSub.Notes
+            },
+            usedStudentTrial,
+            usedTeacherTrial
+        };
+    }
+
+    public async Task<UserSubscription> SwitchPlanAsync(long userId, string targetPlanId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
+
+        var plans = await GetPlansAsync();
+        var targetPlan = plans.FirstOrDefault(p => p.PlanId == targetPlanId)
+            ?? DefaultPlans.FirstOrDefault(p => p.PlanId == targetPlanId);
+        if (targetPlan == null) throw new ArgumentException("Tanlangan tarif topilmadi");
+
+        var now = DateTime.UtcNow;
+
+        // 1. Qaraladi barcha active=True obyektlar
+        var activeSubs = await _context.UserSubscriptions
+            .Where(s => s.UserId == userId && (s.Status == "Active" || s.IsActive))
+            .ToListAsync();
+
+        foreach (var sub in activeSubs)
+        {
+            var oldMonthlyPrice = sub.Price > 0 ? sub.Price : 50000m;
+            var oldPerSecRate = oldMonthlyPrice / (30m * 24m * 3600m);
+
+            DateTime finishedDate;
+            decimal spentAmount;
+
+            // agar calculated active date dan o'tib ketilgan bo'lsa finished_date sifatida calculated olinadi
+            if (now >= sub.EndDate)
+            {
+                finishedDate = sub.EndDate;
+                spentAmount = sub.InitialBalance > 0 ? sub.InitialBalance : user.Balance;
+                user.Balance = 0; // to'liq tugagan
+            }
+            else
+            {
+                finishedDate = now;
+                var elapsedSecs = Math.Max(0, (now - sub.StartDate).TotalSeconds);
+                spentAmount = Math.Round((decimal)elapsedSecs * oldPerSecRate);
+                spentAmount = Math.Min(user.Balance, spentAmount);
+                user.Balance = Math.Max(0, user.Balance - spentAmount);
+            }
+
+            sub.FinishedDate = finishedDate;
+            sub.DeductedAmount += spentAmount;
+            sub.IsActive = false;
+            sub.Status = now >= sub.EndDate ? "Expired" : "Switched";
+            sub.Notes = $"Tarif almashtirildi. Sarflangan: {spentAmount:N0} so'm. Yakunlangan: {finishedDate:yyyy-MM-dd HH:mm:ss}";
+        }
+
+        // 2. Yangi tarifga o'tkazilganda yana bitta object yaratiladi
+        if (user.Balance <= 0)
+        {
+            throw new InvalidOperationException("Balansingizda yetarli mablag' mavjud emas (0 so'm). Iltimos, yangi tarifni yoqish uchun avval hisobingizni to'ldiring!");
+        }
+
+        var targetMonthlyPrice = targetPlan.MonthlyPrice > 0 ? targetPlan.MonthlyPrice : 50000m;
+        var targetPerSecRate = targetMonthlyPrice / (30m * 24m * 3600m);
+        var remainingSeconds = (double)(user.Balance / targetPerSecRate);
+        var calculatedEndDate = now.AddSeconds(remainingSeconds);
+
+        var newSub = new UserSubscription
+        {
+            UserId = user.Id,
+            PlanId = targetPlan.PlanId,
+            PlanName = targetPlan.Name,
+            TargetRole = targetPlan.TargetRole,
+            MaxGroups = targetPlan.MaxGroups,
+            Price = targetMonthlyPrice,
+            IsTrial = false,
+            StartDate = now,
+            EndDate = calculatedEndDate,
+            InitialBalance = user.Balance,
+            DeductedAmount = 0,
+            IsActive = true,
+            Status = "Active",
+            LastActivatedAt = now,
+            Notes = $"Yangi tarifga o'tildi. Balans: {user.Balance:N0} so'm. Hisoblangan muddat: {calculatedEndDate:yyyy-MM-dd HH:mm} gacha."
+        };
+
+        if (targetPlan.TargetRole == "Teacher" && user.Role == "Student")
+        {
+            user.Role = "Teacher";
+        }
+
+        _context.UserSubscriptions.Add(newSub);
+
+        var log = new SubscriptionLog
+        {
+            UserId = user.Id,
+            PlanId = targetPlan.PlanId,
+            PlanName = targetPlan.Name,
+            ActionType = "TariffSwitched",
+            AmountPaid = 0,
+            DurationHours = (decimal)(remainingSeconds / 3600.0),
+            PeriodStart = now,
+            PeriodEnd = calculatedEndDate,
+            Notes = $"Tarif almashtirildi -> {targetPlan.Name}. Balans: {user.Balance:N0} so'm ({Math.Round(remainingSeconds / 3600.0, 1)} soat)."
+        };
+        _context.SubscriptionLogs.Add(log);
+
+        await _context.SaveChangesAsync();
+        return newSub;
+    }
+
+    public async Task<bool> SendTopUpInstructionsToBotAsync(long userId, string? planId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null || !long.TryParse(user.TelegramId, out var userChatId))
+        {
+            return false;
+        }
+
+        var cardSetting = await GetCardSettingsAsync();
+        var plans = await GetPlansAsync();
+        var selectedPlan = plans.FirstOrDefault(p => p.PlanId == planId);
+        string planNotice = selectedPlan != null ? $"\n📦 <b>Tanlangan tarif:</b> {selectedPlan.Name} ({selectedPlan.MonthlyPrice:N0} so'm/oy)" : "";
+
+        var text = $"💳 <b>Lanswitch Hisob Balansini To'ldirish</b>\n{planNotice}\n\n" +
+                   $"Quyidagi rasmiy kartaga to'lov o'tkazing:\n" +
+                   $"🏦 <b>Bank:</b> {cardSetting.BankName}\n" +
+                   $"💳 <b>Karta:</b> <code>{cardSetting.CardNumber}</code>\n" +
+                   $"👤 <b>Egasi:</b> {cardSetting.CardHolder}\n\n" +
+                   $"💰 <b>To'lov summasi:</b>\n" +
+                   $"Qancha pul o'tkazishni o'zingiz belgilaysiz (minimum {cardSetting.MinAmount:N0} so'm). Tarif rejangizga mos ravishda muddat sekundlarigacha hisoblab qo'shiladi.\n\n" +
+                   $"📸 <b>Keyingi qadam:</b>\n" +
+                   $"To'lovni amalga oshirgach, to'lov cheki (kvitansiya yoki screenshot)ni ushbu botga rasm sifatida yuboring!\n\n" +
+                   $"⏳ Admin tasdiqlashi bilan to'lov balansingizga qo'shiladi va WebApp'da real vaqtda sarflanib boradi.";
+
+        try
+        {
+            await _botClient.SendMessage(userChatId, text, parseMode: ParseMode.Html);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending topup instructions to user {userId}: {ex.Message}");
+            return false;
+        }
     }
 }

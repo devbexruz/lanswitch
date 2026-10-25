@@ -72,41 +72,39 @@ public class SubscriptionController : ControllerBase
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var subs = await _context.UserSubscriptions
-            .Where(s => s.UserId == userId.Value)
-            .OrderByDescending(s => s.EndDate)
-            .ToListAsync();
-
-        var activeSub = subs.FirstOrDefault(s => s.Status == "Active" && s.EndDate >= DateTime.UtcNow);
-        var usedStudentTrial = subs.Any(s => s.TargetRole == "Student" && s.IsTrial);
-        var usedTeacherTrial = subs.Any(s => s.TargetRole == "Teacher" && s.IsTrial);
-
-        var daysLeft = activeSub != null ? (int)Math.Max(0, Math.Ceiling((activeSub.EndDate - DateTime.UtcNow).TotalDays)) : 0;
-        var hoursLeft = activeSub != null ? Math.Max(0, (activeSub.EndDate - DateTime.UtcNow).TotalHours) : 0;
-
-        return Ok(new
+        try
         {
-            hasActiveSubscription = activeSub != null,
-            subscription = activeSub == null ? null : new
+            var res = await _subscriptionService.GetUserBalanceAndSubscriptionAsync(userId.Value);
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    public record SwitchPlanRequest(string TargetPlanId);
+
+    [Authorize]
+    [HttpPost("switch-plan")]
+    public async Task<IActionResult> SwitchPlan([FromBody] SwitchPlanRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        try
+        {
+            var newSub = await _subscriptionService.SwitchPlanAsync(userId.Value, request.TargetPlanId);
+            return Ok(new
             {
-                activeSub.Id,
-                activeSub.PlanId,
-                activeSub.PlanName,
-                activeSub.TargetRole,
-                activeSub.MaxGroups,
-                activeSub.Price,
-                activeSub.IsTrial,
-                activeSub.StartDate,
-                activeSub.EndDate,
-                activeSub.Status,
-                activeSub.LastActivatedAt,
-                activeSub.TotalPaidAmount,
-                daysLeft,
-                hoursLeft = Math.Round(hoursLeft, 1)
-            },
-            usedStudentTrial,
-            usedTeacherTrial
-        });
+                message = $"{newSub.PlanName} tarifiga muvaffaqiyatli o'tildi!",
+                subscription = newSub
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     public record CalculateSwitchRequest(string TargetPlanId, decimal AdditionalAmount = 0);
@@ -254,6 +252,25 @@ public class SubscriptionController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    public record RequestTopUpRequest(string? PlanId);
+
+    [Authorize]
+    [HttpPost("request-topup")]
+    public async Task<IActionResult> RequestTopUp([FromBody] RequestTopUpRequest? request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var sent = await _subscriptionService.SendTopUpInstructionsToBotAsync(userId.Value, request?.PlanId);
+        return Ok(new
+        {
+            sentToBot = sent,
+            message = sent
+                ? "Telegram botingizga to'lov ma'lumotlari yuborildi! Bot orqali to'lov qiling va chekni yuboring."
+                : "To'lov ma'lumotlarini qabul qilish uchun avval Telegram botimizga /start bosing."
+        });
     }
 
     // ==================== ADMIN ENDPOINTS ====================
@@ -407,6 +424,176 @@ public class SubscriptionController : ControllerBase
             {
                 message = $"Obuna {dto.DurationDays} kunga muvaffaqiyatli faollashtirildi!",
                 subscription = sub
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // ==================== WEB APP VERIFY ENDPOINTS ====================
+
+    [AllowAnonymous]
+    [HttpGet("receipt-verify/{id}")]
+    public async Task<IActionResult> GetReceiptVerifyDetails(long id, [FromQuery] string? token)
+    {
+        var req = await _context.SubscriptionPaymentRequests
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (req == null) return NotFound(new { message = "To'lov cheki so'rovi topilmadi" });
+
+        // Check authentication: token OR admin session
+        bool isAuthorized = false;
+        if (!string.IsNullOrEmpty(token) && req.VerificationToken == token)
+        {
+            isAuthorized = true;
+        }
+        else
+        {
+            var userId = GetCurrentUserId();
+            if (userId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(userId.Value);
+                if (user != null && (user.IsAdmin || IsUserAdmin()))
+                {
+                    isAuthorized = true;
+                }
+            }
+        }
+
+        if (!isAuthorized)
+        {
+            return Unauthorized(new { message = "Ushbu chekni ko'rish uchun ruxsat berilmagan yoki havola muddati tugagan" });
+        }
+
+        var plans = await _subscriptionService.GetPlansAsync();
+        var plan = plans.FirstOrDefault(p => p.PlanId == req.PlanId);
+
+        return Ok(new
+        {
+            id = req.Id,
+            userId = req.UserId,
+            userFullName = req.User != null ? req.User.FullName : "Noma'lum",
+            userTelegramId = req.User != null ? req.User.TelegramId : "",
+            userUsername = req.User != null ? req.User.Username : "",
+            planId = req.PlanId,
+            planName = req.PlanName,
+            amount = req.Amount,
+            approvedAmount = req.ApprovedAmount,
+            calculatedDurationHours = req.CalculatedDurationHours,
+            calculatedDurationMinutes = req.CalculatedDurationMinutes,
+            receiptImageUrl = req.ReceiptImageUrl,
+            status = req.Status, // "Pending", "Approved", "Rejected"
+            adminNotes = req.AdminNotes,
+            processedAt = req.ProcessedAt,
+            processedBy = req.ProcessedBy,
+            createdAt = req.CreatedAt,
+            monthlyPrice = plan?.MonthlyPrice ?? 50000m,
+            token = req.VerificationToken
+        });
+    }
+
+    public record WebAppApproveDto(decimal Amount, string? AdminNotes, string? ProcessedBy);
+
+    [AllowAnonymous]
+    [HttpPost("receipt-verify/{id}/approve")]
+    public async Task<IActionResult> ApproveReceiptViaWebApp(long id, [FromQuery] string? token, [FromBody] WebAppApproveDto dto)
+    {
+        var req = await _context.SubscriptionPaymentRequests.FindAsync(id);
+        if (req == null) return NotFound(new { message = "To'lov so'rovi topilmadi" });
+
+        string adminName = dto.ProcessedBy ?? "Admin";
+        bool isAuthorized = false;
+        if (!string.IsNullOrEmpty(token) && req.VerificationToken == token)
+        {
+            isAuthorized = true;
+        }
+        else
+        {
+            var userId = GetCurrentUserId();
+            if (userId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(userId.Value);
+                if (user != null && (user.IsAdmin || IsUserAdmin()))
+                {
+                    isAuthorized = true;
+                    adminName = user.FullName;
+                }
+            }
+        }
+
+        if (!isAuthorized)
+        {
+            return Unauthorized(new { message = "Ushbu amalni bajarish uchun ruxsat berilmagan" });
+        }
+
+        try
+        {
+            var updated = await _subscriptionService.ApprovePaymentRequestAsync(
+                id,
+                dto.Amount,
+                dto.AdminNotes,
+                adminName);
+
+            return Ok(new
+            {
+                message = "To'lov muvaffaqiyatli tasdiqlandi va foydalanuvchi balansiga qo'shildi!",
+                request = updated
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    public record WebAppRejectDto(string Reason, string? ProcessedBy);
+
+    [AllowAnonymous]
+    [HttpPost("receipt-verify/{id}/reject")]
+    public async Task<IActionResult> RejectReceiptViaWebApp(long id, [FromQuery] string? token, [FromBody] WebAppRejectDto dto)
+    {
+        var req = await _context.SubscriptionPaymentRequests.FindAsync(id);
+        if (req == null) return NotFound(new { message = "To'lov so'rovi topilmadi" });
+
+        string adminName = dto.ProcessedBy ?? "Admin";
+        bool isAuthorized = false;
+        if (!string.IsNullOrEmpty(token) && req.VerificationToken == token)
+        {
+            isAuthorized = true;
+        }
+        else
+        {
+            var userId = GetCurrentUserId();
+            if (userId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(userId.Value);
+                if (user != null && (user.IsAdmin || IsUserAdmin()))
+                {
+                    isAuthorized = true;
+                    adminName = user.FullName;
+                }
+            }
+        }
+
+        if (!isAuthorized)
+        {
+            return Unauthorized(new { message = "Ushbu amalni bajarish uchun ruxsat berilmagan" });
+        }
+
+        try
+        {
+            var updated = await _subscriptionService.RejectPaymentRequestAsync(
+                id,
+                dto.Reason,
+                adminName);
+
+            return Ok(new
+            {
+                message = "To'lov muvaffaqiyatli rad etildi va foydalanuvchiga xabar yuborildi.",
+                request = updated
             });
         }
         catch (Exception ex)

@@ -72,7 +72,9 @@ public class TelegramBotAppService : ITelegramBotAppService
                 TelegramId = telegramId,
                 FullName = string.IsNullOrEmpty(fullName) ? "Foydalanuvchi" : fullName,
                 NativeLanguageId = 1,
-                IsAdmin = false
+                IsAdmin = false,
+                Balance = 0m,
+                HasReceivedInitialBonus = false
             };
             await _userRepository.AddAsync(user);
         }
@@ -175,6 +177,75 @@ public class TelegramBotAppService : ITelegramBotAppService
                     $"<i>Topshiriqni o'qituvchiga tekshirish uchun yuklaysizmi?</i>",
                     parseMode: ParseMode.Html,
                     replyMarkup: confirmKeyboard);
+                return;
+            }
+        }
+
+        // Foydalanuvchi to'lov cheki screenshotini botga yuborganda (Private chat)
+        if (message.Photo != null && message.Photo.Length > 0 && message.Chat.Type == ChatType.Private)
+        {
+            var largest = message.Photo.OrderByDescending(p => p.FileSize).First();
+
+            decimal amount = 0m;
+            if (!string.IsNullOrWhiteSpace(message.Caption))
+            {
+                var digits = new string(message.Caption.Where(char.IsDigit).ToArray());
+                if (decimal.TryParse(digits, out var parsed) && parsed >= 1000)
+                {
+                    amount = parsed;
+                }
+            }
+
+            try
+            {
+                var file = await _botClient.GetFile(largest.FileId);
+                var botToken = _configuration["BotConfiguration:BotToken"];
+                var downloadUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
+
+                var receiptsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "receipts");
+                if (!Directory.Exists(receiptsDir)) Directory.CreateDirectory(receiptsDir);
+
+                var ext = Path.GetExtension(file.FilePath);
+                if (string.IsNullOrEmpty(ext)) ext = ".jpg";
+                var fileName = $"receipt_bot_{user.Id}_{DateTime.UtcNow.Ticks}{ext}";
+                var localPath = Path.Combine(receiptsDir, fileName);
+
+                using (var httpClient = new System.Net.Http.HttpClient())
+                {
+                    var bytes = await httpClient.GetByteArrayAsync(downloadUrl);
+                    await File.WriteAllBytesAsync(localPath, bytes);
+                }
+
+                var receiptUrl = $"/uploads/receipts/{fileName}";
+
+                using var scope = _scopeFactory.CreateScope();
+                var subService = scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var activeSub = await db.UserSubscriptions
+                    .Where(s => s.UserId == user.Id && (s.Status == "Active" || s.IsActive))
+                    .OrderByDescending(s => s.Id)
+                    .FirstOrDefaultAsync();
+
+                var planId = activeSub?.PlanId ?? "student_monthly";
+
+                var req = await subService.SubmitReceiptAsync(user.Id, planId, amount, receiptUrl);
+
+                var amountText = amount > 0 
+                    ? $"💰 <b>Ko'rsatilgan summa:</b> {amount:N0} so'm\n\n" 
+                    : "💰 <b>Summa:</b> Chek asosida admin tomonidan belgilanadi\n\n";
+
+                await _botClient.SendMessage(chatId,
+                    $"✅ <b>To'lov chekingiz qabul qilindi!</b>\n\n" +
+                    $"📸 Chek adminga tekshirish uchun yuborildi.\n" +
+                    amountText +
+                    $"⏳ <i>Admin chekni ko'rib tasdiqlashi bilan hisob balansingiz to'ldiriladi va WebApp'da real vaqtda sarflanib boradi!</i>",
+                    parseMode: ParseMode.Html);
+                return;
+            }
+            catch (Exception ex)
+            {
+                await _botClient.SendMessage(chatId, $"❌ To'lov chekini qabul qilishda xatolik yuz berdi: {ex.Message}");
                 return;
             }
         }

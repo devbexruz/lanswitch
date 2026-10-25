@@ -19,5 +19,8 @@ public interface ISubscriptionService
     Task<SubscriptionPaymentRequest> RejectPaymentRequestAsync(long requestId, string? reason, string? processedBy);
     
     Task<UserSubscription> GrantSubscriptionAsync(long userId, string planId, int durationDays, string? notes, string? processedBy);
+    Task<UserSubscription> SwitchPlanAsync(long userId, string targetPlanId);
+    Task<object> GetUserBalanceAndSubscriptionAsync(long userId);
     Task<object> GetLogsAndStatsAsync();
+    Task<bool> SendTopUpInstructionsToBotAsync(long userId, string? planId);
 }
