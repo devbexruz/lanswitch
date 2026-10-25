@@ -44,6 +44,21 @@ public class GroupService : IGroupService
 
         var groups = await query.ToListAsync();
 
+        var now = System.DateTime.UtcNow;
+        var ownerIds = groups.Select(g => g.OwnerId).Distinct().ToList();
+
+        var adminOwnerIds = await _db.Users
+            .Where(u => ownerIds.Contains(u.Id) && u.IsAdmin)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        var activeTeacherSubOwnerIds = await _db.UserSubscriptions
+            .Where(s => ownerIds.Contains(s.UserId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        var validOwnerIds = new HashSet<long>(adminOwnerIds.Concat(activeTeacherSubOwnerIds));
+
         return groups.Select(g => new TeacherGroupDto
         {
             Id = g.Id,
@@ -51,7 +66,8 @@ public class GroupService : IGroupService
             Title = g.Title,
             IsOwner = g.OwnerId == teacherId,
             MemberCount = g.Members.Count(m => m.IsActive),
-            ActiveAssignmentsCount = g.Assignments.Count(a => a.Status == "Published")
+            ActiveAssignmentsCount = g.Assignments.Count(a => a.Status == "Published"),
+            IsSubscriptionExpired = !validOwnerIds.Contains(g.OwnerId)
         }).ToList();
     }
 
@@ -187,18 +203,33 @@ public class GroupService : IGroupService
 
     public async Task<List<StudentGroupDto>> GetStudentGroupsAsync(long studentId)
     {
-        var groups = await _db.GroupMembers
+        var members = await _db.GroupMembers
             .Include(gm => gm.Group)
             .Where(gm => gm.StudentId == studentId && gm.IsActive && gm.Group.IsActive)
-            .Select(gm => new StudentGroupDto
-            {
-                Id = gm.Group.Id,
-                TelegramChatId = gm.Group.TelegramChatId,
-                Title = gm.Group.Title
-            })
             .ToListAsync();
 
-        return groups;
+        var now = System.DateTime.UtcNow;
+        var ownerIds = members.Select(gm => gm.Group.OwnerId).Distinct().ToList();
+
+        var adminOwnerIds = await _db.Users
+            .Where(u => ownerIds.Contains(u.Id) && u.IsAdmin)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        var activeTeacherSubOwnerIds = await _db.UserSubscriptions
+            .Where(s => ownerIds.Contains(s.UserId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .Select(s => s.UserId)
+            .ToListAsync();
+
+        var validOwnerIds = new HashSet<long>(adminOwnerIds.Concat(activeTeacherSubOwnerIds));
+
+        return members.Select(gm => new StudentGroupDto
+        {
+            Id = gm.Group.Id,
+            TelegramChatId = gm.Group.TelegramChatId,
+            Title = gm.Group.Title,
+            IsTeacherSubscriptionExpired = !validOwnerIds.Contains(gm.Group.OwnerId)
+        }).ToList();
     }
 
     public async Task<SyncMembersResultDto> SyncGroupMembersAsync(long groupId, long teacherId)

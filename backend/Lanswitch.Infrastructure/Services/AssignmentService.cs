@@ -32,6 +32,7 @@ public class AssignmentService : IAssignmentService
     {
         var group = await _db.TelegramGroups
             .Include(g => g.Admins)
+            .Include(g => g.Owner)
             .FirstOrDefaultAsync(g => g.Id == dto.GroupId);
 
         if (group == null)
@@ -40,6 +41,15 @@ public class AssignmentService : IAssignmentService
         bool canCreate = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanCreateHomework);
         if (!canCreate)
             throw new UnauthorizedAccessException("Sizda ushbu guruhga vazifa qo'shish huquqi yo'q!");
+
+        var now = DateTime.UtcNow;
+        var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+            throw new InvalidOperationException("Guruh o'qituvchisining 'Ustoz' tarifi faol emas yoki muddati tugagan. Topshiriq yaratish uchun tarifni yangilang.");
 
         var assignment = new Assignment
         {
@@ -136,6 +146,23 @@ public class AssignmentService : IAssignmentService
 
     public async Task<List<AssignmentDetailDto>> GetStudentAssignmentsAsync(long groupId, long studentId, string filter)
     {
+        var group = await _db.TelegramGroups
+            .Include(g => g.Owner)
+            .FirstOrDefaultAsync(g => g.Id == groupId && g.IsActive);
+
+        if (group == null) return new List<AssignmentDetailDto>();
+
+        var now = DateTime.UtcNow;
+        bool isOwnerAdmin = group.Owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        // Agar ustozni obuna tarifi ustoz bo'lmasa yoki tugagan bo'lsa topshiriqlar studentlarga ko'rinmaydi
+        if (!hasActiveTeacherSub)
+        {
+            return new List<AssignmentDetailDto>();
+        }
+
         var query = _db.Assignments
             .Include(a => a.Group)
             .Include(a => a.Items).ThenInclude(i => i.TargetUnit).ThenInclude(u => u!.Part).ThenInclude(p => p.Book)

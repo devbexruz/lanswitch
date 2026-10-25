@@ -16,10 +16,23 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ProfileDropdown from '../components/ProfileDropdown';
 import BottomNav from '../components/BottomNav';
+import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function TeacherDashboardPage() {
-  const { user, isAuthenticated, checkAuth, setRole } = useAuth();
+  const { user, isAuthenticated, checkAuth, setRole, hasSubscription, subscription, checkSubscription } = useAuth();
   const navigate = useNavigate();
+
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const isTeacherSubActive = Boolean(user?.isAdmin || (hasSubscription && subscription?.targetRole === 'Teacher'));
+
+  const handleAddGroupClick = () => {
+    if (!isTeacherSubActive) {
+      alert("Yangi guruh qo'shish uchun faol 'Ustoz' tarifiga ega bo'lishingiz kerak. Iltimos, avval tarif rejasini faollashtiring.");
+      setShowSubscriptionModal(true);
+      return;
+    }
+    openTelegramBotChat('lanswitchbot');
+  };
 
   // 1. Top Navigation: 3 Core Panels (Classroom, Movies, Vocabulary)
   const [mainTab, setMainTab] = useState<'classroom' | 'movies' | 'vocabulary'>(() => {
@@ -243,6 +256,7 @@ export default function TeacherDashboardPage() {
 
   useEffect(() => {
     localStorage.setItem('lanswitch_last_route', '/teacher');
+    checkSubscription();
   }, []);
 
   useEffect(() => {
@@ -706,6 +720,11 @@ export default function TeacherDashboardPage() {
   };
 
   const handleOpenCreateModal = () => {
+    if (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) {
+      alert("Ustozlik tarifi muddati tugaganligi sababli yangi topshiriq yarata olmaysiz. Iltimos, avval tarifni yangilang.");
+      setShowSubscriptionModal(true);
+      return;
+    }
     // Starts empty by default as requested: "boshlanishiga shunchaki bo'sh bo'lsin keraklisin qo'lda qo'shib yozadigan bo'ladi"
     setItems([]);
     setCustomTitle(`${new Date().toLocaleDateString('uz-UZ')} Darsi`);
@@ -1028,7 +1047,7 @@ export default function TeacherDashboardPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '380px', margin: '0 auto' }}>
                         <button
                           type="button"
-                          onClick={() => openTelegramBotChat('lanswitchbot')}
+                          onClick={handleAddGroupClick}
                           className="btn-big-blue"
                           style={{ width: '100%', minHeight: '48px', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                         >
@@ -1109,6 +1128,62 @@ export default function TeacherDashboardPage() {
                   )
                 ) : (
                   <>
+                    {/* RED WARNING NOTICE IF SUBSCRIPTION IS EXPIRED */}
+                    {selectedGroup?.isSubscriptionExpired && (
+                      <div style={{
+                        background: '#FEF2F2',
+                        border: '1.5px solid #FCA5A5',
+                        borderRadius: '16px',
+                        padding: '16px 20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                        boxShadow: '0 2px 10px rgba(239, 68, 68, 0.08)',
+                        margin: '6px 0 16px 0'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 280px' }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: '#FEE2E2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <AlertTriangle size={22} color="#DC2626" />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 900, color: '#B91C1C', fontSize: '15px' }}>
+                              ⚠️ Ustoz tarifi muddati tugagan!
+                            </div>
+                            <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '2px', lineHeight: 1.4 }}>
+                              Ushbu guruhdagi barcha topshiriqlar talabalarga ko'rinmaydi va yangi guruh qo'sha olmaysiz. Tizimdan to'liq foydalanish uchun tarifni yangilang.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setShowSubscriptionModal(true)}
+                          style={{
+                            padding: '10px 18px',
+                            background: '#DC2626',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          Tarifni yangilash
+                        </button>
+                      </div>
+                    )}
 
                 {/* 2.2 VIEW MODE: DARSLAR (ASSIGNMENTS LIST) */}
                 {viewMode === 'assignments' && (
@@ -4043,7 +4118,7 @@ export default function TeacherDashboardPage() {
                       type="button"
                       onClick={() => {
                         setShowGroupDrawer(false);
-                        openTelegramBotChat('lanswitchbot');
+                        handleAddGroupClick();
                       }}
                       className="btn-big-blue"
                       style={{ width: '100%', minHeight: '44px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -4072,52 +4147,102 @@ export default function TeacherDashboardPage() {
                   </div>
                 </div>
               ) : (
-                groups.map(g => {
-                  const isSelected = selectedGroup?.id === g.id;
-                  return (
-                    <button
-                      key={g.id}
-                      onClick={() => {
-                        handleSelectGroup(g);
-                        setShowGroupDrawer(false);
-                      }}
-                      style={{
-                        padding: '16px 20px',
-                        borderRadius: 'var(--radius-card-sm)',
-                        border: isSelected ? '2px solid var(--primary-blue)' : '1.5px solid var(--sky-border)',
-                        background: isSelected ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)' }}>
-                          {g.title}
-                        </div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          {g.memberCount} ta a'zo • Telegram ID: {g.telegramChatId}
-                        </div>
-                      </div>
-                      {isSelected && (
-                        <div style={{
-                          width: '28px',
-                          height: '28px',
-                          borderRadius: '9999px',
-                          background: 'var(--primary-blue)',
-                          color: 'var(--pure-white)',
+                <>
+                  {groups.map(g => {
+                    const isSelected = selectedGroup?.id === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => {
+                          handleSelectGroup(g);
+                          setShowGroupDrawer(false);
+                        }}
+                        style={{
+                          padding: '16px 20px',
+                          borderRadius: 'var(--radius-card-sm)',
+                          border: g.isSubscriptionExpired
+                            ? '1.5px solid #FCA5A5'
+                            : isSelected
+                            ? '2px solid var(--primary-blue)'
+                            : '1.5px solid var(--sky-border)',
+                          background: g.isSubscriptionExpired
+                            ? '#FEF2F2'
+                            : isSelected
+                            ? 'var(--ice-blue-bg)'
+                            : 'var(--pure-white)',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <Check size={18} strokeWidth={3} />
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <div>
+                          {g.isSubscriptionExpired && (
+                            <div style={{
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              color: '#DC2626',
+                              background: '#FEE2E2',
+                              border: '1px solid #FECACA',
+                              borderRadius: '6px',
+                              padding: '2px 8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              marginBottom: '6px'
+                            }}>
+                              <AlertTriangle size={12} color="#DC2626" />
+                              <span>Tarif muddati tugagan (Topshiriqlar ko'rinmaydi)</span>
+                            </div>
+                          )}
+                          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)' }}>
+                            {g.title}
+                          </div>
+                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {g.memberCount} ta a'zo • Telegram ID: {g.telegramChatId}
+                          </div>
                         </div>
-                      )}
-                    </button>
-                  );
-                })
+                        {isSelected && (
+                          <div style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '9999px',
+                            background: 'var(--primary-blue)',
+                            color: 'var(--pure-white)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <Check size={18} strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGroupDrawer(false);
+                      handleAddGroupClick();
+                    }}
+                    className="btn-big-blue"
+                    style={{
+                      width: '100%',
+                      minHeight: '44px',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      marginTop: '6px'
+                    }}
+                  >
+                    <PlusCircle size={16} />
+                    <span>➕ Yangi guruh ulash</span>
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -4149,6 +4274,15 @@ export default function TeacherDashboardPage() {
           }
         }}
         badgeCount={0}
+      />
+
+      <SubscriptionPlansModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscriptionUpdated={() => {
+          checkSubscription();
+          loadGroups();
+        }}
       />
     </div>
   );

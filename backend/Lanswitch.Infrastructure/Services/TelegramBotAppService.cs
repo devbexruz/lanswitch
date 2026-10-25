@@ -879,6 +879,38 @@ public class TelegramBotAppService : ITelegramBotAppService
             var group = await db.TelegramGroups.FirstOrDefaultAsync(g => g.TelegramChatId == chatId);
             if (group == null)
             {
+                var now = DateTime.UtcNow;
+                var activeTeacherSub = await db.UserSubscriptions
+                    .Where(s => s.UserId == ownerUser.Id && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+                    .OrderByDescending(s => s.Id)
+                    .FirstOrDefaultAsync();
+
+                if (!ownerUser.IsAdmin && activeTeacherSub == null)
+                {
+                    await _botClient.SendMessage(
+                        chatId,
+                        "❌ <b>Yangi guruhni ulash uchun guruh egasida faol \"Ustoz\" tarifi bo'lishi lozim.</b>\n\n" +
+                        $"Guruh egasi (@{ownerUser.Username ?? ownerUser.FullName}) avval botga kirib, \"Ustoz\" tarifini faollashtirishi kerak: @lanswitchbot",
+                        parseMode: ParseMode.Html);
+                    try { await _botClient.LeaveChat(chatId); } catch {}
+                    return;
+                }
+
+                if (!ownerUser.IsAdmin && activeTeacherSub != null)
+                {
+                    var currentGroupCount = await db.TelegramGroups.CountAsync(g => g.OwnerId == ownerUser.Id && g.IsActive);
+                    if (currentGroupCount >= activeTeacherSub.MaxGroups)
+                    {
+                        await _botClient.SendMessage(
+                            chatId,
+                            $"❌ <b>Sizning tarifingizdagi guruhlar limiti ({activeTeacherSub.MaxGroups} ta) to'lgan!</b>\n\n" +
+                            "Yangi guruh ulash uchun tarifingizni oshiring: @lanswitchbot",
+                            parseMode: ParseMode.Html);
+                        try { await _botClient.LeaveChat(chatId); } catch {}
+                        return;
+                    }
+                }
+
                 group = new TelegramGroup
                 {
                     TelegramChatId = chatId,
@@ -997,6 +1029,38 @@ public class TelegramBotAppService : ITelegramBotAppService
                 var group = await db.TelegramGroups.FirstOrDefaultAsync(g => g.TelegramChatId == chatId);
                 if (group == null)
                 {
+                    var now = DateTime.UtcNow;
+                    var activeTeacherSub = await db.UserSubscriptions
+                        .Where(s => s.UserId == ownerUser.Id && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+                        .OrderByDescending(s => s.Id)
+                        .FirstOrDefaultAsync();
+
+                    if (!ownerUser.IsAdmin && activeTeacherSub == null)
+                    {
+                        await _botClient.SendMessage(
+                            chatId,
+                            "❌ <b>Yangi guruhni ulash uchun guruh egasida faol \"Ustoz\" tarifi bo'lishi lozim.</b>\n\n" +
+                            $"Guruh egasi (@{ownerUser.Username ?? ownerUser.FullName}) avval botga kirib, \"Ustoz\" tarifini faollashtirishi kerak: @lanswitchbot",
+                            parseMode: ParseMode.Html);
+                        try { await _botClient.LeaveChat(chatId); } catch {}
+                        return;
+                    }
+
+                    if (!ownerUser.IsAdmin && activeTeacherSub != null)
+                    {
+                        var currentGroupCount = await db.TelegramGroups.CountAsync(g => g.OwnerId == ownerUser.Id && g.IsActive);
+                        if (currentGroupCount >= activeTeacherSub.MaxGroups)
+                        {
+                            await _botClient.SendMessage(
+                                chatId,
+                                $"❌ <b>Sizning tarifingizdagi guruhlar limiti ({activeTeacherSub.MaxGroups} ta) to'lgan!</b>\n\n" +
+                                "Yangi guruh ulash uchun tarifingizni oshiring: @lanswitchbot",
+                                parseMode: ParseMode.Html);
+                            try { await _botClient.LeaveChat(chatId); } catch {}
+                            return;
+                        }
+                    }
+
                     group = new TelegramGroup
                     {
                         TelegramChatId = chatId,

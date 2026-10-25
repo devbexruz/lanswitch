@@ -9,12 +9,14 @@ export interface TeacherGroup {
   isOwner: boolean;
   memberCount: number;
   activeAssignmentsCount: number;
+  isSubscriptionExpired?: boolean;
 }
 
 export interface StudentGroup {
   id: number;
   telegramChatId: number;
   title: string;
+  isTeacherSubscriptionExpired?: boolean;
 }
 
 export interface CreateAssignmentItem {

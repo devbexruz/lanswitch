@@ -11,6 +11,7 @@ public class TeacherGroupDto
     public bool IsOwner { get; set; }
     public int MemberCount { get; set; }
     public int ActiveAssignmentsCount { get; set; }
+    public bool IsSubscriptionExpired { get; set; }
 }
 
 public class StudentGroupDto
@@ -18,6 +19,7 @@ public class StudentGroupDto
     public long Id { get; set; }
     public long TelegramChatId { get; set; }
     public string Title { get; set; } = null!;
+    public bool IsTeacherSubscriptionExpired { get; set; }
 }
 
 public class CreateAssignmentItemDto

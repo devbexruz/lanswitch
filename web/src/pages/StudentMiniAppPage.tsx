@@ -1423,6 +1423,31 @@ export default function StudentMiniAppPage() {
 
           {/* MAIN CONTENT AREA */}
           <main style={{ padding: '16px 20px', flex: 1 }}>
+            {/* Red Warning Banner if Teacher Subscription is Expired */}
+            {selectedGroup?.isTeacherSubscriptionExpired && (
+              <div style={{
+                background: '#FEF2F2',
+                border: '1.5px solid #FCA5A5',
+                borderRadius: '16px',
+                padding: '14px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)',
+                marginBottom: '16px'
+              }}>
+                <span style={{ fontSize: '24px', flexShrink: 0 }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight: 800, color: '#B91C1C', fontSize: '14px' }}>
+                    Ustoz tarifi muddati tugagan
+                  </div>
+                  <div style={{ color: '#DC2626', fontSize: '12.5px', marginTop: '2px', lineHeight: 1.4 }}>
+                    Ustozingizning obuna tarifi tugaganligi sababli ushbu guruhdagi topshiriqlar talabalar uchun vaqtincha ko'rinmaydi.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isLoading ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
                 <div style={{ 
@@ -1449,7 +1474,9 @@ export default function StudentMiniAppPage() {
                       Vazifalar mavjud emas
                     </div>
                     <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                      Ushbu guruh uchun e'lon qilingan topshiriqlar mavjud emas.
+                      {selectedGroup?.isTeacherSubscriptionExpired 
+                        ? "Ustozingizning obuna tarifi muddati tugaganligi sababli ushbu guruh topshiriqlari vaqtincha ko'rinmaydi."
+                        : "Ushbu guruh uchun e'lon qilingan topshiriqlar mavjud emas."}
                     </div>
                   </div>
                 ) : (
@@ -2383,8 +2410,16 @@ export default function StudentMiniAppPage() {
                       style={{
                         padding: '16px 20px',
                         borderRadius: 'var(--radius-card-sm)',
-                        border: isSelected ? '2px solid var(--primary-blue)' : '1.5px solid var(--sky-border)',
-                        background: isSelected ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
+                        border: g.isTeacherSubscriptionExpired
+                          ? '1.5px solid #FCA5A5'
+                          : isSelected
+                          ? '2px solid var(--primary-blue)'
+                          : '1.5px solid var(--sky-border)',
+                        background: g.isTeacherSubscriptionExpired
+                          ? '#FEF2F2'
+                          : isSelected
+                          ? 'var(--ice-blue-bg)'
+                          : 'var(--pure-white)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -2393,6 +2428,23 @@ export default function StudentMiniAppPage() {
                       }}
                     >
                       <div>
+                        {g.isTeacherSubscriptionExpired && (
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            color: '#DC2626',
+                            background: '#FEE2E2',
+                            border: '1px solid #FECACA',
+                            borderRadius: '6px',
+                            padding: '2px 8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            marginBottom: '4px'
+                          }}>
+                            <span>⚠️ Ustoz tarifi tugagan (Topshiriqlar ko'rinmaydi)</span>
+                          </div>
+                        )}
                         <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)' }}>
                           {g.title}
                         </div>
