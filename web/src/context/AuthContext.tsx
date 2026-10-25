@@ -173,18 +173,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setRole = async (newRole: 'Student' | 'Teacher') => {
     try {
-      await fetch('/api/users/role', {
+      let uid = user?.id;
+      if (!uid) {
+        try {
+          const saved = localStorage.getItem('lanswitch_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed?.id) uid = parsed.id;
+          }
+        } catch {}
+      }
+      const res = await fetch('/api/users/role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole, userId: user?.id })
+        body: JSON.stringify({ role: newRole, userId: uid })
       });
-      if (user) {
+      if (res.ok) {
+        const data = await res.json();
+        const updated = data.user || (user ? { ...user, role: newRole } : { id: uid, role: newRole });
+        setUser(updated);
+        localStorage.setItem('lanswitch_user', JSON.stringify(updated));
+      } else if (user) {
         const updated = { ...user, role: newRole };
         setUser(updated);
         localStorage.setItem('lanswitch_user', JSON.stringify(updated));
       }
     } catch (e) {
       console.error('Failed to update role', e);
+      if (user) {
+        const updated = { ...user, role: newRole };
+        setUser(updated);
+        localStorage.setItem('lanswitch_user', JSON.stringify(updated));
+      }
     }
   };
 

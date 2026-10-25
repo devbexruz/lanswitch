@@ -18,7 +18,7 @@ import BottomNav from '../components/BottomNav';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function StudentMiniAppPage() {
-  const { user: authUser, hasSubscription, checkSubscription } = useAuth();
+  const { user: authUser, hasSubscription, checkSubscription, setRole } = useAuth();
   const navigate = useNavigate();
 
   // Navigation: 3 Core Panels
@@ -187,13 +187,8 @@ export default function StudentMiniAppPage() {
   }, [authUser?.id]);
 
   useEffect(() => {
-    if (authUser?.role === 'Teacher') {
-      const search = window.location.search || '';
-      navigate(`/teacher${search}`, { replace: true });
-      return;
-    }
     localStorage.setItem('lanswitch_last_route', '/student');
-  }, [authUser?.role]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('lanswitch_student_main_tab', mainTab);
@@ -241,11 +236,6 @@ export default function StudentMiniAppPage() {
         if (autoLoginRes?.user) {
           resolvedId = autoLoginRes.user.id;
           localStorage.setItem('lanswitch_user', JSON.stringify(autoLoginRes.user));
-          if (autoLoginRes.user.role === 'Teacher') {
-            const search = window.location.search || '';
-            navigate(`/teacher${search}`, { replace: true });
-            return;
-          }
         }
       }
     } catch (e) {
@@ -1300,14 +1290,13 @@ export default function StudentMiniAppPage() {
                     type="button"
                     onClick={async () => {
                       try {
-                        if (studentId) {
-                          await api.updateUserRole('Teacher', studentId);
-                        }
+                        await setRole('Teacher');
                       } catch (e) {
                         console.warn(e);
                       }
+                      localStorage.setItem('lanswitch_last_route', '/teacher');
                       const search = window.location.search || '';
-                      navigate(`/teacher${search}`, { replace: true });
+                      navigate(`/teacher${search}`);
                     }}
                     className="btn-big-blue"
                     style={{ width: '100%', minHeight: '44px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%)' }}
@@ -2245,15 +2234,15 @@ export default function StudentMiniAppPage() {
                     <button
                       type="button"
                       onClick={async () => {
+                        setShowGroupDrawer(false);
                         try {
-                          if (studentId) {
-                            await api.updateUserRole('Teacher', studentId);
-                          }
+                          await setRole('Teacher');
                         } catch (e) {
                           console.warn(e);
                         }
+                        localStorage.setItem('lanswitch_last_route', '/teacher');
                         const search = window.location.search || '';
-                        navigate(`/teacher${search}`, { replace: true });
+                        navigate(`/teacher${search}`);
                       }}
                       className="btn-big-white"
                       style={{ width: '100%', minHeight: '42px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}

@@ -18,7 +18,7 @@ import ProfileDropdown from '../components/ProfileDropdown';
 import BottomNav from '../components/BottomNav';
 
 export default function TeacherDashboardPage() {
-  const { user, isAuthenticated, checkAuth } = useAuth();
+  const { user, isAuthenticated, checkAuth, setRole } = useAuth();
   const navigate = useNavigate();
 
   // 1. Top Navigation: 3 Core Panels (Classroom, Movies, Vocabulary)
@@ -242,13 +242,8 @@ export default function TeacherDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (user?.role === 'Student') {
-      const search = window.location.search || '';
-      navigate(`/student${search}`, { replace: true });
-      return;
-    }
     localStorage.setItem('lanswitch_last_route', '/teacher');
-  }, [user?.role]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('lanswitch_teacher_main_tab', mainTab);
@@ -1059,14 +1054,13 @@ export default function TeacherDashboardPage() {
                             type="button"
                             onClick={async () => {
                               try {
-                                if (user?.id) {
-                                  await api.updateUserRole('Student', user.id);
-                                }
+                                await setRole('Student');
                               } catch (e) {
                                 console.warn(e);
                               }
+                              localStorage.setItem('lanswitch_last_route', '/student');
                               const search = window.location.search || '';
-                              navigate(`/student${search}`, { replace: true });
+                              navigate(`/student${search}`);
                             }}
                             className="btn-big-white"
                             style={{ width: '100%', minHeight: '42px', fontSize: '13px' }}
@@ -4060,15 +4054,15 @@ export default function TeacherDashboardPage() {
                     <button
                       type="button"
                       onClick={async () => {
+                        setShowGroupDrawer(false);
                         try {
-                          if (user?.id) {
-                            await api.updateUserRole('Student', user.id);
-                          }
+                          await setRole('Student');
                         } catch (e) {
                           console.warn(e);
                         }
+                        localStorage.setItem('lanswitch_last_route', '/student');
                         const search = window.location.search || '';
-                        navigate(`/student${search}`, { replace: true });
+                        navigate(`/student${search}`);
                       }}
                       className="btn-big-white"
                       style={{ width: '100%', minHeight: '42px', fontSize: '13px' }}
