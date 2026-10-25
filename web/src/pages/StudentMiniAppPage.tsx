@@ -23,6 +23,13 @@ export default function StudentMiniAppPage() {
 
   // Navigation: 3 Core Panels
   const [mainTab, setMainTab] = useState<'homework' | 'movies' | 'vocabulary'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'movies' || tabParam === 'vocabulary' || tabParam === 'homework') {
+        return tabParam;
+      }
+    } catch {}
     const saved = localStorage.getItem('lanswitch_student_main_tab');
     return (saved === 'movies' || saved === 'vocabulary' || saved === 'homework') ? saved : 'homework';
   });
@@ -76,7 +83,14 @@ export default function StudentMiniAppPage() {
   const [movieSearch, setMovieSearch] = useState('');
   const [selectedMovieLevel, setSelectedMovieLevel] = useState<string>('All');
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('open_plans') === '1' || p.get('open_plans') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Vocabulary Hierarchy State (Book -> BookPart -> PartUnit -> UnitWord)
   const [vocabStep, setVocabStep] = useState<'books' | 'parts' | 'units'>('books');

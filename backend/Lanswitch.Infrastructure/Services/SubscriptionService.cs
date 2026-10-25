@@ -1102,6 +1102,81 @@ public class SubscriptionService : ISubscriptionService
         _context.SubscriptionLogs.Add(log);
 
         await _context.SaveChangesAsync();
+
+        // Telegram bot orqali obuna faollashganligi haqida xabar yuborish
+        if (long.TryParse(user.TelegramId, out var userChatId))
+        {
+            try
+            {
+                var diff = calculatedEndDate - now;
+                string remFormatted = diff.TotalDays >= 1 
+                    ? $"{(int)diff.TotalDays} kun {(int)diff.Hours} soat" 
+                    : $"{(int)diff.TotalHours} soat {(int)diff.Minutes} daqiqa";
+
+                string host = "lanswitch.developerlogic.uz";
+                var studentUrl = $"https://{host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
+                var teacherUrl = $"https://{host}/teacher?user_id={user.Id}&telegram_id={user.TelegramId}";
+
+                var groupCount = await _context.GroupMembers
+                    .CountAsync(gm => gm.StudentId == user.Id && gm.IsActive);
+
+                string notifyText;
+                InlineKeyboardMarkup notifyKb;
+
+                if (targetPlan.TargetRole == "Teacher" || targetPlan.PlanId.Contains("teacher"))
+                {
+                    notifyText = $"🎉 <b>Tabriklaymiz! O'qituvchi obunangiz ({targetPlan.Name}) muvaffaqiyatli faollashtirildi!</b>\n\n" +
+                                 $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n" +
+                                 $"⏳ <b>Amal qilish muddati:</b> ~{remFormatted}\n\n" +
+                                 $"Guruhlarni ulash, topshiriqlar berish va avtomatik nazorat vositalari siz uchun to'liq faol! 🚀";
+                    notifyKb = new InlineKeyboardMarkup(new[]
+                    {
+                        new[] { InlineKeyboardButton.WithWebApp("👨‍🏫 O'qituvchi Paneli", new Telegram.Bot.Types.WebAppInfo { Url = teacherUrl }) }
+                    });
+                }
+                else
+                {
+                    if (groupCount == 0)
+                    {
+                        notifyText = $"🎉 <b>Tabriklaymiz! Student Premium obunangiz faollashtirildi!</b>\n\n" +
+                                     $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n" +
+                                     $"⏳ <b>Amal qilish muddati:</b> ~{remFormatted} <i>(real-time sarflanadi)</i>\n\n" +
+                                     $"🎯 <b>Siz mustaqil ta'lim rejimidasiz:</b>\n" +
+                                     $"Hozircha guruhga a'zo emassiz, shuning uchun asosiy e'tiboringizni mustaqil o'rganishga qaratishingiz mumkin:\n\n" +
+                                     $"🎬 <b>Kinolar va Seriallar:</b> Barcha filmlarni interaktiv subtitrlar va AI Ustoz bilan tomosha qiling\n" +
+                                     $"📖 <b>Lug'at va So'z yodlash:</b> Darslik so'zlarini audio talaffuz bilan yodlang\n\n" +
+                                     $"✨ <i>(Kelajakda: insho/esseni rasmga olib AI orqali tekshirtirish imkoni ham qo'shiladi! 🚀)</i>\n\n" +
+                                     $"💡 <i>Ustozingiz sizni dars guruhiga qo'shishi bilanoq topshiriqlar ham bu yerda avtomatik ko'rinadi.</i>";
+                        notifyKb = new InlineKeyboardMarkup(new[]
+                        {
+                            new[] { InlineKeyboardButton.WithWebApp("🎬 Kinolarni ko'rish", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentUrl}&tab=movies" }) },
+                            new[] { InlineKeyboardButton.WithWebApp("📖 Lug'at yodlash", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentUrl}&tab=vocabulary" }) }
+                        });
+                    }
+                    else
+                    {
+                        notifyText = $"🎉 <b>Tabriklaymiz! Student Premium obunangiz faollashtirildi!</b>\n\n" +
+                                     $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n" +
+                                     $"⏳ <b>Amal qilish muddati:</b> ~{remFormatted} <i>(real-time sarflanadi)</i>\n" +
+                                     $"🏫 <b>Guruhlaringiz:</b> {groupCount} ta faol dars guruhi\n\n" +
+                                     $"Barcha topshiriqlar, darslar, kinolar va lug'at siz uchun to'liq ochiq! 🚀\n\n" +
+                                     $"✨ <i>(Kelajakda: insho/esseni rasmga olib AI tahlil qilish imkoni ham qo'shiladi!)</i>";
+                        notifyKb = new InlineKeyboardMarkup(new[]
+                        {
+                            new[] { InlineKeyboardButton.WithWebApp("📝 Topshiriqlarni ko'rish", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentUrl}&tab=homework" }) },
+                            new[] { InlineKeyboardButton.WithWebApp("🎬 Kinolar", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentUrl}&tab=movies" }) }
+                        });
+                    }
+                }
+
+                await _botClient.SendMessage(userChatId, notifyText, parseMode: ParseMode.Html, replyMarkup: notifyKb);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending subscription notification to {user.TelegramId}: {ex.Message}");
+            }
+        }
+
         return newSub;
     }
 
@@ -1178,6 +1253,25 @@ public class SubscriptionService : ISubscriptionService
         _context.SubscriptionPaymentRequests.Add(payment);
 
         await _context.SaveChangesAsync();
+
+        if (long.TryParse(user.TelegramId, out var userChatId))
+        {
+            try
+            {
+                string host = "lanswitch.developerlogic.uz";
+                var studentUrl = $"https://{host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
+                var text = $"🎁 <b>25 000 so'm Boshlang'ich Bonus balansingizga muvaffaqiyatli qo'shildi!</b>\n\n" +
+                           $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
+                           $"Siz ushbu bonus bilan Student Premium (15 kun) yoki O'qituvchi (5 kun) tariflarini bepul sinab ko'rishingiz mumkin!\n\n" +
+                           $"👇 <i>Ilovaga kirib, istalgan tarifni tanlang va boshlang:</i>";
+                var kb = new InlineKeyboardMarkup(new[]
+                {
+                    new[] { InlineKeyboardButton.WithWebApp("🚀 Tarifni tanlash va boshlash", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentUrl}&open_plans=1" }) }
+                });
+                await _botClient.SendMessage(userChatId, text, parseMode: ParseMode.Html, replyMarkup: kb);
+            }
+            catch { }
+        }
 
         return new
         {
