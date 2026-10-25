@@ -117,36 +117,6 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
     }
   };
 
-  const handleClaimBonus = async () => {
-    setClaimingBonus(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    try {
-      const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
-      const res = await fetch('/api/subscription/claim-bonus', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccessMessage(`🎁 Tabriklaymiz! ${bonusAmount.toLocaleString('uz-UZ')} so'm boshlang'ich bonus balansingizga qo'shildi!`);
-        setCanClaimBonus(false);
-        await loadData();
-        if (onSubscriptionUpdated) onSubscriptionUpdated();
-      } else {
-        setErrorMessage(data.message || "Bonusni olishda xatolik yuz berdi");
-      }
-    } catch (e) {
-      console.error(e);
-      setErrorMessage("Tarmoq xatosi yuz berdi");
-    } finally {
-      setClaimingBonus(false);
-    }
-  };
-
   const handleClaimBonusAndStart = async (plan: Plan) => {
     setClaimingBonus(true);
     setErrorMessage(null);
@@ -418,60 +388,33 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
             gap: '14px',
-            flexWrap: 'wrap',
             boxShadow: '0 8px 24px rgba(245, 158, 11, 0.22)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '240px' }}>
-              <div style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #F59E0B, #D97706)',
-                color: '#fff',
-                fontSize: '24px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
-              }}>
-                🎁
+            <div style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+              color: '#fff',
+              fontSize: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+            }}>
+              🎁
+            </div>
+            <div>
+              <div style={{ fontSize: '15px', fontWeight: 900, color: '#FEF3C7', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>{bonusAmount.toLocaleString('uz-UZ')} so'm Boshlang'ich Bonus!</span>
+                <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
               </div>
-              <div>
-                <div style={{ fontSize: '15px', fontWeight: 900, color: '#FEF3C7', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>{bonusAmount.toLocaleString('uz-UZ')} so'm Boshlang'ich Bonus!</span>
-                  <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
-                </div>
-                <div style={{ fontSize: '12.5px', color: '#CBD5E1', marginTop: '2px', lineHeight: 1.4 }}>
-                  Siz hali obuna faollashtirmagansiz. {bonusAmount.toLocaleString('uz-UZ')} so'm bonusni oling va istalgan tarifni sinab ko'ring!
-                </div>
+              <div style={{ fontSize: '13px', color: '#FEF08A', marginTop: '3px', fontWeight: 700, lineHeight: 1.4 }}>
+                Tariflardan birini tanlang va {bonusAmount.toLocaleString('uz-UZ')} bonus bilan boshlang!
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={handleClaimBonus}
-              disabled={claimingBonus}
-              style={{
-                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '12px',
-                padding: '12px 20px',
-                fontSize: '13.5px',
-                fontWeight: 900,
-                cursor: claimingBonus ? 'wait' : 'pointer',
-                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                flexShrink: 0
-              }}
-            >
-              <span>{claimingBonus ? "Yuklanmoqda..." : `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonusni olish`}</span>
-            </button>
           </div>
         )}
 
@@ -512,7 +455,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                   <span className="status-free-badge">🎓 Tarifsiz rejim</span>
                   <span className="status-welcome-sub">
                     {canClaimBonus
-                      ? `${bonusAmount.toLocaleString('uz-UZ')} so'm bonusni oling va istalgan tarifni bepul sinab ko'ring!`
+                      ? `Tariflardan birini tanlang va ${bonusAmount.toLocaleString('uz-UZ')} bonus bilan boshlang!`
                       : "Barcha darslar, lug'at va vazifalar bepul. Faqat kinolar uchun Student Premium talab etiladi."}
                   </span>
                 </div>
@@ -520,22 +463,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             </div>
           </div>
 
-          {canClaimBonus ? (
-            <button 
-              className="compact-topup-btn"
-              style={{
-                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                color: '#fff',
-                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
-                border: 'none',
-                cursor: claimingBonus ? 'wait' : 'pointer'
-              }}
-              onClick={handleClaimBonus}
-              disabled={claimingBonus}
-            >
-              <span>🎁</span> {claimingBonus ? "Olinmoqda..." : `${bonusAmount.toLocaleString('uz-UZ')} bonusni olish`}
-            </button>
-          ) : (
+          {!canClaimBonus && (
             <button 
               className="compact-topup-btn"
               onClick={() => openPayment()}

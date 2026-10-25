@@ -18,7 +18,7 @@ import BottomNav from '../components/BottomNav';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function StudentMiniAppPage() {
-  const { user: authUser, hasSubscription, checkSubscription, setRole, canClaimBonus, bonusAmount, minAmount, claimBonus } = useAuth();
+  const { user: authUser, hasSubscription, checkSubscription, setRole, canClaimBonus, bonusAmount, minAmount } = useAuth();
   const navigate = useNavigate();
 
   // Navigation: 3 Core Panels
@@ -1263,16 +1263,13 @@ export default function StudentMiniAppPage() {
                         <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
                       </div>
                       <div style={{ fontSize: '12px', color: '#047857', marginTop: '2px', lineHeight: 1.4 }}>
-                        Kinolar va AI yordamchini mutlaqo bepul sinab ko'rish uchun bonusni oling!
+                        Tariflardan birini tanlang va {bonusAmount.toLocaleString('uz-UZ')} so'm bonus bilan boshlang!
                       </div>
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const ok = await claimBonus();
-                      if (ok) setIsSubscriptionModalOpen(true);
-                    }}
+                    onClick={() => setIsSubscriptionModalOpen(true)}
                     style={{
                       background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                       color: '#fff',
@@ -1286,7 +1283,7 @@ export default function StudentMiniAppPage() {
                       flexShrink: 0
                     }}
                   >
-                    🎁 {bonusAmount.toLocaleString('uz-UZ')} bonusni olish
+                    🚀 Tarifni tanlash
                   </button>
                 </div>
               )}
@@ -1819,10 +1816,7 @@ export default function StudentMiniAppPage() {
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {canClaimBonus ? (
                   <button
-                    onClick={async () => {
-                      const ok = await claimBonus();
-                      if (ok) setIsSubscriptionModalOpen(true);
-                    }}
+                    onClick={() => setIsSubscriptionModalOpen(true)}
                     style={{
                       background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                       color: '#fff',
@@ -1839,7 +1833,7 @@ export default function StudentMiniAppPage() {
                       flexShrink: 0
                     }}
                   >
-                    🎁 {bonusAmount.toLocaleString('uz-UZ')} bonusni olish
+                    🚀 Tarifni tanlash & Boshlash
                   </button>
                 ) : (
                   <button
