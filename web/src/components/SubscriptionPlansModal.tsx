@@ -150,6 +150,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   const handleClaimBonusAndStart = async (plan: Plan) => {
     setClaimingBonus(true);
     setErrorMessage(null);
+    setSuccessMessage(null);
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
       const res = await fetch('/api/subscription/claim-bonus', {
@@ -157,15 +158,17 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+        },
+        body: JSON.stringify({ targetPlanId: getPlanId(plan) })
       });
+      const data = await res.json();
       if (res.ok) {
         setCanClaimBonus(false);
+        setConfirmSwitchPlan(null);
+        setSuccessMessage(`✅ Tabriklaymiz! ${bonusAmount.toLocaleString('uz-UZ')} so'm bonus qabul qilindi va "${plan.name}" tarifi faollashtirildi!`);
         await loadData();
         if (onSubscriptionUpdated) onSubscriptionUpdated();
-        setConfirmSwitchPlan(plan);
       } else {
-        const data = await res.json();
         setErrorMessage(data.message || "Bonusni olishda xatolik yuz berdi");
       }
     } catch (e) {
@@ -406,7 +409,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         {/* ======================================================== */}
         {/* 25 000 SO'M INITIAL BONUS BANNER                        */}
         {/* ======================================================== */}
-        {(canClaimBonus || !hasPriorSubscription) && (
+        {canClaimBonus && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.28) 100%)',
             border: '2px solid #F59E0B',
@@ -508,7 +511,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span className="status-free-badge">🎓 Tarifsiz rejim</span>
                   <span className="status-welcome-sub">
-                    {canClaimBonus || !hasPriorSubscription
+                    {canClaimBonus
                       ? `${bonusAmount.toLocaleString('uz-UZ')} so'm bonusni oling va istalgan tarifni bepul sinab ko'ring!`
                       : "Barcha darslar, lug'at va vazifalar bepul. Faqat kinolar uchun Student Premium talab etiladi."}
                   </span>
@@ -517,7 +520,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             </div>
           </div>
 
-          {(canClaimBonus || !hasPriorSubscription) ? (
+          {canClaimBonus ? (
             <button 
               className="compact-topup-btn"
               style={{
@@ -793,7 +796,7 @@ const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                       <button className="btn-current" disabled>
                         ✓ Joriy faol tarif
                       </button>
-                    ) : (canClaimBonus || !hasPriorSubscription) ? (
+                    ) : canClaimBonus ? (
                       <button
                         className="btn-start"
                         style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: '#fff', fontWeight: 900 }}

@@ -64,7 +64,7 @@ const PlayerPage: React.FC = () => {
   const { mediaId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, canClaimBonus, hasPriorSubscription, bonusAmount, minAmount, claimBonus } = useAuth();
+  const { user, canClaimBonus, bonusAmount, minAmount, claimBonus } = useAuth();
 
   const [media, setMedia] = useState<Media | null>(null);
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
@@ -921,20 +921,20 @@ const PlayerPage: React.FC = () => {
             <div 
               className="premium-lock-badge" 
               style={
-                (canClaimBonus || !hasPriorSubscription) 
+                canClaimBonus 
                   ? { background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff' } 
                   : { background: 'linear-gradient(135deg, #EF4444, #DC2626)', color: '#fff' }
               }
             >
-              {(canClaimBonus || !hasPriorSubscription) ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} so'm Bepul Bonus` : "⚠️ Tarif muddati tugagan"}
+              {canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} so'm Bepul Bonus` : "⚠️ Tarif muddati tugagan"}
             </div>
             <h2 className="premium-lock-title">
-              {(canClaimBonus || !hasPriorSubscription) 
+              {canClaimBonus 
                 ? `${bonusAmount.toLocaleString('uz-UZ')} so'm bonus bilan kinoni bepul boshlang!` 
                 : "Tarif muddati tugagan — Kinoni ko'rishda davom eting!"}
             </h2>
             <p className="premium-lock-desc">
-              {(canClaimBonus || !hasPriorSubscription) 
+              {canClaimBonus 
                 ? `Sizda yangi foydalanuvchi sifatida ${bonusAmount.toLocaleString('uz-UZ')} so'm boshlang'ich bonus mavjud! Bonusni oling va filmni darhol tomosha qilishni boshlang.`
                 : `Kinolarni tomosha qilish va AI yordamchidan foydalanish uchun balansingizni minimal ${minAmount.toLocaleString('uz-UZ')}+ so'mga to'ldiring. Mablag'ingiz faqat ko'rgan daqiqalaringizgacha sarflanadi!`}
             </p>
@@ -955,15 +955,15 @@ const PlayerPage: React.FC = () => {
                 </div>
               </div>
               <div className="lock-feature-item">
-                <span>{(canClaimBonus || !hasPriorSubscription) ? '🎁' : '💳'}</span>
+                <span>{canClaimBonus ? '🎁' : '💳'}</span>
                 <div>
                   <strong>
-                    {(canClaimBonus || !hasPriorSubscription) 
+                    {canClaimBonus 
                       ? `${bonusAmount.toLocaleString('uz-UZ')} so'm Bepul Bonus` 
                       : `Balansni to'ldirish (Minimal ${minAmount.toLocaleString('uz-UZ')} so'm)`}
                   </strong>
                   <p>
-                    {(canClaimBonus || !hasPriorSubscription) 
+                    {canClaimBonus 
                       ? "Bonus bilan bepul ko'ring — minutigacha hisoblab beriladi" 
                       : "Istalgan summa bilan to'ldiring — minutigacha hisoblab beriladi"}
                   </p>
@@ -972,16 +972,17 @@ const PlayerPage: React.FC = () => {
             </div>
 
             <div className="premium-lock-actions">
-              {(canClaimBonus || !hasPriorSubscription) ? (
+              {canClaimBonus ? (
                 <button 
                   className="btn-unlock-premium"
                   style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)' }}
                   onClick={async () => {
-                    const ok = await claimBonus();
+                    const ok = await claimBonus('student_premium');
                     if (ok) {
                       await checkSubscription();
+                    } else {
+                      setIsSubscriptionModalOpen(true);
                     }
-                    setIsSubscriptionModalOpen(true);
                   }}
                 >
                   🎁 {bonusAmount.toLocaleString('uz-UZ')} bonusni olish va boshlash

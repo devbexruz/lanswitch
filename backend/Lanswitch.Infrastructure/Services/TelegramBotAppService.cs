@@ -665,7 +665,7 @@ public class TelegramBotAppService : ITelegramBotAppService
         bool hasPriorSubscription = await db.UserSubscriptions.AnyAsync(s => s.UserId == user.Id);
         bool canClaimBonus = !user.HasReceivedInitialBonus && !hasPriorSubscription;
 
-        if (canClaimBonus || !hasPriorSubscription)
+        if (canClaimBonus)
         {
             // Yangi foydalanuvchi yoki hali tarif belgilanmagan: Tarmoqlangan qisqa kirish menyusi
             var welcomeMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n" +

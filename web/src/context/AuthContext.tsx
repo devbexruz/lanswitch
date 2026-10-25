@@ -23,7 +23,7 @@ interface AuthContextType {
   canClaimBonus: boolean;
   bonusAmount: number;
   minAmount: number;
-  claimBonus: () => Promise<boolean>;
+  claimBonus: (targetPlanId?: string) => Promise<boolean>;
   checkSubscription: () => Promise<void>;
   login: () => void;
   logout: () => void;
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const claimBonus = async (): Promise<boolean> => {
+  const claimBonus = async (targetPlanId?: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('lanswitch_token');
       const res = await fetch('/api/subscription/claim-bonus', {
@@ -109,11 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+        },
+        body: JSON.stringify({ targetPlanId })
       });
       if (res.ok) {
         const data = await res.json();
         setCanClaimBonus(false);
+        if (data.subscription) {
+          setSubscription(data.subscription);
+          setHasSubscription(true);
+          setHasPriorSubscription(true);
+        }
         if (user) {
           const updated = { 
             ...user, 

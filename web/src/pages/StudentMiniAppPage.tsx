@@ -18,7 +18,7 @@ import BottomNav from '../components/BottomNav';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
 
 export default function StudentMiniAppPage() {
-  const { user: authUser, hasSubscription, hasPriorSubscription, checkSubscription, setRole, canClaimBonus, bonusAmount, minAmount, claimBonus } = useAuth();
+  const { user: authUser, hasSubscription, checkSubscription, setRole, canClaimBonus, bonusAmount, minAmount, claimBonus } = useAuth();
   const navigate = useNavigate();
 
   // Navigation: 3 Core Panels
@@ -1781,10 +1781,10 @@ export default function StudentMiniAppPage() {
           {/* Student Premium Info Banner (Only for non-premium users) */}
           {!hasSubscription && (
             <div style={{
-              background: (canClaimBonus || !hasPriorSubscription)
+              background: canClaimBonus
                 ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.16) 100%)'
                 : 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.14) 100%)',
-              border: (canClaimBonus || !hasPriorSubscription) ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1.5px solid rgba(245, 158, 11, 0.5)',
+              border: canClaimBonus ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1.5px solid rgba(245, 158, 11, 0.5)',
               borderRadius: '16px',
               padding: '14px 18px',
               display: 'flex',
@@ -1794,10 +1794,10 @@ export default function StudentMiniAppPage() {
               flexWrap: 'wrap'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: 1 }}>
-                <span style={{ fontSize: '28px' }}>{(canClaimBonus || !hasPriorSubscription) ? '🎁' : '⚠️'}</span>
+                <span style={{ fontSize: '28px' }}>{canClaimBonus ? '🎁' : '⚠️'}</span>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {(canClaimBonus || !hasPriorSubscription) ? (
+                    {canClaimBonus ? (
                       <>
                         <span>Student Premium — {bonusAmount.toLocaleString('uz-UZ')} so'm Boshlang'ich Bonus!</span>
                         <span style={{ background: '#10B981', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>BEPUL</span>
@@ -1807,7 +1807,7 @@ export default function StudentMiniAppPage() {
                     )}
                   </div>
                   <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    {(canClaimBonus || !hasPriorSubscription) ? (
+                    {canClaimBonus ? (
                       `Yangi foydalanuvchilar uchun ${bonusAmount.toLocaleString('uz-UZ')} so'm bepul bonus mavjud! Bonusni oling va kinolarni bepul tomosha qiling.`
                     ) : (
                       `Kinolarni ko'rish va AI yordamchidan foydalanish uchun balansingizni minimal ${minAmount.toLocaleString('uz-UZ')}+ so'mga to'ldiring. Mablag'ingiz daqiqasigacha tejaladi!`
@@ -1817,7 +1817,7 @@ export default function StudentMiniAppPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {(canClaimBonus || !hasPriorSubscription) ? (
+                {canClaimBonus ? (
                   <button
                     onClick={async () => {
                       const ok = await claimBonus();
@@ -1936,10 +1936,10 @@ export default function StudentMiniAppPage() {
                     {!hasSubscription && (
                       <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
                         <span style={{
-                          background: (canClaimBonus || !hasPriorSubscription)
+                          background: canClaimBonus
                             ? 'linear-gradient(135deg, #10B981, #059669)' 
                             : 'linear-gradient(135deg, #F59E0B, #D97706)',
-                          color: (canClaimBonus || !hasPriorSubscription) ? '#fff' : '#000',
+                          color: canClaimBonus ? '#fff' : '#000',
                           padding: '2px 8px',
                           borderRadius: '6px',
                           fontSize: '11px',
@@ -1949,7 +1949,7 @@ export default function StudentMiniAppPage() {
                           alignItems: 'center',
                           gap: '3px'
                         }}>
-                          {(canClaimBonus || !hasPriorSubscription) ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonus` : '👑 Premium'}
+                          {canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonus` : '👑 Premium'}
                         </span>
                       </div>
                     )}

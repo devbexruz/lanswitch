@@ -1246,7 +1246,7 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
-    public async Task<object> ClaimInitialBonusAsync(long userId)
+    public async Task<object> ClaimInitialBonusAsync(long userId, string? targetPlanId = null)
     {
         var user = await _context.Users.FindAsync(userId);
         if (user == null) throw new ArgumentException("Foydalanuvchi topilmadi");
@@ -1286,19 +1286,39 @@ public class SubscriptionService : ISubscriptionService
 
         await _context.SaveChangesAsync();
 
+        UserSubscription? activatedSub = null;
+        if (!string.IsNullOrWhiteSpace(targetPlanId))
+        {
+            try
+            {
+                activatedSub = await SwitchPlanAsync(user.Id, targetPlanId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error auto-switching plan after bonus claim: {ex.Message}");
+            }
+        }
+
         if (long.TryParse(user.TelegramId, out var userChatId))
         {
             try
             {
                 string host = "lanswitch.developerlogic.uz";
                 var studentUrl = $"https://{host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
-                var text = $"🎁 <b>{bonusAmount:N0} so'm Boshlang'ich Bonus balansingizga muvaffaqiyatli qo'shildi!</b>\n\n" +
-                           $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
-                           $"Siz ushbu bonus bilan Student Premium yoki O'qituvchi tariflarini bepul sinab ko'rishingiz mumkin!\n\n" +
-                           $"👇 <i>Ilovaga kirib, istalgan tarifni tanlang va boshlang:</i>";
+                var text = activatedSub != null
+                    ? $"🎁 <b>{bonusAmount:N0} so'm Boshlang'ich Bonus qabul qilindi!</b>\n\n" +
+                      $"🚀 <b>{activatedSub.PlanName}</b> tarifi hisobingizdagi bonus bilan muvaffaqiyatli faollashtirildi!\n\n" +
+                      $"⏳ <b>Amal qilish muddati:</b> {activatedSub.EndDate:yyyy-MM-dd HH:mm} gacha\n" +
+                      $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
+                      $"Endi barcha imkoniyatlardan to'liq foydalanishingiz mumkin!"
+                    : $"🎁 <b>{bonusAmount:N0} so'm Boshlang'ich Bonus balansingizga muvaffaqiyatli qo'shildi!</b>\n\n" +
+                      $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
+                      $"Siz ushbu bonus bilan Student Premium yoki O'qituvchi tariflarini bepul sinab ko'rishingiz mumkin!\n\n" +
+                      $"👇 <i>Ilovaga kirib, istalgan tarifni tanlang va boshlang:</i>";
+
                 var kb = new InlineKeyboardMarkup(new[]
                 {
-                    new[] { InlineKeyboardButton.WithWebApp("🚀 Tarifni tanlash va boshlash", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentUrl}&open_plans=1" }) }
+                    new[] { InlineKeyboardButton.WithWebApp(activatedSub != null ? "🎬 Ilovani ochish" : "🚀 Tarifni tanlash va boshlash", new Telegram.Bot.Types.WebAppInfo { Url = activatedSub != null ? studentUrl : $"{studentUrl}&open_plans=1" }) }
                 });
                 await _botClient.SendMessage(userChatId, text, parseMode: ParseMode.Html, replyMarkup: kb);
             }
@@ -1307,12 +1327,16 @@ public class SubscriptionService : ISubscriptionService
 
         return new
         {
-            message = $"Tabriklaymiz! {bonusAmount:N0} so'm boshlang'ich bonus balansingizga muvaffaqiyatli qo'shildi!",
+            message = activatedSub != null
+                ? $"Tabriklaymiz! {bonusAmount:N0} so'm boshlang'ich bonus bilan {activatedSub.PlanName} tarifi faollashtirildi! 🎉"
+                : $"Tabriklaymiz! {bonusAmount:N0} so'm boshlang'ich bonus balansingizga muvaffaqiyatli qo'shildi!",
             balance = user.Balance,
             liveBalance = user.Balance,
             bonusAmount = bonusAmount,
             hasReceivedInitialBonus = true,
-            canClaimBonus = false
+            canClaimBonus = false,
+            hasActiveSubscription = activatedSub != null,
+            subscription = activatedSub
         };
     }
 }

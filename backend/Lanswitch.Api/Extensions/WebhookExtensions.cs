@@ -30,8 +30,6 @@ namespace Lanswitch.Api.Extensions
             // -----------------------  DB migration & seed  -----------------------
             try
             {
-                dbContext.Database.Migrate();
-
                 try
                 {
                     dbContext.Database.ExecuteSqlRaw(@"
@@ -40,7 +38,12 @@ namespace Lanswitch.Api.Extensions
                         ALTER TABLE ""Users"" ALTER COLUMN ""HasReceivedInitialBonus"" SET DEFAULT false;
                     ");
                 }
-                catch { }
+                catch (Exception rawEx)
+                {
+                    logger.LogWarning(rawEx, "ExecuteSqlRaw error");
+                }
+
+                dbContext.Database.Migrate();
 
                 // Languages
                 if (!dbContext.Languages.Any())

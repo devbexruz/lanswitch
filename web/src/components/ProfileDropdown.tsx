@@ -13,7 +13,7 @@ interface ProfileDropdownProps {
 }
 
 export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps) {
-  const { user, isAuthenticated, logout, setRole, login, hasSubscription, subscription, checkSubscription, canClaimBonus } = useAuth();
+  const { user, isAuthenticated, logout, setRole, login, hasSubscription, subscription, checkSubscription, canClaimBonus, bonusAmount } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isPlansOpen, setIsPlansOpen] = useState(false);
@@ -369,7 +369,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                 <span>👑</span> Tariflar va Balans
                 {canClaimBonus && (
                   <span style={{ background: '#10B981', color: '#fff', fontSize: '9.5px', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
-                    🎁 25 000 bonus
+                    🎁 {bonusAmount.toLocaleString('uz-UZ')} bonus
                   </span>
                 )}
               </span>
@@ -377,7 +377,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                 {hasSubscription ? (
                   subscription?.formattedRemainingTime ? `⏳ ${subscription.formattedRemainingTime}` : '✨ Obuna faol'
                 ) : (
-                  canClaimBonus ? "🎁 25 000 bonusni oling!" : "Hisobni to'ldirish & boshlash"
+                  canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonusni oling!` : "Hisobni to'ldirish & boshlash"
                 )}
               </span>
             </div>
