@@ -904,7 +904,7 @@ export default function TeacherDashboardPage() {
                 marginTop: '2px',
                 lineHeight: 1.2
               }}>
-                {selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
+                {selectedGroup ? selectedGroup.title : (groups.length === 0 ? 'Guruh ulanmagan' : 'Guruhni tanlang')}
               </div>
             </div>
             <ChevronDown size={14} color="#FFFFFF" style={{ flexShrink: 0, opacity: 0.9 }} />
@@ -1000,41 +1000,119 @@ export default function TeacherDashboardPage() {
             {mainTab === 'classroom' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {!selectedGroup ? (
-                  <div style={{
-                    padding: '48px 20px',
-                    textAlign: 'center',
-                    background: 'var(--pure-white)',
-                    borderRadius: 'var(--radius-card)',
-                    border: '2px dashed var(--sky-border)',
-                    margin: '12px 0'
-                  }}>
+                  groups.length === 0 ? (
                     <div style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: '9999px',
-                      background: 'var(--ice-blue-bg)',
-                      color: 'var(--primary-blue)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 16px'
+                      padding: '40px 24px',
+                      background: 'var(--pure-white)',
+                      borderRadius: 'var(--radius-card)',
+                      border: '2px dashed var(--sky-border)',
+                      margin: '12px 0',
+                      textAlign: 'center'
                     }}>
-                      <BookOpen size={28} />
+                      <div style={{
+                        width: '72px',
+                        height: '72px',
+                        borderRadius: '9999px',
+                        background: 'var(--ice-blue-bg)',
+                        color: 'var(--primary-blue)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 18px',
+                        border: '2px solid var(--sky-border)'
+                      }}>
+                        <Users size={34} />
+                      </div>
+                      <h3 style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '8px' }}>
+                        Hali guruhlar ulanmagan
+                      </h3>
+                      <p style={{ fontSize: '14px', color: 'var(--text-navy-secondary)', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 20px' }}>
+                        O'quvchilaringiz mavjud bo'lgan Telegram guruhingizga <b>@lanswitchbot</b> ni qo'shing va uni <b>Administrator</b> qiling. Shunda guruh va uning a'zolari ushbu panelda avtomatik paydo bo'ladi.
+                      </p>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '380px', margin: '0 auto' }}>
+                        <button
+                          type="button"
+                          onClick={() => openTelegramBotChat('lanswitchbot')}
+                          className="btn-big-blue"
+                          style={{ width: '100%', minHeight: '48px', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        >
+                          <Send size={18} />
+                          <span>➕ Botni guruhga qo'shish</span>
+                        </button>
+                        
+                        <div style={{
+                          padding: '16px',
+                          background: '#F8FAFC',
+                          borderRadius: '14px',
+                          border: '1px solid #E2E8F0',
+                          textAlign: 'left',
+                          marginTop: '4px'
+                        }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px' }}>
+                            🎓 Siz o'quvchimisiz?
+                          </div>
+                          <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '12px' }}>
+                            Agar siz talaba bo'lsangiz, kinolar va lug'atdan mustaqil foydalanish yoki topshiriqlarni ko'rish uchun talaba rejimiga o'ting.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                if (user?.id) {
+                                  await api.updateUserRole('Student', user.id);
+                                }
+                              } catch (e) {
+                                console.warn(e);
+                              }
+                              const search = window.location.search || '';
+                              navigate(`/student${search}`, { replace: true });
+                            }}
+                            className="btn-big-white"
+                            style={{ width: '100%', minHeight: '42px', fontSize: '13px' }}
+                          >
+                            <span>🎓 Talaba rejimiga o'tish</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '8px' }}>
-                      Guruh tanlanmagan
-                    </h3>
-                    <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '360px', margin: '0 auto 20px' }}>
-                      Topshiriqlarni ko'rish va boshqarish uchun guruhni tanlang.
-                    </p>
-                    <button
-                      onClick={() => setShowGroupDrawer(true)}
-                      className="btn-big-blue"
-                      style={{ margin: '0 auto' }}
-                    >
-                      <span>Guruhni tanlash</span>
-                    </button>
-                  </div>
+                  ) : (
+                    <div style={{
+                      padding: '48px 20px',
+                      textAlign: 'center',
+                      background: 'var(--pure-white)',
+                      borderRadius: 'var(--radius-card)',
+                      border: '2px dashed var(--sky-border)',
+                      margin: '12px 0'
+                    }}>
+                      <div style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '9999px',
+                        background: 'var(--ice-blue-bg)',
+                        color: 'var(--primary-blue)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 16px'
+                      }}>
+                        <BookOpen size={28} />
+                      </div>
+                      <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '8px' }}>
+                        Guruh tanlanmagan
+                      </h3>
+                      <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '360px', margin: '0 auto 20px' }}>
+                        Topshiriqlarni ko'rish va boshqarish uchun guruhni tanlang.
+                      </p>
+                      <button
+                        onClick={() => setShowGroupDrawer(true)}
+                        className="btn-big-blue"
+                        style={{ margin: '0 auto' }}
+                      >
+                        <span>Guruhni tanlash</span>
+                      </button>
+                    </div>
+                  )
                 ) : (
                   <>
 
@@ -3958,8 +4036,46 @@ export default function TeacherDashboardPage() {
               {isLoadingGroups ? (
                 <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>Yuklanmoqda...</div>
               ) : groups.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '14px' }}>
-                  Guruhlar topilmadi. Botni guruhga qo'shing va /start buyrug'ini yuboring.
+                <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>👥</div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px', fontSize: '16px' }}>
+                    Guruhlar topilmadi
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                    O'quvchilaringiz mavjud bo'lgan Telegram guruhingizga <b>@lanswitchbot</b> ni qo'shing va administrator qiling.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGroupDrawer(false);
+                        openTelegramBotChat('lanswitchbot');
+                      }}
+                      className="btn-big-blue"
+                      style={{ width: '100%', minHeight: '44px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                      <Send size={16} />
+                      <span>➕ Botni guruhga qo'shish</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (user?.id) {
+                            await api.updateUserRole('Student', user.id);
+                          }
+                        } catch (e) {
+                          console.warn(e);
+                        }
+                        const search = window.location.search || '';
+                        navigate(`/student${search}`, { replace: true });
+                      }}
+                      className="btn-big-white"
+                      style={{ width: '100%', minHeight: '42px', fontSize: '13px' }}
+                    >
+                      <span>🎓 Talaba rejimiga o'tish</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 groups.map(g => {

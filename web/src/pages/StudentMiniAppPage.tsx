@@ -9,7 +9,7 @@ import {
   BookOpen, CheckCircle2, XCircle, AlertTriangle, 
   Send, ChevronLeft, ChevronRight, Volume2, Sparkles, 
   Clock, Trophy, X, Check, RefreshCw, Film, Library, Play, Search, ArrowLeft,
-  Trash2, ExternalLink, ChevronDown, Users, Maximize2, Minimize2
+  Trash2, ExternalLink, ChevronDown, Users, Maximize2, Minimize2, GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -259,7 +259,9 @@ export default function StudentMiniAppPage() {
     setGroups(userGroups);
 
     if (userGroups.length === 0) {
-      setShowOnboardingModal(true);
+      setShowOnboardingModal(false);
+      setSelectedGroup(null);
+      setAssignments([]);
     } else {
       setShowOnboardingModal(false);
       const savedGroupId = localStorage.getItem('lanswitch_student_selected_group_id');
@@ -1153,7 +1155,7 @@ export default function StudentMiniAppPage() {
                 marginTop: '2px',
                 lineHeight: 1.2
               }}>
-                {selectedGroup ? selectedGroup.title : 'Guruhni tanlang'}
+                {selectedGroup ? selectedGroup.title : (groups.length === 0 ? 'Mustaqil rejim' : 'Guruhni tanlang')}
               </div>
             </div>
             <ChevronDown size={14} color="#FFFFFF" style={{ flexShrink: 0, opacity: 0.9 }} />
@@ -1202,7 +1204,132 @@ export default function StudentMiniAppPage() {
       {/* 2. TAB CONTENT: UYGA VAZIFALAR (HOMEWORK)                */}
       {/* ======================================================== */}
       {mainTab === 'homework' && (
-        <>
+        groups.length === 0 ? (
+          <main style={{ padding: '24px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{
+              background: 'var(--pure-white)',
+              borderRadius: 'var(--radius-card)',
+              border: '2px solid var(--sky-border)',
+              boxShadow: 'var(--shadow-card)',
+              padding: '32px 20px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                background: 'var(--ice-blue-bg)',
+                color: 'var(--primary-blue)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                border: '2px solid var(--sky-border)'
+              }}>
+                <GraduationCap size={36} />
+              </div>
+
+              <h2 style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '8px' }}>
+                Hali guruhga qo'shilmagansiz
+              </h2>
+              <p style={{ fontSize: '14px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '24px' }}>
+                Siz hozir <b>Mustaqil ta'lim</b> rejimidasiz. O'zingiz mustaqil o'rganishingiz yoki topshiriqlarni ko'rish uchun quyidagilardan foydalanishingiz mumkin:
+              </p>
+
+              {/* CARD 1: O'QUVCHI UCHUN */}
+              <div style={{
+                background: '#F8FAFC',
+                border: '1.5px solid #E2E8F0',
+                borderRadius: '16px',
+                padding: '18px 16px',
+                textAlign: 'left',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>🎓</span>
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-navy)' }}>O'quvchi / Talaba bo'lsangiz:</span>
+                </div>
+                <p style={{ fontSize: '13px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, margin: '0 0 14px' }}>
+                  Agar topshiriqlar ko'rinmayotgan bo'lsa, <b>ustozingizga murojaat qiling</b> — ular sizni dars guruhiga qo'shishi bilanoq barcha uyga vazifalar bu yerda avtomatik ko'rinadi!
+                </p>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMainTab('movies');
+                      loadMovies();
+                    }}
+                    className="btn-big-blue"
+                    style={{ flex: 1, minHeight: '44px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <Film size={16} />
+                    <span>🎬 Kinolarni ko'rish</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMainTab('vocabulary');
+                      loadBooks();
+                    }}
+                    className="btn-big-white"
+                    style={{ flex: 1, minHeight: '44px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <BookOpen size={16} />
+                    <span>📖 Lug'at yodlash</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CARD 2: O'QITUVCHI UCHUN */}
+              <div style={{
+                background: '#EFF6FF',
+                border: '1.5px solid #BFDBFE',
+                borderRadius: '16px',
+                padding: '18px 16px',
+                textAlign: 'left'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>👨‍🏫</span>
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: '#1E40AF' }}>O'qituvchi / Repetitor bo'lsangiz:</span>
+                </div>
+                <p style={{ fontSize: '13px', color: '#1E3A8A', lineHeight: 1.5, margin: '0 0 14px' }}>
+                  Dars o'tadigan, ya'ni talabalaringiz mavjud bo'lgan Telegram guruhingizga <b>@lanswitchbot</b> ni qo'shing va <b>Administrator</b> qiling.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (studentId) {
+                          await api.updateUserRole('Teacher', studentId);
+                        }
+                      } catch (e) {
+                        console.warn(e);
+                      }
+                      const search = window.location.search || '';
+                      navigate(`/teacher${search}`, { replace: true });
+                    }}
+                    className="btn-big-blue"
+                    style={{ width: '100%', minHeight: '44px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%)' }}
+                  >
+                    <span>👨‍🏫 O'qituvchi bo'limiga o'tish</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTelegramBotChat('lanswitchbot')}
+                    className="btn-big-white"
+                    style={{ width: '100%', minHeight: '40px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <Send size={15} />
+                    <span>➕ Botni guruhga qo'shish</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </main>
+        ) : (
+          <>
           {/* 4 TOP CATEGORY TABS */}
           <div style={{
             padding: '14px 20px 6px 20px',
@@ -1546,6 +1673,7 @@ export default function StudentMiniAppPage() {
             )}
           </main>
         </>
+        )
       )}
 
       {/* ======================================================== */}
@@ -1957,8 +2085,31 @@ export default function StudentMiniAppPage() {
             width: '100%',
             textAlign: 'center',
             boxShadow: 'var(--shadow-modal)',
-            border: '2px solid var(--sky-border)'
+            border: '2px solid var(--sky-border)',
+            position: 'relative'
           }}>
+            <button
+              type="button"
+              onClick={() => setShowOnboardingModal(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: '#F1F5F9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'var(--text-muted)'
+              }}
+            >
+              <X size={18} />
+            </button>
+
             <div style={{
               width: '80px',
               height: '80px',
@@ -1978,30 +2129,33 @@ export default function StudentMiniAppPage() {
             <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '8px' }}>
               Xush kelibsiz!
             </div>
-            <div style={{ fontSize: '15px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '28px' }}>
-              Guruhlaringiz va topshiriqlaringiz Mini App'da avtomatik paydo bo'lishi uchun avval botimizga <b>/start</b> bosing.
+            <div style={{ fontSize: '15px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '24px' }}>
+              Guruhlaringiz va topshiriqlaringiz avtomatik paydo bo'lishi uchun Telegram botimizga <b>/start</b> bosing yoki mustaqil ta'limdan foydalaning.
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button
                 type="button"
                 onClick={() => openTelegramBotChat('lanswitchbot')}
                 className="btn-big-blue"
-                style={{ width: '100%', minHeight: '56px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                style={{ width: '100%', minHeight: '52px', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
-                <Send size={20} />
+                <Send size={18} />
                 <span>🚀 BOTGA START BOSISH</span>
               </button>
 
               <button
-                onClick={async () => {
+                type="button"
+                onClick={() => {
                   setShowOnboardingModal(false);
-                  await loadInitialData();
+                  setMainTab('movies');
+                  loadMovies();
                 }}
                 className="btn-big-white"
-                style={{ width: '100%', minHeight: '50px', fontSize: '15px' }}
+                style={{ width: '100%', minHeight: '46px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                <span>✅ Start bosdim, qayta tekshirish</span>
+                <Film size={16} />
+                <span>🎬 Mustaqil rejimda davom etish</span>
               </button>
             </div>
           </div>
@@ -2065,49 +2219,94 @@ export default function StudentMiniAppPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {groups.map(g => {
-                const isSelected = selectedGroup?.id === g.id;
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => handleSelectGroup(g)}
-                    style={{
-                      padding: '16px 20px',
-                      borderRadius: 'var(--radius-card-sm)',
-                      border: isSelected ? '2px solid var(--primary-blue)' : '1.5px solid var(--sky-border)',
-                      background: isSelected ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)' }}>
-                        {g.title}
-                      </div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Telegram ID: {g.telegramChatId}
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '9999px',
-                        background: 'var(--primary-blue)',
-                        color: 'var(--pure-white)',
+              {groups.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>👥</div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px', fontSize: '16px' }}>
+                    Guruhlar mavjud emas
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-navy-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                    Siz hali birorta dars guruhiga a'zo emassiz. Ustozingiz sizni guruhga qo'shgach bu yerda paydo bo'ladi.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGroupDrawer(false);
+                        setMainTab('movies');
+                        loadMovies();
+                      }}
+                      className="btn-big-blue"
+                      style={{ width: '100%', minHeight: '44px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    >
+                      <Film size={16} />
+                      <span>🎬 Kinolarni ko'rish</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (studentId) {
+                            await api.updateUserRole('Teacher', studentId);
+                          }
+                        } catch (e) {
+                          console.warn(e);
+                        }
+                        const search = window.location.search || '';
+                        navigate(`/teacher${search}`, { replace: true });
+                      }}
+                      className="btn-big-white"
+                      style={{ width: '100%', minHeight: '42px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    >
+                      <span>👨‍🏫 O'qituvchi bo'limiga o'tish</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                groups.map(g => {
+                  const isSelected = selectedGroup?.id === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => handleSelectGroup(g)}
+                      style={{
+                        padding: '16px 20px',
+                        borderRadius: 'var(--radius-card-sm)',
+                        border: isSelected ? '2px solid var(--primary-blue)' : '1.5px solid var(--sky-border)',
+                        background: isSelected ? 'var(--ice-blue-bg)' : 'var(--pure-white)',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Check size={18} strokeWidth={3} />
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)' }}>
+                          {g.title}
+                        </div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          Telegram ID: {g.telegramChatId}
+                        </div>
                       </div>
-                    )}
-                  </button>
-                );
-              })}
+                      {isSelected && (
+                        <div style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '9999px',
+                          background: 'var(--primary-blue)',
+                          color: 'var(--pure-white)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Check size={18} strokeWidth={3} />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

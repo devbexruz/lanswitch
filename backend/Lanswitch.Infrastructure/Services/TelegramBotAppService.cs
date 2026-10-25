@@ -488,21 +488,43 @@ public class TelegramBotAppService : ITelegramBotAppService
         user.LoginTokenExpiry = DateTime.UtcNow.AddMinutes(10);
         _userRepository.Update(user);
 
+        var me = await _botClient.GetMe();
+        var botUsername = me.Username ?? "lanswitchbot";
+
         string frontend_host = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+        var studentTmaUrl = $"https://{frontend_host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
+        var teacherTmaUrl = $"https://{frontend_host}/teacher?user_id={user.Id}&telegram_id={user.TelegramId}";
         var loginUrl = $"https://{frontend_host}/api/auth/redirect?token={user.LoginToken}";
-        var tmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontend_host}/tma";
-        var fullTmaUrl = $"{tmaUrl}?user_id={user.Id}&telegram_id={user.TelegramId}";
 
         var keyboard = new InlineKeyboardMarkup(new[]
         {
-            new[] { InlineKeyboardButton.WithWebApp("📱 Lanswitch Mini App", new Telegram.Bot.Types.WebAppInfo { Url = fullTmaUrl }) },
-            new[] { InlineKeyboardButton.WithUrl("Tizimga kirish (Web) 🚀", loginUrl) }
+            new[]
+            {
+                InlineKeyboardButton.WithWebApp("🎓 O'quvchi / Talaba (Mini App)", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl })
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithWebApp("👨‍🏫 O'qituvchi / Repetitor (Mini App)", new Telegram.Bot.Types.WebAppInfo { Url = teacherTmaUrl })
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithUrl("➕ Botni guruhga qo'shish", $"https://t.me/{botUsername}?startgroup=true"),
+                InlineKeyboardButton.WithUrl("🌐 Web orqali kirish", loginUrl)
+            }
         });
 
-        await _botClient.SendMessage(chatId, 
-            $"Assalomu alaykum, <b>{user.FullName}</b>!\n\nLanswitch ta'lim platformasiga xush kelibsiz.\nDarslar, so'zlar va uyga vazifalaringizni ko'rish uchun quyidagi tugmani bosing 👇", 
-            parseMode: ParseMode.Html,
-            replyMarkup: keyboard);
+        var welcomeMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n\n" +
+                         $"🚀 <b>Lanswitch</b> — ingliz tilini o'rganish va o'qitishni avtomatlashtiruvchi zamonaviy ta'lim platformasi!\n\n" +
+                         $"Siz platformadan 2 xil maqsadda foydalanishingiz mumkin:\n\n" +
+                         $"👨‍🏫 <b>1. O'qituvchi / Repetitor bo'lsangiz:</b>\n" +
+                         $"• O'quvchilaringiz mavjud bo'lgan Telegram guruhingizga ushbu botni qo'shing va <b>Administrator</b> qiling.\n" +
+                         $"• Bot o'quvchilarni guruhdan avtomatik ro'yxatga oladi, darsliklardan so'zlar yodlash, 4 variantli testlar, video/audio topshiriqlar nazorati va jarimalar hisobini 100% avtomatlashtirib beradi.\n\n" +
+                         $"🎓 <b>2. Mustaqil o'rganuvchi / Talaba bo'lsangiz:</b>\n" +
+                         $"• <b>Guruhsiz mustaqil rejim:</b> Hech qanday guruhga a'zo bo'lmasdan ham sara filmlar va seriallarni interaktiv subtitrlar bilan ko'rishingiz, film ichida AI Ustoz bilan muloqot qilishingiz hamda kitoblar lug'atidan so'z yodlashingiz mumkin.\n" +
+                         $"• <b>Topshiriqlar ko'rinmayotgan bo'lsa:</b> O'qituvchingizga murojaat qiling, ular sizni o'z guruhiga qo'shishi bilanoq barcha uyga vazifalar avtomatik paydo bo'ladi!\n\n" +
+                         $"👇 <i>Kerakli bo'limga o'tish uchun quyidagi tugmalardan birini tanlang:</i>";
+
+        await _botClient.SendMessage(chatId, welcomeMsg, parseMode: ParseMode.Html, replyMarkup: keyboard);
     }
 
     private async Task HandleGroupStartAsync(long chatId, string title, Lanswitch.Domain.Entities.User user, Telegram.Bot.Types.User? fromUser)
