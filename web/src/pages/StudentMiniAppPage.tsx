@@ -47,6 +47,7 @@ export default function StudentMiniAppPage() {
   const [selectedGroup, setSelectedGroup] = useState<StudentGroup | null>(null);
   const [showGroupDrawer, setShowGroupDrawer] = useState(false);
   const [assignments, setAssignments] = useState<AssignmentDetail[]>([]);
+  const [targetAssignmentId, setTargetAssignmentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [preparingUploadItemId, setPreparingUploadItemId] = useState<number | null>(null);
   const [sendingAttId, setSendingAttId] = useState<number | null>(null);
@@ -262,20 +263,48 @@ export default function StudentMiniAppPage() {
     const currentStudentId = resolvedId || 1;
     setStudentId(currentStudentId);
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryGroupId = urlParams.get('group_id') || urlParams.get('groupId');
+    const queryAssignmentId = urlParams.get('assignment_id') || urlParams.get('assignmentId');
+
+    if (queryAssignmentId || queryGroupId) {
+      setMainTab('homework');
+      setHomeworkSubTab('all');
+    }
+    if (queryAssignmentId) {
+      setTargetAssignmentId(queryAssignmentId);
+    }
+
     const userGroups = await api.getStudentGroups(currentStudentId);
     setGroups(userGroups);
 
-    if (userGroups.length === 0) {
+    let activeGroup: StudentGroup | null = null;
+    if (queryGroupId) {
+      const foundInGroups = userGroups.find(g => g.id.toString() === queryGroupId);
+      if (foundInGroups) {
+        activeGroup = foundInGroups;
+      } else {
+        activeGroup = {
+          id: parseInt(queryGroupId, 10),
+          title: 'Dars guruhi',
+          telegramChatId: 0
+        };
+        setGroups(prev => [activeGroup!, ...prev]);
+      }
+    } else {
+      const savedGroupId = localStorage.getItem('lanswitch_student_selected_group_id');
+      activeGroup = userGroups.find(g => g.id.toString() === savedGroupId) || (userGroups.length > 0 ? userGroups[0] : null);
+    }
+
+    if (activeGroup) {
+      setShowOnboardingModal(false);
+      setSelectedGroup(activeGroup);
+      localStorage.setItem('lanswitch_student_selected_group_id', activeGroup.id.toString());
+      await loadAssignments(activeGroup.id, 'All', currentStudentId);
+    } else {
       setShowOnboardingModal(false);
       setSelectedGroup(null);
       setAssignments([]);
-    } else {
-      setShowOnboardingModal(false);
-      const savedGroupId = localStorage.getItem('lanswitch_student_selected_group_id');
-      const found = userGroups.find(g => g.id.toString() === savedGroupId);
-      const initial = found || userGroups[0];
-      setSelectedGroup(initial);
-      await loadAssignments(initial.id, 'All', currentStudentId);
     }
     setIsLoading(false);
   };
@@ -283,9 +312,30 @@ export default function StudentMiniAppPage() {
   const loadAssignments = async (groupId: number, filter: string, sId?: number) => {
     setIsLoading(true);
     const resolvedId = sId ?? studentId;
-    const data = await api.getStudentAssignments(groupId, filter, resolvedId);
-    setAssignments(data);
-    setIsLoading(false);
+    try {
+      const data = await api.getStudentAssignments(groupId, filter, resolvedId);
+      const urlParams = new URLSearchParams(window.location.search);
+      const qAssId = urlParams.get('assignment_id') || urlParams.get('assignmentId');
+
+      if (qAssId) {
+        const targetId = parseInt(qAssId, 10);
+        data.sort((a, b) => (a.id === targetId ? -1 : b.id === targetId ? 1 : 0));
+      }
+      setAssignments(data);
+
+      if (qAssId) {
+        setTimeout(() => {
+          const el = document.getElementById(`assignment-${qAssId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
+      }
+    } catch (err) {
+      console.error('Error loading assignments:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSelectGroup = async (g: StudentGroup) => {
@@ -1456,17 +1506,25 @@ export default function StudentMiniAppPage() {
                     </div>
                   </div>
                 ) : (
-                  assignments.map(assignment => (
+                  assignments.map(assignment => {
+                    const isTarget = Boolean(targetAssignmentId && assignment.id.toString() === targetAssignmentId);
+                    return (
                     <div
+                      id={`assignment-${assignment.id}`}
                       key={assignment.id}
                       style={{
                         background: 'var(--pure-white)',
                         borderRadius: 'var(--radius-card)',
-                        border: '2px solid var(--sky-border)',
-                        boxShadow: 'var(--shadow-card)',
+                        border: isTarget ? '3px solid #2563EB' : '2px solid var(--sky-border)',
+                        boxShadow: isTarget ? '0 0 24px rgba(37, 99, 235, 0.35)' : 'var(--shadow-card)',
                         overflow: 'hidden'
                       }}
                     >
+                      {isTarget && (
+                        <div style={{ background: '#2563EB', color: '#fff', padding: '6px 16px', fontSize: '13px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>🎯 Tanlangan vazifa</span>
+                        </div>
+                      )}
                       <div style={{
                         background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1D4ED8 100%)',
                         padding: '18px 20px',
@@ -1503,7 +1561,8 @@ export default function StudentMiniAppPage() {
                         {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             ) : homeworkSubTab === 'todo' ? (
@@ -1534,14 +1593,16 @@ export default function StudentMiniAppPage() {
                     );
                     if (pendingItems.length === 0) return null;
 
+                    const isTarget = Boolean(targetAssignmentId && assignment.id.toString() === targetAssignmentId);
                     return (
                       <div
+                        id={`assignment-todo-${assignment.id}`}
                         key={assignment.id}
                         style={{
                           background: 'var(--pure-white)',
                           borderRadius: 'var(--radius-card)',
-                          border: '2px solid var(--sky-border)',
-                          boxShadow: 'var(--shadow-card)',
+                          border: isTarget ? '3px solid #2563EB' : '2px solid var(--sky-border)',
+                          boxShadow: isTarget ? '0 0 24px rgba(37, 99, 235, 0.35)' : 'var(--shadow-card)',
                           overflow: 'hidden'
                         }}
                       >

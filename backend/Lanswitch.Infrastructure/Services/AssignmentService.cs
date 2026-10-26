@@ -116,52 +116,90 @@ public class AssignmentService : IAssignmentService
 
         if (assignment == null) return false;
 
-        var webAppUrl = _config["Frontend:TmaUrl"] ?? "https://lanswitch.uz/tma";
-        var tmaButtonUrl = $"{webAppUrl}?assignment_id={assignment.Id}&group_id={assignment.GroupId}";
+        string frontendHost = _config.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+        var me = await _botClient.GetMe();
+        var botUsername = me.Username ?? "lanswitchbot";
 
-        var inlineKeyboard = new InlineKeyboardMarkup(new[]
+        var groupDeepLink = $"https://t.me/{botUsername}?start=hw_{assignment.Id}";
+        var groupKeyboard = new InlineKeyboardMarkup(new[]
         {
-            new[] { InlineKeyboardButton.WithWebApp("📝 Vazifani Bajarish", new Telegram.Bot.Types.WebAppInfo { Url = tmaButtonUrl }) }
+            new[] { InlineKeyboardButton.WithUrl("📝 Vazifani Bajarish", groupDeepLink) }
         });
 
         var messageText = $"📢 <b>YANGI UYGA VAZIFA!</b>\n\n" +
                           $"📚 <b>Guruh:</b> {assignment.Group.Title}\n" +
                           $"📌 <b>Dars:</b> {assignment.Title}\n" +
                           $"⏰ <b>Topshirish muddati:</b> {assignment.Deadline:dd.MM.yyyy HH:mm}\n" +
-                          $"🔢 <b>Qismlar soni:</b> {assignment.Items.Count} ta qism\n\n" +
+                          $"🔢 <b>Topshiriqlar soni:</b> {assignment.Items.Count} ta qism\n\n" +
                           $"<i>Bajarish uchun quyidagi tugmani bosing 👇</i>";
 
-        // 1. Telegram guruhga yuborish
+        // 1. Telegram guruhga yuborish (bosilganda bot oynasi ochiladi)
         try
         {
             await _botClient.SendMessage(
                 chatId: assignment.Group.TelegramChatId,
                 text: messageText,
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
-                replyMarkup: inlineKeyboard);
+                replyMarkup: groupKeyboard);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Guruhga xabar yuborishda xatolik: {ex.Message}");
         }
 
-        // 2. Start bosgan o'quvchilarning shaxsiy chatiga yuborish
+        // 2. Ustozga lichka (PM) xabar yuborish
+        try
+        {
+            var creator = await _db.Users.FindAsync(teacherId);
+            if (creator != null && long.TryParse(creator.TelegramId, out long teacherTgId))
+            {
+                var teacherTmaUrl = $"https://{frontendHost}/teacher?role=teacher&user_id={creator.Id}&telegram_id={creator.TelegramId}";
+                var teacherKeyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[] { InlineKeyboardButton.WithWebApp("👨‍🏫 O'qituvchi Panelida ko'rish", new Telegram.Bot.Types.WebAppInfo { Url = teacherTmaUrl }) }
+                });
+
+                var teacherMsg = $"✅ <b>Uyga vazifa muvaffaqiyatli '{assignment.Group.Title}' guruhiga e'lon qilindi!</b> 🎉\n\n" +
+                                 $"📌 <b>Dars:</b> {assignment.Title}\n" +
+                                 $"⏰ <b>Topshirish muddati:</b> {assignment.Deadline:dd.MM.yyyy HH:mm}\n" +
+                                 $"🔢 <b>Topshiriqlar:</b> {assignment.Items.Count} ta qism\n\n" +
+                                 $"<i>O'quvchilar topshirishini monitoring qilish uchun paneldan foydalanishingiz mumkin 👇</i>";
+
+                await _botClient.SendMessage(
+                    chatId: teacherTgId,
+                    text: teacherMsg,
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
+                    replyMarkup: teacherKeyboard);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ustozga lichka yuborishda xatolik: {ex.Message}");
+        }
+
+        // 3. Start bosgan o'quvchilarning shaxsiy chatiga (Lichkaga) WebApp tugmasi bilan yuborish
         var activeMembers = assignment.Group.Members.Where(m => m.IsActive).ToList();
         foreach (var member in activeMembers)
         {
             if (long.TryParse(member.Student.TelegramId, out long studentTelegramId))
             {
+                var studentTmaUrl = $"https://{frontendHost}/student?role=student&user_id={member.StudentId}&telegram_id={member.Student.TelegramId}&assignment_id={assignment.Id}&group_id={assignment.GroupId}";
+                var studentKeyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[] { InlineKeyboardButton.WithWebApp("📝 Vazifani Bajarish", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl }) }
+                });
+
                 try
                 {
                     await _botClient.SendMessage(
                         chatId: studentTelegramId,
                         text: messageText,
                         parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
-                        replyMarkup: inlineKeyboard);
+                        replyMarkup: studentKeyboard);
                 }
                 catch
                 {
-                    // Foydalanuvchi botni bloklagan bo'lishi mumkin, davom etaveradi
+                    // Foydalanuvchi botni bloklagan bo'lishi mumkin
                 }
             }
         }
@@ -178,9 +216,11 @@ public class AssignmentService : IAssignmentService
         if (group == null) return new List<AssignmentDetailDto>();
 
         var now = DateTime.UtcNow;
-        bool isOwnerAdmin = group.Owner?.IsAdmin == true;
+        var groupOwner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = groupOwner?.IsAdmin == true || await _db.GroupAdmins.AnyAsync(ga => ga.GroupId == groupId && ga.User.IsAdmin);
+
         var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
-            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .Where(s => (s.UserId == group.OwnerId || _db.GroupAdmins.Any(ga => ga.GroupId == groupId && ga.UserId == s.UserId)) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
             .OrderByDescending(s => s.Id)
             .FirstOrDefaultAsync();
 

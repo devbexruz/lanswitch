@@ -22,13 +22,14 @@ function SmartRoleRoute() {
   const [searchParams] = useSearchParams();
   const search = searchParams.toString() ? `?${searchParams.toString()}` : '';
 
-  // 1. Agar URL da role yoki branch parametri aniq berilgan bo'lsa (eng yuqori prioritet)
+  // 1. Agar URL da assignment yoki group parametri bo'lsa yoki student roli ko'rsatilgan bo'lsa
   const roleParam = searchParams.get('role')?.toLowerCase() || searchParams.get('branch')?.toLowerCase();
+  const hasAssignment = searchParams.has('assignment_id') || searchParams.has('assignmentId') || searchParams.has('group_id');
+  if (hasAssignment || roleParam === 'student') {
+    return <Navigate to={`/student${search}`} replace />;
+  }
   if (roleParam === 'teacher') {
     return <Navigate to={`/teacher${search}`} replace />;
-  }
-  if (roleParam === 'student') {
-    return <Navigate to={`/student${search}`} replace />;
   }
 
   // 2. Foydalanuvchining aktiv roli (state yoki localStorage)

@@ -332,6 +332,42 @@ public class TelegramBotAppService : ITelegramBotAppService
                 return;
             }
 
+            // Guruhdagi tugma orqali /start hw_{assignmentId} kelganda
+            if (payload.StartsWith("hw_"))
+            {
+                if (long.TryParse(payload.Replace("hw_", ""), out var assignmentId))
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var assignment = await db.Assignments
+                        .Include(a => a.Group)
+                        .Include(a => a.Items)
+                        .FirstOrDefaultAsync(a => a.Id == assignmentId);
+
+                    if (assignment != null)
+                    {
+                        string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+                        var tmaUrl = $"https://{frontendHost}/student?role=student&user_id={user.Id}&telegram_id={user.TelegramId}&assignment_id={assignment.Id}&group_id={assignment.GroupId}";
+
+                        var kb = new InlineKeyboardMarkup(new[]
+                        {
+                            new[] { InlineKeyboardButton.WithWebApp("📝 Topshiriqni Bajarish", new WebAppInfo { Url = tmaUrl }) }
+                        });
+
+                        var sb = new StringBuilder();
+                        sb.AppendLine($"📢 <b>YANGI UYGA VAZIFA!</b>\n");
+                        sb.AppendLine($"📚 <b>Guruh:</b> {assignment.Group?.Title}");
+                        sb.AppendLine($"📌 <b>Dars:</b> {assignment.Title}");
+                        sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {assignment.Deadline:dd.MM.yyyy HH:mm}");
+                        sb.AppendLine($"🔢 <b>Topshiriqlar soni:</b> {assignment.Items.Count} ta qism\n");
+                        sb.AppendLine("<i>Topshiriqni boshlash uchun quyidagi tugmani bosing 👇</i>");
+
+                        await _botClient.SendMessage(chatId, sb.ToString(), parseMode: ParseMode.Html, replyMarkup: kb);
+                        return;
+                    }
+                }
+            }
+
             // 3-tur: O'quvchi "Yuborish" tugmasini bosib kelganda
             if (payload.StartsWith("item_"))
             {
