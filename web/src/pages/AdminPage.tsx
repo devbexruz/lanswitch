@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './AdminPage.css';
 import { useAuth } from '../context/AuthContext';
 import AdminMediaEditModal from './AdminMediaEditModal';
 import CreateMediaModal from './CreateMediaModal';
 import ReactMarkdown from 'react-markdown';
+import { 
+  Send, Megaphone, Archive, Trash2, Bold, Italic, Underline, Strikethrough, 
+  Code, Quote, Link2, Eye, RefreshCw, AlertTriangle, Sparkles, Plus, 
+  ExternalLink, Copy 
+} from 'lucide-react';
 
 const AdminPage: React.FC = () => {
   const { user } = useAuth();
@@ -13,10 +18,54 @@ const AdminPage: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [editingMedia, setEditingMedia] = useState<any>(null);
   const [isCreatingMedia, setIsCreatingMedia] = useState(false);
-  const [activeTab, setActiveTab] = useState<'media' | 'subscriptions' | 'users' | 'categories' | 'grammar'>('media');
+  const [activeTab, setActiveTab] = useState<'broadcast' | 'subscriptions' | 'media' | 'users' | 'grammar' | 'categories' | 'archives'>('broadcast');
   const [categories, setCategories] = useState<any[]>([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
+
+  // Telegram Broadcast state
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'students' | 'teachers' | 'premium' | 'free'>('all');
+  const [broadcastStats, setBroadcastStats] = useState<any>(null);
+  const [loadingBroadcastStats, setLoadingBroadcastStats] = useState(false);
+  const [broadcastMessageHtml, setBroadcastMessageHtml] = useState<string>(
+`🔥 <b>LANSWITCH — ZAMONAVIY TIL O'RGANISH PLATFORMASI!</b>
+
+Ingliz tilini tez va oson o'rganish uchun barcha qulayliklar bitta joyda:
+
+🎬 <b>Interaktiv Kinolar & Seriallar:</b>
+Subtitrlar ustiga bosib so'zlarni bir zumda tarjima qiling va lug'atingizga qo'shing.
+
+🤖 <b>Sun'iy Intellekt (AI) Tahlili:</b>
+Har bir gapning arxitekturasi va so'zma-so'z chuqur ma'nosi bilan tanishing.
+
+📚 <b>Interaktiv Lug'atlar & Qiziqarli Testlar:</b>
+O'rgangan so'zlaringizni mustahkamlang va lug'at boyligingizni oshiring.
+
+👨‍🏫 <b>O'qituvchilar va Kurslar uchun:</b>
+Telegram guruhlaringizni ulang, avtomatik vazifalar bering va talabalarni qulay tekshiring!
+
+🎁 <b>START BONUS:</b> Hozir kiring va <b>25 000 so'm</b> bonusga ega bo'ling!
+
+<i>Boshlash uchun quyidagi tugmani bosing 👇</i>`
+  );
+  const [broadcastPhotoUrl, setBroadcastPhotoUrl] = useState<string>('');
+  const [broadcastButtons, setBroadcastButtons] = useState<Array<{ text: string; url: string }>>([
+    { text: '📱 Platformaga kirish (Mini App)', url: 'https://lanswitch.developerlogic.uz/tma' },
+    { text: '⭐ Imkoniyatlar va Tariflar', url: 'https://t.me/lanswitchbot?start=premium' }
+  ]);
+  const [broadcastAlsoInApp, setBroadcastAlsoInApp] = useState<boolean>(true);
+  const [broadcastInAppTitle, setBroadcastInAppTitle] = useState<string>("🔥 Lanswitch Yangi Imkoniyatlari va 25,000 so'm Bonus!");
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  const [isTestingBroadcast, setIsTestingBroadcast] = useState(false);
+  const [showBroadcastConfirm, setShowBroadcastConfirm] = useState(false);
+  const [broadcastProgress, setBroadcastProgress] = useState<string | null>(null);
+
+  // Archives state
+  const [archivesList, setArchivesList] = useState<any[]>([]);
+  const [loadingArchives, setLoadingArchives] = useState(false);
+  const [archiveEntityType, setArchiveEntityType] = useState<string>('all');
+  const [selectedArchiveJson, setSelectedArchiveJson] = useState<any | null>(null);
 
   // Subscriptions management state
   const [subTab, setSubTab] = useState<'receipts' | 'plans_settings' | 'active_subs' | 'logs'>('receipts');
@@ -93,7 +142,297 @@ const AdminPage: React.FC = () => {
     fetchPaymentRequests();
     fetchCardSettings();
     fetchLogsAndStats();
+    fetchBroadcastStats();
+    fetchArchives();
   }, []);
+
+  const fetchBroadcastStats = async () => {
+    setLoadingBroadcastStats(true);
+    try {
+      const res = await fetch('/api/notification/admin/broadcast/stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'X-User-Id': user?.id?.toString() || ''
+        }
+      });
+      if (res.ok) {
+        setBroadcastStats(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingBroadcastStats(false);
+    }
+  };
+
+  const handleTestBroadcast = async () => {
+    if (!broadcastMessageHtml.trim()) {
+      alert("Xabar matnini kiriting!");
+      return;
+    }
+    setIsTestingBroadcast(true);
+    try {
+      const res = await fetch('/api/notification/admin/broadcast/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'X-User-Id': user?.id?.toString() || ''
+        },
+        body: JSON.stringify({
+          messageHtml: broadcastMessageHtml,
+          photoUrl: broadcastPhotoUrl || null,
+          buttons: broadcastButtons.filter(b => b.text.trim() && b.url.trim())
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || "✅ Test xabari Telegramingizga muvaffaqiyatli yuborildi!");
+      } else {
+        alert(`❌ ${data.message || 'Xatolik yuz berdi'}`);
+      }
+    } catch (e: any) {
+      alert("Tarmoq xatosi: " + (e?.message || e));
+    } finally {
+      setIsTestingBroadcast(false);
+    }
+  };
+
+  const handleSendBroadcast = async () => {
+    setShowBroadcastConfirm(false);
+    setIsSendingBroadcast(true);
+    setBroadcastProgress("Xabarlar auditoriyaga tarqatilmoqda, iltimos kuting...");
+    try {
+      const res = await fetch('/api/notification/admin/broadcast/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'X-User-Id': user?.id?.toString() || ''
+        },
+        body: JSON.stringify({
+          target: broadcastTarget,
+          messageHtml: broadcastMessageHtml,
+          photoUrl: broadcastPhotoUrl || null,
+          buttons: broadcastButtons.filter(b => b.text.trim() && b.url.trim()),
+          alsoSendInApp: broadcastAlsoInApp,
+          inAppTitle: broadcastInAppTitle
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`🎉 Muvaffaqiyatli tarqatildi!\n\nJami auditoriya: ${data.totalRecipients} ta\n✅ Yetkazildi: ${data.sentCount} ta\n🚫 Botni bloklagan: ${data.blockedCount} ta\n❌ Xatolik: ${data.failedCount} ta`);
+        fetchBroadcastStats();
+      } else {
+        alert(`❌ ${data.message || 'Xabar yuborishda xatolik yuz berdi'}`);
+      }
+    } catch (e: any) {
+      alert("Xatolik: " + (e?.message || e));
+    } finally {
+      setIsSendingBroadcast(false);
+      setBroadcastProgress(null);
+    }
+  };
+
+  const handleLoadPromoTemplate = () => {
+    setBroadcastMessageHtml(
+`🔥 <b>LANSWITCH — ZAMONAVIY TIL O'RGANISH PLATFORMASI!</b>
+
+Ingliz tilini tez va oson o'rganish uchun barcha qulayliklar bitta joyda:
+
+🎬 <b>Interaktiv Kinolar & Seriallar:</b>
+Subtitrlar ustiga bosib so'zlarni bir zumda tarjima qiling va lug'atingizga qo'shing.
+
+🤖 <b>Sun'iy Intellekt (AI) Tahlili:</b>
+Har bir gapning arxitekturasi va so'zma-so'z chuqur ma'nosi bilan tanishing.
+
+📚 <b>Interaktiv Lug'atlar & Qiziqarli Testlar:</b>
+O'rgangan so'zlaringizni mustahkamlang va lug'at boyligingizni oshiring.
+
+👨‍🏫 <b>O'qituvchilar va Kurslar uchun:</b>
+Telegram guruhlaringizni ulang, avtomatik vazifalar bering va talabalarni qulay tekshiring!
+
+🎁 <b>START BONUS:</b> Hozir kiring va <b>25 000 so'm</b> bonusga ega bo'ling!
+
+<i>Boshlash uchun quyidagi tugmani bosing 👇</i>`
+    );
+    setBroadcastButtons([
+      { text: '🚀 Platformaga kirish (Mini App)', url: 'https://lanswitch.developerlogic.uz/tma' },
+      { text: '⭐ Imkoniyatlar va Tariflar', url: 'https://t.me/lanswitchbot?start=premium' }
+    ]);
+    setBroadcastInAppTitle("🔥 Lanswitch Yangi Imkoniyatlari va 25,000 so'm Bonus!");
+  };
+
+  const insertTextAtCursor = (textToInsert: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setBroadcastMessageHtml(prev => prev + textToInsert);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const currentText = broadcastMessageHtml;
+    const newText = currentText.substring(0, start) + textToInsert + currentText.substring(end);
+    setBroadcastMessageHtml(newText);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + textToInsert.length, start + textToInsert.length);
+    }, 10);
+  };
+
+  const insertTag = (openTag: string, closeTag: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const currentText = broadcastMessageHtml;
+    const selected = currentText.substring(start, end);
+
+    const replacement = `${openTag}${selected || 'matn'}${closeTag}`;
+    const newText = currentText.substring(0, start) + replacement + currentText.substring(end);
+    setBroadcastMessageHtml(newText);
+
+    setTimeout(() => {
+      el.focus();
+      const newCursorPos = selected ? start + replacement.length : start + openTag.length;
+      el.setSelectionRange(newCursorPos, selected ? newCursorPos : newCursorPos + 4);
+    }, 10);
+  };
+
+  const handleInsertLink = () => {
+    const el = textareaRef.current;
+    const selected = el ? broadcastMessageHtml.substring(el.selectionStart, el.selectionEnd) : '';
+    const url = prompt("Havola (URL) manzilini kiriting:", "https://");
+    if (!url) return;
+    const linkText = selected || prompt("Havola ko'rinadigan matnini kiriting:", "Batafsil ko'rish") || "havola";
+    insertTextAtCursor(`<a href="${url}">${linkText}</a>`);
+  };
+
+  const handleSmartPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const htmlData = e.clipboardData.getData('text/html');
+    const textData = e.clipboardData.getData('text/plain');
+
+    if (htmlData) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlData, 'text/html');
+
+        const convertNode = (node: Node): string => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            return (node.textContent || '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
+          }
+
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement;
+            const tagName = el.tagName.toLowerCase();
+            const childrenText = Array.from(el.childNodes).map(convertNode).join('');
+
+            switch (tagName) {
+              case 'b':
+              case 'strong':
+                return `<b>${childrenText}</b>`;
+              case 'i':
+              case 'em':
+                return `<i>${childrenText}</i>`;
+              case 'u':
+              case 'ins':
+                return `<u>${childrenText}</u>`;
+              case 's':
+              case 'strike':
+              case 'del':
+                return `<s>${childrenText}</s>`;
+              case 'code':
+                return `<code>${childrenText}</code>`;
+              case 'pre':
+                return `<pre>${childrenText}</pre>`;
+              case 'blockquote':
+                return `<blockquote>${childrenText}</blockquote>`;
+              case 'tg-spoiler':
+                return `<tg-spoiler>${childrenText}</tg-spoiler>`;
+              case 'a':
+                const href = el.getAttribute('href');
+                return href ? `<a href="${href}">${childrenText}</a>` : childrenText;
+              case 'p':
+              case 'div':
+                return `\n${childrenText}\n`;
+              case 'br':
+                return `\n`;
+              case 'li':
+                return `\n• ${childrenText}`;
+              default:
+                return childrenText;
+            }
+          }
+          return '';
+        };
+
+        const converted = Array.from(doc.body.childNodes)
+          .map(convertNode)
+          .join('')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+
+        if (converted && converted !== textData) {
+          e.preventDefault();
+          insertTextAtCursor(converted);
+          return;
+        }
+      } catch (err) {
+        console.warn('HTML paste parsing failed, falling back:', err);
+      }
+    }
+
+    // Markdown paste auto-conversion (e.g. **bold**, *italic*, [text](url))
+    if (textData && (/(\*\*|__|\*|_|\[.*?\]\(.*?\)|`)/.test(textData))) {
+      let mdConverted = textData
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+        .replace(/__(.*?)__/g, '<b>$1</b>')
+        .replace(/(?<!\w)\*(.*?)\*(?!\w)/g, '<i>$1</i>')
+        .replace(/(?<!\w)_(.*?)_(?!\w)/g, '<i>$1</i>')
+        .replace(/\[(.*?)\]\((https?:\/\/.*?)\)/g, '<a href="$2">$1</a>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+
+      if (mdConverted !== textData) {
+        e.preventDefault();
+        insertTextAtCursor(mdConverted);
+        return;
+      }
+    }
+  };
+
+  const fetchArchives = async () => {
+    setLoadingArchives(true);
+    try {
+      const url = archiveEntityType !== 'all' 
+        ? `/api/v1/groups/archives?entityType=${archiveEntityType}`
+        : '/api/v1/groups/archives';
+      const res = await fetch(url);
+      if (res.ok) setArchivesList(await res.json());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingArchives(false);
+    }
+  };
+
+  const handleCleanupArchives = async () => {
+    const daysStr = prompt("Necha kundan eski arxiv yozuvlarini tozalamoqchisiz?", "30");
+    if (!daysStr) return;
+    const days = parseInt(daysStr, 10);
+    if (isNaN(days) || days < 0) return;
+    try {
+      const res = await fetch(`/api/v1/groups/archives/cleanup?olderThanDays=${days}`, { method: 'POST' });
+      const data = await res.json();
+      alert(data.message || "Arxiv muvaffaqiyatli tozalandi");
+      fetchArchives();
+    } catch (e) {
+      alert("Xatolik yuz berdi");
+    }
+  };
 
   const fetchSubscriptions = async () => {
     setLoadingSubscriptions(true);
@@ -518,11 +857,49 @@ const AdminPage: React.FC = () => {
               Lanswitch Console
               <span className="admin-live-badge">● Jonli Tizim</span>
             </h1>
-            <p className="admin-subtitle">Tariflar, erkin to'lovlar, kvitansiyalar va platforma boshqaruvi</p>
+            <p className="admin-subtitle">Reklama tarqatish, tariflar, erkin to'lovlar, kvitansiyalar va boshqaruv</p>
+          </div>
+        </div>
+
+        {/* Quick Stat Pills */}
+        <div className="admin-stat-pills">
+          <div className="admin-stat-pill" onClick={() => { setActiveTab('users'); fetchUsers(); }} style={{ cursor: 'pointer' }} title="Foydalanuvchilar">
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8' }} />
+            <span>Foydalanuvchilar:</span>
+            <strong>{broadcastStats?.totalUsers ?? usersList.length}</strong>
+          </div>
+          <div className="admin-stat-pill" onClick={() => { setActiveTab('subscriptions'); setSubTab('receipts'); }} style={{ cursor: 'pointer' }} title="Kutilayotgan cheklar">
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
+            <span>Cheklar:</span>
+            <strong style={{ color: paymentRequests.filter(r => r.status === 'Pending').length > 0 ? '#ef4444' : '#10b981' }}>
+              {paymentRequests.filter(r => r.status === 'Pending').length} ta
+            </strong>
+          </div>
+          <div className="admin-stat-pill" onClick={() => { setActiveTab('media'); fetchMedia(); }} style={{ cursor: 'pointer' }} title="Kinolar va seriallar">
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#a855f7' }} />
+            <span>Kinolar:</span>
+            <strong>{mediaList.length} ta</strong>
+          </div>
+          <div className="admin-stat-pill" onClick={() => { setActiveTab('broadcast'); fetchBroadcastStats(); }} style={{ cursor: 'pointer', borderColor: 'rgba(56, 189, 248, 0.4)' }} title="Telegram foydalanuvchilari">
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+            <span>Telegram Bot:</span>
+            <strong style={{ color: '#38bdf8' }}>{broadcastStats?.telegramUsers ?? 0} ta</strong>
           </div>
         </div>
 
         <div className="admin-nav-tabs">
+          <button
+            className={`admin-nav-btn broadcast-pill ${activeTab === 'broadcast' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('broadcast');
+              fetchBroadcastStats();
+            }}
+          >
+            <span>🚀 Telegram Reklama & Broadcast</span>
+            <span style={{ background: '#22c55e', color: '#000', fontSize: '9px', fontWeight: 900, padding: '2px 5px', borderRadius: '4px', letterSpacing: '0.5px' }}>
+              REKLAMA
+            </span>
+          </button>
           <button
             className={`admin-nav-btn ${activeTab === 'subscriptions' ? 'active' : ''}`}
             onClick={() => {
@@ -562,10 +939,497 @@ const AdminPage: React.FC = () => {
           >
             👥 Foydalanuvchilar
           </button>
+          <button
+            className={`admin-nav-btn ${activeTab === 'archives' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('archives');
+              fetchArchives();
+            }}
+          >
+            🗄️ Arxivlar
+          </button>
         </div>
       </div>
 
       <div className="admin-glass-container">
+        {/* ========================================================== */}
+        {/* 1. TELEGRAM REKLAMA & BROADCAST TAB                        */}
+        {/* ========================================================== */}
+        {activeTab === 'broadcast' && (
+          <div className="broadcast-tab-wrapper animate-fade-in">
+            {/* Header / Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap', gap: '14px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.35rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🚀</span>
+                  <span>Telegram Ommaviy Reklama & Broadcast Markazi</span>
+                </h3>
+                <p style={{ margin: '5px 0 0 0', color: '#94a3b8', fontSize: '0.88rem' }}>
+                  Barcha yoki maqsadli foydalanuvchilarga rasmli, boy formatlangan (bold, italic, link) va tugmali xabar tarqating.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-outline-light"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 14px', borderRadius: '10px' }}
+                  onClick={handleLoadPromoTemplate}
+                  title="Platforma imkoniyatlari va 25,000 so'm bonus reklama matnini yuklash"
+                >
+                  <Sparkles size={16} color="#f59e0b" />
+                  <span>🎁 Tayyor Reklama Shabloni</span>
+                </button>
+                <button
+                  className="btn btn-outline-light"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 14px', borderRadius: '10px' }}
+                  onClick={fetchBroadcastStats}
+                  disabled={loadingBroadcastStats}
+                  title="Auditoriya sonlarini qayta sanash"
+                >
+                  <RefreshCw size={15} className={loadingBroadcastStats ? 'spin' : ''} />
+                  <span>Auditoriyani Yangilash</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Audience Segmentation Cards */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, color: '#cbd5e1', marginBottom: '10px' }}>
+                🎯 Qaysi Auditoriyaga yuborilsin? (Kerakli toifani tanlang):
+              </label>
+              <div className="audience-grid">
+                <div
+                  className={`audience-card ${broadcastTarget === 'all' ? 'active' : ''}`}
+                  onClick={() => setBroadcastTarget('all')}
+                >
+                  <div className="audience-card-title">
+                    <span>🌐 Barchaga</span>
+                  </div>
+                  <div className="audience-card-count">
+                    {broadcastStats?.telegramUsers ?? 0}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginLeft: '4px' }}>ta</span>
+                  </div>
+                </div>
+
+                <div
+                  className={`audience-card ${broadcastTarget === 'free' ? 'active' : ''}`}
+                  onClick={() => setBroadcastTarget('free')}
+                  style={{ borderColor: broadcastTarget === 'free' ? '#f59e0b' : undefined }}
+                >
+                  <div className="audience-card-title" style={{ color: broadcastTarget === 'free' ? '#f59e0b' : undefined }}>
+                    <span>🎁 Obunasiz (Bepul)</span>
+                  </div>
+                  <div className="audience-card-count" style={{ color: broadcastTarget === 'free' ? '#f59e0b' : undefined }}>
+                    {broadcastStats?.freeUsers ?? 0}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginLeft: '4px' }}>ta</span>
+                  </div>
+                </div>
+
+                <div
+                  className={`audience-card ${broadcastTarget === 'students' ? 'active' : ''}`}
+                  onClick={() => setBroadcastTarget('students')}
+                >
+                  <div className="audience-card-title">
+                    <span>🎓 Talabalar</span>
+                  </div>
+                  <div className="audience-card-count">
+                    {broadcastStats?.students ?? 0}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginLeft: '4px' }}>ta</span>
+                  </div>
+                </div>
+
+                <div
+                  className={`audience-card ${broadcastTarget === 'teachers' ? 'active' : ''}`}
+                  onClick={() => setBroadcastTarget('teachers')}
+                >
+                  <div className="audience-card-title">
+                    <span>👨‍🏫 O'qituvchilar</span>
+                  </div>
+                  <div className="audience-card-count">
+                    {broadcastStats?.teachers ?? 0}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginLeft: '4px' }}>ta</span>
+                  </div>
+                </div>
+
+                <div
+                  className={`audience-card ${broadcastTarget === 'premium' ? 'active' : ''}`}
+                  onClick={() => setBroadcastTarget('premium')}
+                >
+                  <div className="audience-card-title">
+                    <span>⭐ Faol Premium</span>
+                  </div>
+                  <div className="audience-card-count">
+                    {broadcastStats?.premiumUsers ?? 0}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginLeft: '4px' }}>ta</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2-Column Broadcast Builder & Preview */}
+            <div className="broadcast-grid-layout">
+              {/* Left Column: Editor & Builder */}
+              <div>
+                {/* Formatting Toolbar */}
+                <div className="tg-toolbar-box">
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<b>', '</b>')}
+                    title="Qalin matn (Bold)"
+                  >
+                    <Bold size={14} /> <b>B</b>
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<i>', '</i>')}
+                    title="Kursiv matn (Italic)"
+                  >
+                    <Italic size={14} /> <i>I</i>
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<u>', '</u>')}
+                    title="Tagchiziqli matn (Underline)"
+                  >
+                    <Underline size={14} /> <u>U</u>
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<s>', '</s>')}
+                    title="O'chirilgan matn (Strikethrough)"
+                  >
+                    <Strikethrough size={14} /> <s>S</s>
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<tg-spoiler>', '</tg-spoiler>')}
+                    title="Yashirin matn (Spoiler)"
+                  >
+                    <Eye size={14} /> Spoiler
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={handleInsertLink}
+                    title="Havola qo'shish (Link)"
+                  >
+                    <Link2 size={14} /> Havola
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<code>', '</code>')}
+                    title="Kod (Monospace)"
+                  >
+                    <Code size={14} /> Code
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<pre>', '</pre>')}
+                    title="Kod bloki (Preformatted)"
+                  >
+                    Pre
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    onClick={() => insertTag('<blockquote>', '</blockquote>')}
+                    title="Iqtibos (Quote)"
+                  >
+                    <Quote size={14} /> Quote
+                  </button>
+                  <button
+                    type="button"
+                    className="tg-tool-btn"
+                    style={{ marginLeft: 'auto', color: '#f87171' }}
+                    onClick={() => {
+                      if (window.confirm("Xabar matnini tozalashga ishonchingiz komilmi?")) {
+                        setBroadcastMessageHtml('');
+                      }
+                    }}
+                    title="Tozalash"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {/* Auto-Paste Helper Banner */}
+                <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '8px 12px', fontSize: '11.5px', color: '#7dd3fc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>⚡</span>
+                  <span>
+                    <b>Aqlli nusxalash:</b> Telegram yoki Word'dan nusxalab (Ctrl+V) tashlasangiz, <b>bold</b>, <i>italic</i> va havolalar avtomatik HTML teglarga aylanadi!
+                  </span>
+                </div>
+
+                {/* Main Textarea */}
+                <textarea
+                  ref={textareaRef}
+                  className="form-control tg-textarea-box"
+                  value={broadcastMessageHtml}
+                  onChange={e => setBroadcastMessageHtml(e.target.value)}
+                  onPaste={handleSmartPaste}
+                  placeholder="Telegram xabaringiz matnini bu yerga yozing yoki nusxalab tashlang..."
+                  rows={13}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', fontSize: '11.5px', color: '#64748b' }}>
+                  <span>Belgilar: {broadcastMessageHtml.length} ta {broadcastPhotoUrl ? '(Rasm bilan max 1024)' : '(Matnli xabar max 4096)'}</span>
+                  <span>HTML teglari qo'llab-quvvatlanadi</span>
+                </div>
+
+                {/* Photo URL Input */}
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>
+                    🖼️ Banner Rasmi URL (Ixtiyoriy)
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={broadcastPhotoUrl}
+                      onChange={e => setBroadcastPhotoUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/... yoki rasm havolasi"
+                    />
+                    {broadcastPhotoUrl && (
+                      <button
+                        className="btn btn-outline-light"
+                        onClick={() => setBroadcastPhotoUrl('')}
+                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                    💡 Agar rasm URL manzili kiritilsa, xabar Telegramda rasm ostidagi izoh (caption) sifatida chiroyli yuboriladi.
+                  </span>
+                </div>
+
+                {/* Inline Buttons Builder */}
+                <div style={{ marginTop: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <label style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: '#cbd5e1' }}>
+                      🔘 Telegram Havola Tugmalari (Inline Buttons):
+                    </label>
+                    {broadcastButtons.length < 5 && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-light"
+                        style={{ padding: '4px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => setBroadcastButtons([...broadcastButtons, { text: '', url: 'https://' }])}
+                      >
+                        <Plus size={13} /> Tugma qo'shish
+                      </button>
+                    )}
+                  </div>
+
+                  {broadcastButtons.map((btn, idx) => (
+                    <div key={idx} className="tg-btn-builder-row">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Tugma matni (masalan: 🚀 Kirish)"
+                        value={btn.text}
+                        onChange={e => {
+                          const updated = [...broadcastButtons];
+                          updated[idx].text = e.target.value;
+                          setBroadcastButtons(updated);
+                        }}
+                        style={{ flex: 1 }}
+                      />
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Havola (URL: https://...)"
+                        value={btn.url}
+                        onChange={e => {
+                          const updated = [...broadcastButtons];
+                          updated[idx].url = e.target.value;
+                          setBroadcastButtons(updated);
+                        }}
+                        style={{ flex: 1.4 }}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        style={{ color: '#ef4444' }}
+                        onClick={() => {
+                          setBroadcastButtons(broadcastButtons.filter((_, i) => i !== idx));
+                        }}
+                        title="Tugmani o'chirish"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  {broadcastButtons.length === 0 && (
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '10px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+                      Tugmalar qo'shilmagan (ixtiyoriy)
+                    </div>
+                  )}
+                </div>
+
+                {/* Also Send In-App Option */}
+                <div style={{ marginTop: '20px', background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="checkbox"
+                      id="alsoInAppCheck"
+                      checked={broadcastAlsoInApp}
+                      onChange={e => setBroadcastAlsoInApp(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="alsoInAppCheck" style={{ cursor: 'pointer', fontSize: '13px', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
+                      📱 Shuningdek, veb-sayt ichida ham bildirishnoma sifatida yuborilsin
+                    </label>
+                  </div>
+                  {broadcastAlsoInApp && (
+                    <div style={{ marginTop: '10px' }}>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Sayt ichidagi bildirishnoma sarlavhasi..."
+                        value={broadcastInAppTitle}
+                        onChange={e => setBroadcastInAppTitle(e.target.value)}
+                        style={{ fontSize: '13px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions: Test and Broadcast */}
+                <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-light"
+                    style={{ flex: 1, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '14px', fontWeight: 700 }}
+                    onClick={handleTestBroadcast}
+                    disabled={isTestingBroadcast || isSendingBroadcast || !broadcastMessageHtml.trim()}
+                  >
+                    <Send size={16} />
+                    <span>{isTestingBroadcast ? 'Yuborilmoqda...' : '🧪 Menga Test Yuborish'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ flex: 1.4, padding: '12px 22px', background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '14px', fontWeight: 800, boxShadow: '0 6px 20px rgba(37, 99, 235, 0.4)' }}
+                    onClick={() => {
+                      if (!broadcastMessageHtml.trim()) {
+                        alert("Xabar matnini kiriting!");
+                        return;
+                      }
+                      setShowBroadcastConfirm(true);
+                    }}
+                    disabled={isSendingBroadcast || !broadcastMessageHtml.trim()}
+                  >
+                    <Megaphone size={18} />
+                    <span>
+                      🚀 Auditoriyaga Tarqatish (
+                      {broadcastTarget === 'all'
+                        ? (broadcastStats?.telegramUsers ?? 0)
+                        : broadcastTarget === 'free'
+                        ? (broadcastStats?.freeUsers ?? 0)
+                        : broadcastTarget === 'students'
+                        ? (broadcastStats?.students ?? 0)
+                        : broadcastTarget === 'teachers'
+                        ? (broadcastStats?.teachers ?? 0)
+                        : (broadcastStats?.premiumUsers ?? 0)} ta)
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Live Telegram Device Mockup */}
+              <div>
+                <div style={{ position: 'sticky', top: '24px' }}>
+                  <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      📱 Telegram Jonli Ko'rinishi (Preview)
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                      ● Jonli render
+                    </span>
+                  </div>
+
+                  <div className="tg-preview-container">
+                    {/* Telegram Mockup Top Bar */}
+                    <div className="tg-preview-header">
+                      <div className="tg-bot-avatar">
+                        🛡️
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div className="tg-bot-info-title">
+                          <span>Lanswitch Bot</span>
+                          <span className="tg-bot-badge">bot</span>
+                        </div>
+                        <div className="tg-bot-subtitle">
+                          @lanswitchbot • Rasmiy Platforma Boti
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Telegram Chat Bubble Canvas */}
+                    <div className="tg-chat-canvas">
+                      <div className="tg-message-bubble">
+                        {broadcastPhotoUrl && (
+                          <img
+                            src={broadcastPhotoUrl}
+                            alt="Banner Preview"
+                            className="tg-bubble-photo"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        )}
+
+                        <div
+                          className="tg-bubble-body"
+                          dangerouslySetInnerHTML={{
+                            __html: broadcastMessageHtml || '<span style="opacity:0.4">Xabar matnini kiriting...</span>'
+                          }}
+                        />
+
+                        <div className="tg-bubble-meta">
+                          <span>{new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span style={{ color: '#4ade80', fontSize: '12px' }}>✓✓</span>
+                        </div>
+                      </div>
+
+                      {/* Mockup Inline Buttons */}
+                      {broadcastButtons.filter(b => b.text.trim()).length > 0 && (
+                        <div className="tg-inline-buttons-wrap">
+                          {broadcastButtons.filter(b => b.text.trim()).map((btn, idx) => (
+                            <div key={idx} className="tg-mockup-inline-btn">
+                              <span>{btn.text}</span>
+                              <ExternalLink size={13} style={{ opacity: 0.8 }} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Hints card */}
+                  <div style={{ marginTop: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '12px 14px', fontSize: '11.5px', color: '#94a3b8', lineHeight: 1.6 }}>
+                    <div style={{ fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' }}>🛡️ Xavfsiz va Ishonchli Tarqatish:</div>
+                    <div>• Telegram Bot API Flood-limitlariga to'liq rioya etiladi (har bir xabar orasida 35ms pauza).</div>
+                    <div>• Botni bloklagan foydalanuvchilar hisobdan chiqariladi va hisobotda ko'rsatiladi.</div>
+                    <div>• Reklama yuborishdan avval <b>"🧪 Menga Test Yuborish"</b> tugmasi orqali o'zingizda tekshirib olishingiz mumkin.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'media' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
@@ -1361,6 +2225,130 @@ const AdminPage: React.FC = () => {
             )}
           </div>
         )}
+
+        {/* ========================================================== */}
+        {/* ARCHIVES (DELETED DATA SNAPSHOTS) TAB                      */}
+        {/* ========================================================== */}
+        {activeTab === 'archives' && (
+          <div className="animate-fade-in">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.3rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Archive size={22} color="#f59e0b" />
+                  <span>O'chirilgan Ma'lumotlar Arxiv Bazasi</span>
+                </h3>
+                <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>
+                  O'chirilgan guruhlar, topshiriqlar va materiallar alohida xavfsiz SQLite bazada to'liq JSON snapshot sifatida saqlanadi.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="form-control"
+                  value={archiveEntityType}
+                  onChange={e => {
+                    setArchiveEntityType(e.target.value);
+                    setTimeout(fetchArchives, 10);
+                  }}
+                  style={{ width: 'auto', fontSize: '13px' }}
+                >
+                  <option value="all">Barcha obyektlar</option>
+                  <option value="group">Guruhlar</option>
+                  <option value="assignment">Topshiriqlar</option>
+                  <option value="material">Materiallar</option>
+                </select>
+
+                <button
+                  className="btn btn-outline-light"
+                  onClick={handleCleanupArchives}
+                  style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Trash2 size={14} color="#ef4444" />
+                  <span>Arxivni Tozalash</span>
+                </button>
+
+                <button
+                  className="btn btn-outline-light"
+                  onClick={fetchArchives}
+                  style={{ fontSize: '12px' }}
+                >
+                  🔄 Yangilash
+                </button>
+              </div>
+            </div>
+
+            {loadingArchives ? (
+              <div className="flex-center" style={{ padding: '50px' }}>Yuklanmoqda...</div>
+            ) : (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Turi</th>
+                    <th>Asl ID</th>
+                    <th>O'chirgan Foydalanuvchi</th>
+                    <th>O'chirish Sababi</th>
+                    <th>O'chirilgan Sana</th>
+                    <th>Amallar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archivesList.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.id}</td>
+                      <td>
+                        <span style={{
+                          background: item.entityType === 'group' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                          color: item.entityType === 'group' ? '#38bdf8' : '#c084fc',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase'
+                        }}>
+                          {item.entityType}
+                        </span>
+                      </td>
+                      <td>#{item.originalEntityId}</td>
+                      <td>
+                        <strong>{item.deletedByUserName || 'Noma\'lum'}</strong>
+                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>ID: {item.deletedByUserId}</div>
+                      </td>
+                      <td style={{ maxWidth: '240px', fontSize: '12px', color: '#cbd5e1' }}>
+                        {item.reason || 'Tarif limiti yoki foydalanuvchi so\'rovi'}
+                      </td>
+                      <td style={{ fontSize: '12px' }}>
+                        {new Date(item.archivedAt).toLocaleString('uz-UZ')}
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-outline-light"
+                          style={{ padding: '4px 10px', fontSize: '12px' }}
+                          onClick={() => {
+                            try {
+                              setSelectedArchiveJson(JSON.parse(item.dataJson));
+                            } catch {
+                              setSelectedArchiveJson(item.dataJson);
+                            }
+                          }}
+                        >
+                          👁️ JSON Snapshot
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {archivesList.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>
+                        Arxivda hozircha o'chirilgan ma'lumotlar mavjud emas
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       {editingMedia && (
@@ -1797,6 +2785,131 @@ const AdminPage: React.FC = () => {
                   {savingPlan ? 'Saqlanmoqda...' : '💾 Tarifni Saqlash'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Broadcast Confirmation Modal */}
+      {showBroadcastConfirm && (
+        <div className="modal-overlay" onClick={() => setShowBroadcastConfirm(false)}>
+          <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()} style={{ width: '500px', maxWidth: '92vw' }}>
+            <div className="modal-header">
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle color="#f59e0b" size={24} />
+                <span>Reklama Tarqatishni Tasdiqlash</span>
+              </h2>
+              <button className="icon-btn" onClick={() => setShowBroadcastConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '12px', padding: '14px', fontSize: '13px', color: '#fcd34d', lineHeight: 1.5 }}>
+                ⚠️ <b>Diqqat:</b> Ushbu xabar Telegram orqali tanlangan auditoriyadagi barcha foydalanuvchilarning shaxsiy xabarnomasiga (bot orqali) to'g'ridan-to'g'ri yuboriladi.
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.04)', padding: '12px 16px', borderRadius: '12px', fontSize: '13px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>Tanlangan auditoriya:</span>
+                  <strong style={{ color: '#38bdf8', textTransform: 'uppercase' }}>
+                    {broadcastTarget === 'all'
+                      ? '🌐 Barcha Telegram foydalanuvchilari'
+                      : broadcastTarget === 'free'
+                      ? '🎁 Obunasiz (Bepul)'
+                      : broadcastTarget === 'students'
+                      ? '🎓 Talabalar'
+                      : broadcastTarget === 'teachers'
+                      ? '👨‍🏫 O\'qituvchilar'
+                      : '⭐ Faol Premium'}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>Qabul qiluvchilar soni:</span>
+                  <strong style={{ color: '#22c55e', fontSize: '1.1rem' }}>
+                    {broadcastTarget === 'all'
+                      ? (broadcastStats?.telegramUsers ?? 0)
+                      : broadcastTarget === 'free'
+                      ? (broadcastStats?.freeUsers ?? 0)
+                      : broadcastTarget === 'students'
+                      ? (broadcastStats?.students ?? 0)
+                      : broadcastTarget === 'teachers'
+                      ? (broadcastStats?.teachers ?? 0)
+                      : (broadcastStats?.premiumUsers ?? 0)} ta foydalanuvchi
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Banner rasmi:</span>
+                  <span>{broadcastPhotoUrl ? '✅ Mavjud' : '❌ Yo\'q (Faqat matn)'}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+                <button className="btn btn-outline-light" onClick={() => setShowBroadcastConfirm(false)}>
+                  Bekor qilish
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)', fontWeight: 800 }}
+                  onClick={handleSendBroadcast}
+                >
+                  Ha, Tarqatishni Boshlash 🚀
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Broadcast In-Progress Overlay Modal */}
+      {isSendingBroadcast && (
+        <div className="modal-overlay" style={{ zIndex: 99999, background: 'rgba(0,0,0,0.85)' }}>
+          <div className="modal-content animate-fade-in" style={{ width: '420px', textAlign: 'center', padding: '36px 24px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🚀</div>
+            <h3 style={{ margin: '0 0 10px 0', color: '#fff' }}>Xabarlar Tarqatilmoqda...</h3>
+            <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: 1.5 }}>
+              {broadcastProgress || 'Telegram API orqali foydalanuvchilarga xabarlar yetkazilmoqda. Iltimos sahifani yopmang.'}
+            </p>
+            <div style={{ marginTop: '20px' }}>
+              <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: '100%', background: '#38bdf8', borderRadius: '2px', animation: 'fadeIn 1s infinite alternate' }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Archive JSON Viewer Modal */}
+      {selectedArchiveJson && (
+        <div className="modal-overlay" onClick={() => setSelectedArchiveJson(null)}>
+          <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()} style={{ width: '700px', maxWidth: '94vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h2>🗄️ Arxivlangan Ma'lumot Snapshot (JSON)</h2>
+              <button className="icon-btn" onClick={() => setSelectedArchiveJson(null)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ marginTop: '16px', flex: 1, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                <button
+                  className="btn btn-outline-light"
+                  style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(selectedArchiveJson, null, 2));
+                    alert("JSON nusxalandi!");
+                  }}
+                >
+                  <Copy size={12} /> Nusxa olish
+                </button>
+              </div>
+              <pre style={{
+                background: '#090d16',
+                color: '#38bdf8',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                overflowX: 'auto',
+                maxHeight: '480px'
+              }}>
+                {typeof selectedArchiveJson === 'string' ? selectedArchiveJson : JSON.stringify(selectedArchiveJson, null, 2)}
+              </pre>
             </div>
           </div>
         </div>
