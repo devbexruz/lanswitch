@@ -10,6 +10,9 @@ export interface TeacherGroup {
   memberCount: number;
   activeAssignmentsCount: number;
   isSubscriptionExpired?: boolean;
+  isGroupLimitExceeded?: boolean;
+  groupLimit?: number;
+  currentGroupCount?: number;
 }
 
 export interface StudentGroup {
@@ -572,6 +575,15 @@ export const api = {
       return res.ok;
     } catch {}
     return false;
+  },
+
+  async deleteGroup(groupId: number, teacherId = 1): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/groups/${groupId}?teacherId=${teacherId}`, {
+      method: 'DELETE'
+    });
+    if (res.ok) return true;
+    const err = await res.json().catch(() => ({ message: "Guruhni o'chirishda xatolik yuz berdi" }));
+    throw new Error(err.message || "Guruhni o'chirishda xatolik yuz berdi");
   },
 
   // Review Groups (Ordered by latest student submission first)

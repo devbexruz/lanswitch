@@ -12,6 +12,9 @@ public class TeacherGroupDto
     public int MemberCount { get; set; }
     public int ActiveAssignmentsCount { get; set; }
     public bool IsSubscriptionExpired { get; set; }
+    public bool IsGroupLimitExceeded { get; set; }
+    public int GroupLimit { get; set; }
+    public int CurrentGroupCount { get; set; }
 }
 
 public class StudentGroupDto

@@ -24,6 +24,8 @@ export default function TeacherDashboardPage() {
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const isTeacherSubActive = Boolean(user?.isAdmin || (hasSubscription && subscription?.targetRole === 'Teacher'));
+  const [groupToDelete, setGroupToDelete] = useState<TeacherGroup | null>(null);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
 
   const handleAddGroupClick = () => {
     if (!isTeacherSubActive) {
@@ -31,7 +33,33 @@ export default function TeacherDashboardPage() {
       setShowSubscriptionModal(true);
       return;
     }
+    const anyLimitExceeded = groups.some(g => g.isGroupLimitExceeded);
+    const maxGroups = subscription?.maxGroups ?? 0;
+    if (!user?.isAdmin && (anyLimitExceeded || (maxGroups > 0 && groups.length >= maxGroups))) {
+      alert(`Guruhlar soni tarifingizdagi limitdan (${maxGroups} ta) ko'p yoki unga teng bo'lganligi sababli yangi guruh qo'sha olmaysiz. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!`);
+      setShowSubscriptionModal(true);
+      return;
+    }
     openTelegramBotChat('lanswitchbot');
+  };
+
+  const handleConfirmDeleteGroup = async () => {
+    if (!groupToDelete) return;
+    setIsDeletingGroup(true);
+    try {
+      await api.deleteGroup(groupToDelete.id, user?.id);
+      alert("✅ Guruh muvaffaqiyatli o'chirildi va barcha ma'lumotlar alohida xavfsiz arxiv bazasiga nusxalandi.");
+      const deletedId = groupToDelete.id;
+      setGroupToDelete(null);
+      await loadGroups();
+      if (selectedGroup?.id === deletedId) {
+        setSelectedGroup(null);
+      }
+    } catch (err: any) {
+      alert(`❌ Xatolik: ${err.message || "Guruhni o'chirishda xatolik yuz berdi"}`);
+    } finally {
+      setIsDeletingGroup(false);
+    }
   };
 
   // 1. Top Navigation: 3 Core Panels (Classroom, Movies, Vocabulary)
@@ -1144,8 +1172,82 @@ export default function TeacherDashboardPage() {
                   )
                 ) : (
                   <>
-                    {/* RED WARNING NOTICE IF SUBSCRIPTION IS EXPIRED */}
-                    {selectedGroup?.isSubscriptionExpired && (
+                    {/* RED WARNING NOTICE IF GROUP LIMIT IS EXCEEDED OR SUBSCRIPTION EXPIRED */}
+                    {selectedGroup?.isGroupLimitExceeded ? (
+                      <div style={{
+                        background: '#FEF2F2',
+                        border: '1.5px solid #FCA5A5',
+                        borderRadius: '16px',
+                        padding: '16px 20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                        boxShadow: '0 2px 10px rgba(239, 68, 68, 0.08)',
+                        margin: '6px 0 16px 0'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 280px' }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: '#FEE2E2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <AlertTriangle size={22} color="#DC2626" />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 900, color: '#B91C1C', fontSize: '15px' }}>
+                              ⚠️ Guruhlaringiz soni tarif rejangizdagi limitdan oshib ketgan!
+                            </div>
+                            <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '2px', lineHeight: 1.4 }}>
+                              Tarifingiz bo'yicha ruxsat etilgan limit: <strong>{selectedGroup.groupLimit ?? 0} ta</strong> guruh. Sizda esa hozir <strong>{selectedGroup.currentGroupCount ?? groups.length} ta</strong> guruh mavjud. Shu sababli hech qaysi guruh ishlamaydi. Tizim ishlashi uchun ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowGroupDrawer(true)}
+                            style={{
+                              padding: '10px 16px',
+                              background: '#FFFFFF',
+                              color: '#DC2626',
+                              border: '1.5px solid #FCA5A5',
+                              borderRadius: '10px',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Ortiqcha guruhni o'chirish
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowSubscriptionModal(true)}
+                            style={{
+                              padding: '10px 18px',
+                              background: '#DC2626',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Tarifni oshirish (Upgrade)
+                          </button>
+                        </div>
+                      </div>
+                    ) : selectedGroup?.isSubscriptionExpired && (
                       <div style={{
                         background: '#FEF2F2',
                         border: '1.5px solid #FCA5A5',
@@ -1182,6 +1284,7 @@ export default function TeacherDashboardPage() {
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => setShowSubscriptionModal(true)}
                           style={{
                             padding: '10px 18px',
@@ -1213,15 +1316,41 @@ export default function TeacherDashboardPage() {
                           Guruh bo'yicha e'lon qilingan topshiriqlar va hisobotlar
                         </p>
                       </div>
-                      <button
-                        onClick={handleOpenCreateModal}
-                        disabled={!selectedGroup}
-                        className="btn-big-blue"
-                        style={{ minHeight: '40px', padding: '0 18px', fontSize: '13px' }}
-                      >
-                        <PlusCircle size={16} />
-                        <span>Yangi Vazifa Tuzish</span>
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {selectedGroup?.isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => setGroupToDelete(selectedGroup)}
+                            title="Guruhni o'chirish"
+                            style={{
+                              background: '#FEE2E2',
+                              color: '#DC2626',
+                              border: '1.5px solid #FECACA',
+                              borderRadius: '10px',
+                              padding: '8px 14px',
+                              fontSize: '13px',
+                              fontWeight: 800,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              minHeight: '40px'
+                            }}
+                          >
+                            <Trash2 size={16} />
+                            <span>Guruhni o'chirish</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={handleOpenCreateModal}
+                          disabled={!selectedGroup}
+                          className="btn-big-blue"
+                          style={{ minHeight: '40px', padding: '0 18px', fontSize: '13px' }}
+                        >
+                          <PlusCircle size={16} />
+                          <span>Yangi Vazifa Tuzish</span>
+                        </button>
+                      </div>
                     </div>
                     {assignments.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)', background: 'var(--pure-white)', borderRadius: '20px', border: '1.5px dashed var(--sky-border)' }}>
@@ -4195,7 +4324,7 @@ export default function TeacherDashboardPage() {
                   {groups.map(g => {
                     const isSelected = selectedGroup?.id === g.id;
                     return (
-                      <button
+                      <div
                         key={g.id}
                         onClick={() => {
                           handleSelectGroup(g);
@@ -4204,12 +4333,12 @@ export default function TeacherDashboardPage() {
                         style={{
                           padding: '16px 20px',
                           borderRadius: 'var(--radius-card-sm)',
-                          border: g.isSubscriptionExpired
+                          border: (g.isGroupLimitExceeded || g.isSubscriptionExpired)
                             ? '1.5px solid #FCA5A5'
                             : isSelected
                             ? '2px solid var(--primary-blue)'
                             : '1.5px solid var(--sky-border)',
-                          background: g.isSubscriptionExpired
+                          background: (g.isGroupLimitExceeded || g.isSubscriptionExpired)
                             ? '#FEF2F2'
                             : isSelected
                             ? 'var(--ice-blue-bg)'
@@ -4217,12 +4346,31 @@ export default function TeacherDashboardPage() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
+                          gap: '12px',
                           cursor: 'pointer',
-                          textAlign: 'left'
+                          textAlign: 'left',
+                          transition: 'all 0.15s ease'
                         }}
                       >
-                        <div>
-                          {g.isSubscriptionExpired && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {g.isGroupLimitExceeded ? (
+                            <div style={{
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              color: '#DC2626',
+                              background: '#FEE2E2',
+                              border: '1px solid #FECACA',
+                              borderRadius: '6px',
+                              padding: '2px 8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              marginBottom: '6px'
+                            }}>
+                              <AlertTriangle size={12} color="#DC2626" />
+                              <span>Limit oshib ketgan ({g.currentGroupCount}/{g.groupLimit}) - Guruh ishlamaydi</span>
+                            </div>
+                          ) : g.isSubscriptionExpired && (
                             <div style={{
                               fontSize: '11px',
                               fontWeight: 800,
@@ -4240,29 +4388,57 @@ export default function TeacherDashboardPage() {
                               <span>Tarif muddati tugagan (Topshiriqlar ko'rinmaydi)</span>
                             </div>
                           )}
-                          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)' }}>
+                          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {g.title}
                           </div>
                           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
                             {g.memberCount} ta a'zo • Telegram ID: {g.telegramChatId}
                           </div>
                         </div>
-                        {isSelected && (
-                          <div style={{
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '9999px',
-                            background: 'var(--primary-blue)',
-                            color: 'var(--pure-white)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                          }}>
-                            <Check size={18} strokeWidth={3} />
-                          </div>
-                        )}
-                      </button>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                          {g.isOwner && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setGroupToDelete(g);
+                              }}
+                              title="Guruhni o'chirish"
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                background: '#FEE2E2',
+                                color: '#DC2626',
+                                border: '1px solid #FECACA',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+
+                          {isSelected && (
+                            <div style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '9999px',
+                              background: 'var(--primary-blue)',
+                              color: 'var(--pure-white)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <Check size={18} strokeWidth={3} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
                   <button
@@ -4288,6 +4464,121 @@ export default function TeacherDashboardPage() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GROUP DELETION CONFIRMATION MODAL */}
+      {groupToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          zIndex: 10000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'var(--pure-white)',
+            borderRadius: '24px',
+            maxWidth: '480px',
+            width: '100%',
+            padding: '28px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
+            border: '1.5px solid #FCA5A5'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: '#FEE2E2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: '#DC2626'
+            }}>
+              <AlertTriangle size={32} />
+            </div>
+
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: 900,
+              color: '#B91C1C',
+              textAlign: 'center',
+              margin: '0 0 10px 0'
+            }}>
+              Guruhni o'chirishni tasdiqlaysizmi?
+            </h3>
+
+            <p style={{
+              fontSize: '14px',
+              color: 'var(--text-navy)',
+              lineHeight: 1.6,
+              textAlign: 'center',
+              margin: '0 0 16px 0'
+            }}>
+              Haqiqatan ham <strong>"{groupToDelete.title}"</strong> guruhini o'chirmoqchimisiz?
+            </p>
+
+            <div style={{
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: '12px',
+              padding: '14px',
+              color: '#991B1B',
+              fontSize: '13px',
+              lineHeight: 1.5,
+              marginBottom: '24px'
+            }}>
+              ⚠️ <strong>DIQQAT:</strong> Ushbu guruh o'chirilganda unga tegishli barcha ma'lumotlar (vazifalar, o'quvchilar topshirgan ishlar va hisobotlar) o'chib ketadi!
+              <br /><br />
+              <span style={{ fontSize: '12px', color: '#B91C1C' }}>
+                ℹ️ <i>Xavfsizlik maqsadida barcha ma'lumotlar alohida arxiv bazasiga to'liq nusxalanadi va saqlanadi.</i>
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setGroupToDelete(null)}
+                disabled={isDeletingGroup}
+                className="btn-big-white"
+                style={{ flex: 1, minHeight: '44px', fontSize: '14px', fontWeight: 800 }}
+              >
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteGroup}
+                disabled={isDeletingGroup}
+                style={{
+                  flex: 1,
+                  minHeight: '44px',
+                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 900,
+                  fontSize: '14px',
+                  cursor: isDeletingGroup ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Trash2 size={16} />
+                <span>{isDeletingGroup ? "O'chirilmoqda..." : "Ha, o'chirilsin"}</span>
+              </button>
             </div>
           </div>
         </div>

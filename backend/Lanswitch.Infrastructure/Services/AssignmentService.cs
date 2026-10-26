@@ -19,13 +19,15 @@ public class AssignmentService : IAssignmentService
     private readonly ITelegramBotClient _botClient;
     private readonly IConfiguration _config;
     private readonly IBotStateManager _stateManager;
+    private readonly IArchiveDatabaseService _archiveDb;
 
-    public AssignmentService(AppDbContext db, ITelegramBotClient botClient, IConfiguration config, IBotStateManager stateManager)
+    public AssignmentService(AppDbContext db, ITelegramBotClient botClient, IConfiguration config, IBotStateManager stateManager, IArchiveDatabaseService archiveDb)
     {
         _db = db;
         _botClient = botClient;
         _config = config;
         _stateManager = stateManager;
+        _archiveDb = archiveDb;
     }
 
     public async Task<Assignment> CreateAssignmentAsync(long teacherId, CreateAssignmentDto dto)
@@ -46,11 +48,23 @@ public class AssignmentService : IAssignmentService
         var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
         var creator = await _db.Users.FindAsync(teacherId);
         bool isOwnerAdmin = owner?.IsAdmin == true || creator?.IsAdmin == true;
-        bool hasActiveSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now);
 
-        if (!hasActiveSub)
+        var activeSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        if (!isOwnerAdmin && activeSub == null)
             throw new InvalidOperationException("Guruhda yangi vazifa yaratish uchun hisobingizda faol obuna (kamida Student Premium yoki Ustoz tarifi) bo'lishi lozim. Iltimos, balansingizni to'ldiring!");
+
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
+        }
 
         var assignment = new Assignment
         {
@@ -155,13 +169,25 @@ public class AssignmentService : IAssignmentService
 
         var now = DateTime.UtcNow;
         bool isOwnerAdmin = group.Owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
 
         // Agar ustozni obuna tarifi ustoz bo'lmasa yoki tugagan bo'lsa topshiriqlar studentlarga ko'rinmaydi
-        if (!hasActiveTeacherSub)
+        if (!isOwnerAdmin && activeTeacherSub == null)
         {
             return new List<AssignmentDetailDto>();
+        }
+
+        // Agar guruhlar soni tarif limitidan oshib ketgan bo'lsa hech qaysi guruh topshiriqlari ko'rinmaydi
+        if (!isOwnerAdmin && activeTeacherSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeTeacherSub.MaxGroups)
+            {
+                return new List<AssignmentDetailDto>();
+            }
         }
 
         var query = _db.Assignments
@@ -265,10 +291,18 @@ public class AssignmentService : IAssignmentService
         var now = DateTime.UtcNow;
         var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
         bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
 
-        if (!hasActiveTeacherSub) return new();
+        if (!isOwnerAdmin && activeTeacherSub == null) return new();
+
+        if (!isOwnerAdmin && activeTeacherSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeTeacherSub.MaxGroups) return new();
+        }
 
         var query = _db.AssignmentItemSubmissions
             .Include(s => s.Assignment)
@@ -349,6 +383,15 @@ public class AssignmentService : IAssignmentService
                 throw new InvalidOperationException("Vazifalarni tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
             }
             throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
+
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
         }
 
         if (dto.Status == 0 && string.IsNullOrWhiteSpace(dto.Comment))
@@ -543,6 +586,15 @@ public class AssignmentService : IAssignmentService
             throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
         }
 
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
+        }
+
         var sub = await _db.AssignmentItemSubmissions
             .FirstOrDefaultAsync(s => s.AssignmentItemId == assignmentItemId && s.StudentId == studentId);
 
@@ -684,6 +736,15 @@ public class AssignmentService : IAssignmentService
                 throw new InvalidOperationException("Hisobotlarni ko'rish va tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
             }
             throw new InvalidOperationException("Hisobotlarni ko'rish va tekshirish uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
+
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hisobotlar ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
         }
 
         var activeMembers = group.Members.Where(m => m.IsActive).ToList();
@@ -879,10 +940,18 @@ public class AssignmentService : IAssignmentService
         var now = DateTime.UtcNow;
         var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
         bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
 
-        if (!hasActiveTeacherSub) return new();
+        if (!isOwnerAdmin && activeTeacherSub == null) return new();
+
+        if (!isOwnerAdmin && activeTeacherSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeTeacherSub.MaxGroups) return new();
+        }
 
         var query = _db.AssignmentItemSubmissions
             .Include(s => s.Assignment)
@@ -1053,6 +1122,15 @@ public class AssignmentService : IAssignmentService
             throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
         }
 
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
+        }
+
         if (isCompleted)
         {
             // Barcha qismlarni Bajarildi (1) deb belgilash
@@ -1108,6 +1186,34 @@ public class AssignmentService : IAssignmentService
         if (assignment == null) return false;
         bool canReview = assignment.Group.OwnerId == teacherId || assignment.Group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return false;
+
+        var now = DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(assignment.Group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        var activeSub = await _db.UserSubscriptions
+            .Where(s => s.UserId == assignment.Group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        bool hasActiveTeacherSub = isOwnerAdmin || (activeSub != null && activeSub.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+        {
+            if (activeSub != null && activeSub.TargetRole == "Student")
+            {
+                throw new InvalidOperationException("Vazifalarni tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
+
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == assignment.Group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
+        }
 
         if (status == 0 && string.IsNullOrWhiteSpace(comment))
         {
@@ -1204,6 +1310,34 @@ public class AssignmentService : IAssignmentService
         var group = assignment.Group;
         bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return false;
+
+        var now = DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        var activeSub = await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        bool hasActiveTeacherSub = isOwnerAdmin || (activeSub != null && activeSub.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+        {
+            if (activeSub != null && activeSub.TargetRole == "Student")
+            {
+                throw new InvalidOperationException("Vazifalarni tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
+
+        if (!isOwnerAdmin && activeSub != null)
+        {
+            var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
+            if (activeCount > activeSub.MaxGroups)
+            {
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+            }
+        }
 
         var item = assignment.Items.FirstOrDefault(i => i.Id == itemId);
         if (item == null) return false;
@@ -1340,6 +1474,55 @@ public class AssignmentService : IAssignmentService
         {
             throw new UnauthorizedAccessException("Ushbu vazifani o'chirish uchun sizda ruxsat yo'q!");
         }
+
+        // 0. Boshqa bazaga arxivlash (Archive before deleting)
+        var snapshot = new
+        {
+            assignment.Id,
+            assignment.GroupId,
+            GroupTitle = assignment.Group?.Title,
+            assignment.CreatorId,
+            assignment.Title,
+            assignment.Deadline,
+            assignment.Status,
+            assignment.CreatedAt,
+            Items = assignment.Items.Select(i => new
+            {
+                i.Id,
+                i.OrderIndex,
+                i.ItemType,
+                i.Title,
+                i.Instructions,
+                i.TargetUnitId
+            }),
+            Submissions = assignment.Submissions.Select(s => new
+            {
+                s.Id,
+                s.AssignmentItemId,
+                s.StudentId,
+                s.Status,
+                s.Comment,
+                s.SubmittedAt,
+                s.ReviewedAt,
+                Attachments = s.Attachments?.Select(att => new
+                {
+                    att.Id,
+                    att.TelegramFileId,
+                    att.FileType,
+                    att.FileSizeBytes
+                })
+            })
+        };
+
+        await _archiveDb.ArchiveAsync(
+            entityType: "Assignment",
+            entityId: assignment.Id,
+            entityTitle: assignment.Title,
+            ownerId: assignment.Group?.OwnerId ?? teacherId,
+            deletedById: teacherId,
+            data: snapshot,
+            reason: "TeacherDeletedAssignment"
+        );
 
         // 1. Remove attachments
         foreach (var sub in assignment.Submissions)

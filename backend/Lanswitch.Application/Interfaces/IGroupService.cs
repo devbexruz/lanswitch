@@ -16,5 +16,6 @@ public interface IGroupService
     Task<bool> RestoreMemberAsync(long groupId, long teacherId, long studentId);
     Task<List<StudentGroupDto>> GetStudentGroupsAsync(long studentId);
     Task<SyncMembersResultDto> SyncGroupMembersAsync(long groupId, long teacherId);
+    Task<bool> DeleteGroupAsync(long groupId, long teacherId);
 }
 

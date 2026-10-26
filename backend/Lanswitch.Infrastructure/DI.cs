@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAssignmentService, AssignmentService>();
         services.AddScoped<IVocabularyService, VocabularyService>();
         services.AddScoped<ISubscriptionService, SubscriptionService>();
+        services.AddSingleton<IArchiveDatabaseService, ArchiveDatabaseService>();
 
         return services;
     }

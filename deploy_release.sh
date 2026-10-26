@@ -46,7 +46,7 @@ dotnet publish "${PROJECT_ROOT}/backend/Lanswitch.Api/Lanswitch.Api.csproj" \
     -o "${PUBLISH_DIR}"
 
 echo -e "${YELLOW}4. Backend publish fayllari serverga uzatilmoqda...${NC}"
-rsync -avz --exclude 'appsettings.json' --exclude '*.session' \
+rsync -avz --exclude 'appsettings.json' --exclude '*.session' --exclude '*.db*' \
     -e "ssh -F /dev/null -i ${PemFilePath} -o StrictHostKeyChecking=no" \
     "${PUBLISH_DIR}/" \
     "${ServerUser}@${ServerIP}:/home/ubuntu/projects/lanswitch/backend/Lanswitch.Api/publish/"

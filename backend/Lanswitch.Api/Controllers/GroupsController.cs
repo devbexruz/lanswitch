@@ -11,10 +11,12 @@ namespace Lanswitch.Api.Controllers;
 public class GroupsController : ControllerBase
 {
     private readonly IGroupService _groupService;
+    private readonly IArchiveDatabaseService _archiveDb;
 
-    public GroupsController(IGroupService groupService)
+    public GroupsController(IGroupService groupService, IArchiveDatabaseService archiveDb)
     {
         _groupService = groupService;
+        _archiveDb = archiveDb;
     }
 
     private long GetUserId()
@@ -103,6 +105,21 @@ public class GroupsController : ControllerBase
     }
 
     /// <summary>
+    /// Guruhni o'chirish (Soft delete va barcha ma'lumotlarni alohida SQLite arxiv bazaga saqlash)
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteGroup(long id, [FromQuery] long? teacherId = null)
+    {
+        var tId = teacherId ?? GetUserId();
+        if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
+
+        var success = await _groupService.DeleteGroupAsync(id, tId);
+        if (!success) return BadRequest(new { message = "Guruh topilmadi yoki uni o'chirish uchun sizda ruxsat yo'q!" });
+
+        return Ok(new { success = true });
+    }
+
+    /// <summary>
     /// O'quvchini guruhdan chiqarish (soft delete - tizimda ko'rinmaydi)
     /// </summary>
     [HttpDelete("{id}/members/{studentId}")]
@@ -146,6 +163,26 @@ public class GroupsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// O'chirilgan ma'lumotlar arxivini ko'rish (SQLite DB dan)
+    /// </summary>
+    [HttpGet("archives")]
+    public async Task<IActionResult> GetArchives([FromQuery] string? entityType = null, [FromQuery] int limit = 50)
+    {
+        var archives = await _archiveDb.GetArchivesAsync(entityType, limit);
+        return Ok(archives);
+    }
+
+    /// <summary>
+    /// Arxivdagi eski yozuvlarni tozalash (masalan, 30 yoki 90 kundan oshganlarni qo'lda tozalash)
+    /// </summary>
+    [HttpPost("archives/cleanup")]
+    public async Task<IActionResult> CleanupArchives([FromQuery] int olderThanDays = 30)
+    {
+        var count = await _archiveDb.CleanupArchivesOlderThanDaysAsync(olderThanDays);
+        return Ok(new { deletedCount = count, message = $"{olderThanDays} kundan eski bo'lgan {count} ta arxiv yozuvi tozalandi." });
     }
 }
 
