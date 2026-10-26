@@ -18,11 +18,22 @@ using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Lanswitch.Infrastructure.Services;
 
 public class TelegramBotAppService : ITelegramBotAppService
 {
+    private static readonly string[] RateLimitExcuses = new[]
+    {
+        "1 daqiqa, charchab kettim axir... 🥱 Bugun judayam sersavolsiz! Bir ozdan keyin yana davom etamiz. ☕",
+        "Eh, bugun savollar bo'yicha rekord o'rnatyapsiz-ku! 😅 1 daqiqa, charchab kettim axir... Biroz nafas rostlab olay, keyin yana yordam beraman! ✨",
+        "Miyam qizib ketdi-ku! 🤯 Bugun ancha sersavolsiz. 1 daqiqa, charchab kettim axir... Biroz dam olaylik, so'ng yana savollarga tayyorman! 😊",
+        "Voy, tinimsiz savol beryapsiz-a! 1 daqiqa, charchab kettim axir... ⏳ Bir piyola choy ichib olay, keyingi soatda yana bajonidil javob beraman! 🫖",
+        "Sal sekinroq, do'stim! 1 daqiqa, charchab kettim axir... Bugun judayam sersavolsiz. 😅 Birozdan keyin yana kelavering, albatta tushuntirib beraman!",
+        "Bitta sun'iy intellektga shuncha savolmi? 1 daqiqa, charchab kettim axir... 🔋 Keling, 1 daqiqa tanaffus qilamiz, keyin yangi kuch bilan davom etamiz! 🚀"
+    };
+
     private readonly ITelegramBotClient _botClient;
     private readonly IMTProtoClient _mtClient;
     private readonly ICloudStorageService _storageService;
@@ -2201,9 +2212,34 @@ public class TelegramBotAppService : ITelegramBotAppService
                 intent = classification.Intent ?? "CasualChat";
             }
 
-            // 5. Intent bo'yicha harakat:
+            // 5. Rate limit tekshiruvi: Soatiga maksimal 5 ta savol (Har bir premium foydalanuvchi uchun)
+            if (intent == "AskHomework" || intent == "AskEnglishQuestion")
+            {
+                bool isExempt = senderUser.IsAdmin || group.OwnerId == senderUser.Id;
+                if (!isExempt)
+                {
+                    var memoryCache = scope.ServiceProvider.GetRequiredService<IMemoryCache>();
+                    var cacheKey = $"ai_hourly_limit_{senderUser.Id}";
+                    var history = memoryCache.Get<List<DateTime>>(cacheKey) ?? new List<DateTime>();
+                    var cutoff = DateTime.UtcNow.AddHours(-1);
+                    history.RemoveAll(t => t < cutoff);
 
-            // A) Foydalanuvchi uyga vazifani so'rasa:
+                    if (history.Count >= 5)
+                    {
+                        var randomExcuse = RateLimitExcuses[Random.Shared.Next(RateLimitExcuses.Length)];
+                        await _botClient.SendMessage(
+                            chatId,
+                            randomExcuse,
+                            replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                        return;
+                    }
+
+                    history.Add(DateTime.UtcNow);
+                    memoryCache.Set(cacheKey, history, TimeSpan.FromHours(1.5));
+                }
+            }
+
+            // A) Foydalanuvchi uyga vazifani so'rasa yoki tushuntirishini xohlasa:
             if (intent == "AskHomework")
             {
                 var activeAssignment = await db.Assignments
@@ -2214,27 +2250,14 @@ public class TelegramBotAppService : ITelegramBotAppService
 
                 if (activeAssignment != null)
                 {
-                    var sb = new StringBuilder();
-                    sb.AppendLine($"Salom, {senderUser.FullName}! 😊\n");
-                    sb.AppendLine($"Guruhimizdagi joriy uyga vazifa:");
-                    sb.AppendLine($"📌 <b>{activeAssignment.Title}</b>");
-                    sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {activeAssignment.Deadline:dd.MM.yyyy HH:mm} gacha ({activeAssignment.Items.Count} ta topshiriq)\n");
-
-                    sb.AppendLine("<b>📋 Topshiriqlar ro'yxati:</b>");
-                    int idx = 1;
-                    foreach (var it in activeAssignment.Items.OrderBy(i => i.OrderIndex))
-                    {
-                        string icon = it.ItemType switch
-                        {
-                            "Vocabulary" => "📖",
-                            "MediaSubmission" => "🎙️",
-                            _ => "📝"
-                        };
-                        sb.AppendLine($"{idx++}. {icon} <b>{System.Net.WebUtility.HtmlEncode(it.Title)}</b>");
-                    }
-
-                    sb.AppendLine();
-                    sb.AppendLine("Quyidagi tugma orqali topshiriqni ochib, bajarishingiz mumkin 👇");
+                    // AI uyga vazifani samimiy tushuntirib beradi
+                    var explanation = await gemini.ExplainHomeworkToStudentAsync(
+                        activeAssignment.Title,
+                        activeAssignment.Deadline,
+                        activeAssignment.Items.OrderBy(i => i.OrderIndex).ToList(),
+                        rawContent,
+                        senderUser.FullName,
+                        group.Title);
 
                     var hwDeepLink = $"https://t.me/{botUsername}?start=hw_{activeAssignment.Id}";
                     var replyKb = new InlineKeyboardMarkup(new[]
@@ -2242,9 +2265,11 @@ public class TelegramBotAppService : ITelegramBotAppService
                         new[] { InlineKeyboardButton.WithUrl("📝 Vazifani bajarish", hwDeepLink) }
                     });
 
+                    var replyText = $"{explanation}\n\nQuyidagi tugma orqali topshiriqni ochib, bajarishingiz mumkin 👇";
+
                     await _botClient.SendMessage(
                         chatId,
-                        sb.ToString(),
+                        replyText,
                         parseMode: ParseMode.Html,
                         replyParameters: new ReplyParameters { MessageId = message.MessageId },
                         replyMarkup: replyKb);
@@ -2318,22 +2343,16 @@ public class TelegramBotAppService : ITelegramBotAppService
                 return;
             }
 
-            // C) Foydalanuvchi ingliz tili bo'yicha savol bersa (faqat "lanswitch" tilga olinganda yoki botga reply qilinganda):
+            // C) Foydalanuvchi ingliz tili yoki grammatika bo'yicha savol bersa:
             if (intent == "AskEnglishQuestion")
             {
-                bool isTargetedToBot = lowerContent.Contains("lanswitch") ||
-                                       (message.ReplyToMessage != null && message.ReplyToMessage.From != null && message.ReplyToMessage.From.IsBot);
-
-                if (isTargetedToBot)
-                {
-                    var aiAnswer = await gemini.AnswerStudentProQuestionAsync(rawContent, group.Title);
-                    await _botClient.SendMessage(
-                        chatId,
-                        $"🤖 <b>Lanswitch AI:</b>\n\n{aiAnswer}",
-                        parseMode: ParseMode.Html,
-                        replyParameters: new ReplyParameters { MessageId = message.MessageId });
-                    return;
-                }
+                var aiAnswer = await gemini.AnswerStudentProQuestionAsync(rawContent, group.Title);
+                await _botClient.SendMessage(
+                    chatId,
+                    $"🤖 <b>Lanswitch AI:</b>\n\n{aiAnswer}",
+                    parseMode: ParseMode.Html,
+                    replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                return;
             }
 
             // D) CasualChat yoki boshqa holatlar: guruhda bot jim turadi

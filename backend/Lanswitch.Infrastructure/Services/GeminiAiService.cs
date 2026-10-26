@@ -951,6 +951,86 @@ Javobni FAQAT toza JSON formatida bering, markdown (` ```json `) siz:
         return result;
     }
 
+    public async Task<string> ExplainHomeworkToStudentAsync(
+        string assignmentTitle,
+        DateTime deadline,
+        List<AssignmentItem> items,
+        string studentQuestion,
+        string studentName,
+        string groupTitle)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+        {
+            return $"Salom, {studentName}! 😊 Guruhimizdagi joriy uyga vazifa: <b>{assignmentTitle}</b>.\nTopshirish muddati: <b>{deadline:dd.MM.yyyy HH:mm}</b> gacha.";
+        }
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var itemsSb = new StringBuilder();
+        int idx = 1;
+        foreach (var it in items)
+        {
+            itemsSb.AppendLine($"{idx++}. {it.Title} ({it.ItemType}): {it.Instructions}");
+        }
+
+        var systemInstruction = $@"Siz '{groupTitle}' ta'lim guruhida ingliz tili o'qituvchisining do'stona, samimiy va jonli yordamchisisiz.
+Talaba '{studentName}' guruhda uyga vazifa haqida so'radi.
+
+Guruhdagi joriy uyga vazifa ma'lumotlari:
+- Mavzu: {assignmentTitle}
+- Topshirish muddati: {deadline:dd.MM.yyyy HH:mm} gacha
+- Topshiriqlar tarkibi:
+{itemsSb}
+
+TALABLAR:
+1. Salomlashib ('Salom, {studentName}! 😊'), talabaning savoliga mos ravishda uyga vazifani insondek sodda, qiziqarli va tushunarli qilib TUSHUNTIRIB BERING.
+2. Faqat ro'yxat qilib tashlamang, har bir topshiriq nima haqida ekanligini va qanday bajarish kerakligini (lug'at, audio/video yozib yuborish, mashqlar) samimiy tilda izohlang.
+3. Topshirish muddatini va Mini App orqali yuborish kerakligini qisqa eslatib, rag'batlantiring.
+4. Javobingiz ixcham bo'lsin (maksimal 100-140 so'z).
+5. Javobni Telegram HTML formatida bering (<b>, <i>).";
+
+        var requestBody = new
+        {
+            systemInstruction = new { parts = new[] { new { text = systemInstruction } } },
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = studentQuestion } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.3,
+                maxOutputTokens = 350
+            }
+        };
+
+        try
+        {
+            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseJson = await response.Content.ReadAsStringAsync();
+                using var jsonDoc = JsonDocument.Parse(responseJson);
+                var textResult = jsonDoc.RootElement
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text").GetString()?.Trim();
+
+                if (!string.IsNullOrWhiteSpace(textResult))
+                    return textResult;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ExplainHomeworkToStudentAsync error: {ex.Message}");
+        }
+
+        return $"Salom, {studentName}! 😊 Guruhimizdagi joriy uyga vazifa: <b>{assignmentTitle}</b>.\nTopshirish muddati: <b>{deadline:dd.MM.yyyy HH:mm}</b> gacha.";
+    }
+
     private static string CleanJsonText(string raw)
     {
         var clean = raw.Trim();

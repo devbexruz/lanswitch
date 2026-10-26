@@ -41,4 +41,5 @@ public interface IGeminiAiService
     Task<string> LearnAndUpdateTeacherContextAsync(string currentContext, string publishedHomeworkSummary);
     Task<string> AnswerStudentProQuestionAsync(string question, string groupTitle);
     Task<GroupMessageIntentResult> ClassifyGroupMessageIntentAsync(string text, bool isTeacher);
+    Task<string> ExplainHomeworkToStudentAsync(string assignmentTitle, DateTime deadline, List<AssignmentItem> items, string studentQuestion, string studentName, string groupTitle);
 }
