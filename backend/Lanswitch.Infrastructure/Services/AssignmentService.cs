@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Lanswitch.Application.Interfaces;
 using Lanswitch.Application.Models;
@@ -126,12 +127,29 @@ public class AssignmentService : IAssignmentService
             new[] { InlineKeyboardButton.WithUrl("📝 Vazifani Bajarish", groupDeepLink) }
         });
 
-        var messageText = $"📢 <b>YANGI UYGA VAZIFA!</b>\n\n" +
-                          $"📚 <b>Guruh:</b> {assignment.Group.Title}\n" +
-                          $"📌 <b>Dars:</b> {assignment.Title}\n" +
-                          $"⏰ <b>Topshirish muddati:</b> {assignment.Deadline:dd.MM.yyyy HH:mm}\n" +
-                          $"🔢 <b>Topshiriqlar soni:</b> {assignment.Items.Count} ta qism\n\n" +
-                          $"<i>Bajarish uchun quyidagi tugmani bosing 👇</i>";
+        var sb = new StringBuilder();
+        sb.AppendLine("📢 <b>YANGI UYGA VAZIFA!</b>\n");
+        sb.AppendLine($"📚 <b>Guruh:</b> {System.Net.WebUtility.HtmlEncode(assignment.Group.Title)}");
+        sb.AppendLine($"📌 <b>Dars:</b> {System.Net.WebUtility.HtmlEncode(assignment.Title)}");
+        sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {assignment.Deadline:dd.MM.yyyy HH:mm}");
+        sb.AppendLine($"🔢 <b>Topshiriqlar soni:</b> {assignment.Items.Count} ta qism\n");
+        sb.AppendLine("<b>📋 Topshiriqlar:</b>");
+
+        int orderIdx = 1;
+        foreach (var it in assignment.Items.OrderBy(i => i.OrderIndex))
+        {
+            string icon = it.ItemType switch
+            {
+                "Vocabulary" => "📖",
+                "MediaSubmission" => "🎙️",
+                _ => "📝"
+            };
+            sb.AppendLine($"{orderIdx++}. {icon} <b>{System.Net.WebUtility.HtmlEncode(it.Title)}</b>");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("<i>Bajarish uchun quyidagi tugmani bosing 👇</i>");
+        var messageText = sb.ToString();
 
         // 1. Telegram guruhga yuborish (bosilganda bot oynasi ochiladi)
         try

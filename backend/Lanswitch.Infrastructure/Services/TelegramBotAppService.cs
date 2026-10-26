@@ -2220,6 +2220,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                     sb.AppendLine($"📌 <b>{activeAssignment.Title}</b>");
                     sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {activeAssignment.Deadline:dd.MM.yyyy HH:mm} gacha ({activeAssignment.Items.Count} ta topshiriq)\n");
 
+                    sb.AppendLine("<b>📋 Topshiriqlar ro'yxati:</b>");
                     int idx = 1;
                     foreach (var it in activeAssignment.Items.OrderBy(i => i.OrderIndex))
                     {
@@ -2229,11 +2230,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                             "MediaSubmission" => "🎙️",
                             _ => "📝"
                         };
-                        sb.AppendLine($"{idx++}. {icon} <b>{it.Title}</b>");
-                        if (!string.IsNullOrWhiteSpace(it.Instructions))
-                        {
-                            sb.AppendLine($"   <i>{it.Instructions}</i>");
-                        }
+                        sb.AppendLine($"{idx++}. {icon} <b>{System.Net.WebUtility.HtmlEncode(it.Title)}</b>");
                     }
 
                     sb.AppendLine();
@@ -2404,30 +2401,33 @@ public class TelegramBotAppService : ITelegramBotAppService
                 await db.SaveChangesAsync();
 
                 var sb = new StringBuilder();
-                sb.AppendLine("🤖 <b>AI Tavsiya etgan Uyga Vazifa:</b>");
-                sb.AppendLine($"📌 <b>Mavzu:</b> {draft.Title}");
+                sb.AppendLine("🤖 <b>AI Tavsiya etgan Uyga Vazifa:</b>\n");
+                sb.AppendLine($"👥 <b>Guruh:</b> {System.Net.WebUtility.HtmlEncode(draft.Group?.Title ?? "")}");
+                sb.AppendLine($"📌 <b>Mavzu:</b> {System.Net.WebUtility.HtmlEncode(draft.Title)}");
                 sb.AppendLine($"⏰ <b>Tavsiya muddati:</b> {draft.Deadline:dd.MM.yyyy HH:mm}");
                 sb.AppendLine();
-                sb.AppendLine("<b>Topshiriq tarkibi:</b>");
+                sb.AppendLine("<b>📋 Topshiriqlar ro'yxati (batafsil ko'rish uchun bosing):</b>");
 
                 int idx = 1;
                 foreach (var item in analysis.Items)
                 {
                     string icon = item.ItemType switch
                     {
-                        "Vocabulary" => "📖",
-                        "MediaSubmission" => "🎙️",
-                        _ => "📝"
+                        "Vocabulary" => "📖 Lug'at",
+                        "MediaSubmission" => "🎙️ Audio/Video",
+                        _ => "📝 Matnli eslatma"
                     };
-                    sb.AppendLine($"{idx++}. {icon} <b>{item.Title}</b>");
-                    if (!string.IsNullOrWhiteSpace(item.Instructions))
-                        sb.AppendLine($"   <i>{item.Instructions}</i>");
+
+                    var cleanTitle = System.Net.WebUtility.HtmlEncode(item.Title);
+                    var cleanInstructions = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(item.Instructions) ? "Yo'riqnoma kiritilmagan." : item.Instructions);
+
+                    sb.AppendLine($"<blockquote expandable><b>{idx++}. {icon} — {cleanTitle}</b>\n<i>{cleanInstructions}</i></blockquote>");
                 }
 
                 if (!string.IsNullOrWhiteSpace(analysis.UnsupportedRequests))
                 {
                     sb.AppendLine();
-                    sb.AppendLine($"⚠️ <b>Eslatma:</b> {analysis.UnsupportedRequests}");
+                    sb.AppendLine($"⚠️ <b>Eslatma:</b> {System.Net.WebUtility.HtmlEncode(analysis.UnsupportedRequests)}");
                 }
 
                 sb.AppendLine();
@@ -2602,11 +2602,11 @@ public class TelegramBotAppService : ITelegramBotAppService
 
         var sb = new StringBuilder();
         sb.AppendLine($"🛠️ <b>Uyga Vazifani Tahrirlash & Qo'shimcha kiritish</b>\n");
-        sb.AppendLine($"👥 <b>Guruh:</b> {draft.Group?.Title}");
-        sb.AppendLine($"📌 <b>Sarlavha:</b> {draft.Title}");
+        sb.AppendLine($"👥 <b>Guruh:</b> {System.Net.WebUtility.HtmlEncode(draft.Group?.Title ?? "")}");
+        sb.AppendLine($"📌 <b>Sarlavha:</b> {System.Net.WebUtility.HtmlEncode(draft.Title)}");
         sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {draft.Deadline:dd.MM.yyyy HH:mm}");
         sb.AppendLine();
-        sb.AppendLine("<b>📋 Topshiriqlar:</b>");
+        sb.AppendLine("<b>📋 Topshiriqlar ro'yxati (batafsil ko'rish uchun bosing):</b>");
 
         int idx = 1;
         foreach (var item in items)
@@ -2617,15 +2617,17 @@ public class TelegramBotAppService : ITelegramBotAppService
                 "MediaSubmission" => "🎙️ Audio/Video topshirish",
                 _ => "📝 Matnli eslatma"
             };
-            sb.AppendLine($"{idx++}. <b>{item.Title}</b> ({icon})");
-            if (!string.IsNullOrWhiteSpace(item.Instructions))
-                sb.AppendLine($"   <i>{item.Instructions}</i>");
+
+            var cleanTitle = System.Net.WebUtility.HtmlEncode(item.Title);
+            var cleanInstructions = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(item.Instructions) ? "Yo'riqnoma kiritilmagan." : item.Instructions);
+
+            sb.AppendLine($"<blockquote expandable><b>{idx++}. {icon} — {cleanTitle}</b>\n<i>{cleanInstructions}</i></blockquote>");
         }
 
         if (!string.IsNullOrWhiteSpace(unsupported))
         {
             sb.AppendLine();
-            sb.AppendLine($"⚠️ <b>Eslatma:</b> {unsupported}");
+            sb.AppendLine($"⚠️ <b>Eslatma:</b> {System.Net.WebUtility.HtmlEncode(unsupported)}");
         }
 
         sb.AppendLine();
