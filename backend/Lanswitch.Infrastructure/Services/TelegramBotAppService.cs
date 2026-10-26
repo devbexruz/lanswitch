@@ -346,10 +346,12 @@ public class TelegramBotAppService : ITelegramBotAppService
                         }
 
                         string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
-                        var attTmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+                        var attUrl = (user.Role == "Teacher" || user.IsAdmin)
+                            ? $"https://{frontendHost}/teacher?role=teacher&user_id={user.Id}&telegram_id={user.TelegramId}"
+                            : $"https://{frontendHost}/student?role=student&user_id={user.Id}&telegram_id={user.TelegramId}";
                         keyboardList.Add(new[]
                         {
-                            InlineKeyboardButton.WithWebApp("📱 Mini App da ochish", new WebAppInfo { Url = $"{attTmaUrl}?user_id={user.Id}" })
+                            InlineKeyboardButton.WithWebApp("📱 Mini App da ochish", new WebAppInfo { Url = attUrl })
                         });
 
                         var replyKb = new InlineKeyboardMarkup(keyboardList);
@@ -497,8 +499,8 @@ public class TelegramBotAppService : ITelegramBotAppService
         var botUsername = me.Username ?? "lanswitchbot";
 
         string frontend_host = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
-        var studentTmaUrl = $"https://{frontend_host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
-        var teacherTmaUrl = $"https://{frontend_host}/teacher?user_id={user.Id}&telegram_id={user.TelegramId}";
+        var studentTmaUrl = $"https://{frontend_host}/student?role=student&user_id={user.Id}&telegram_id={user.TelegramId}";
+        var teacherTmaUrl = $"https://{frontend_host}/teacher?role=teacher&user_id={user.Id}&telegram_id={user.TelegramId}";
         var loginUrl = $"https://{frontend_host}/api/auth/redirect?token={user.LoginToken}";
 
         using var scope = _scopeFactory.CreateScope();
@@ -692,29 +694,46 @@ public class TelegramBotAppService : ITelegramBotAppService
         else
         {
             // Avval obuna/bonus ishlatgan, lekin hozir muddati tugagan foydalanuvchi
+            bool isTeacherUser = user.Role == "Teacher" || teacherGroups.Count > 0;
             var expiredMsg = $"Assalomu alaykum, <b>{user.FullName}</b>! 👋\n\n" +
                              $"⚠️ <b>Tarifingiz muddati yakunlangan!</b>\n\n" +
                              $"💰 <b>Hisob balansingiz:</b> {user.Balance:N0} so'm\n\n" +
-                             $"Kinolarni tomosha qilish, film ichida AI Ustoz bilan muloqot qilish va o'qishni davom ettirish uchun hisobingizni minimal <b>{minAmount:N0}+ so'm</b>ga to'ldiring!\n\n" +
+                             (isTeacherUser
+                                 ? $"Guruhlaringiz va o'quvchilaringiz bilan ishlashni davom ettirish uchun hisobingizni minimal <b>{minAmount:N0}+ so'm</b>ga to'ldiring!\n\n"
+                                 : $"Kinolarni tomosha qilish, film ichida AI Ustoz bilan muloqot qilish va o'qishni davom ettirish uchun hisobingizni minimal <b>{minAmount:N0}+ so'm</b>ga to'ldiring!\n\n") +
                              $"💡 <i>Mablag' sekundlarigacha aniqlikda, faqat faol foydalangan vaqtingiz bo'yicha real-time sarflanadi.</i>\n\n" +
                              $"👇 <i>Davom etish uchun quyidagilardan birini tanlang:</i>";
 
-            var expiredKb = new InlineKeyboardMarkup(new[]
-            {
-                new[]
+            var expiredKb = isTeacherUser
+                ? new InlineKeyboardMarkup(new[]
                 {
-                    InlineKeyboardButton.WithWebApp($"💳 Balansni to'ldirish (Minimal {minAmount:N0} so'm)", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&open_plans=1" })
-                },
-                new[]
+                    new[]
+                    {
+                        InlineKeyboardButton.WithWebApp("🖥 O'qituvchi Paneli (Mini App)", new Telegram.Bot.Types.WebAppInfo { Url = teacherTmaUrl })
+                    },
+                    new[]
+                    {
+                        InlineKeyboardButton.WithWebApp($"💳 Tariflar (Minimal {minAmount:N0} so'm)", new Telegram.Bot.Types.WebAppInfo { Url = $"{teacherTmaUrl}&open_plans=1" }),
+                        InlineKeyboardButton.WithWebApp("🎓 O'quvchi kabineti", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl })
+                    }
+                })
+                : new InlineKeyboardMarkup(new[]
                 {
-                    InlineKeyboardButton.WithWebApp("🎬 Kinolarni ko'rish", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&tab=movies" }),
-                    InlineKeyboardButton.WithWebApp("📖 Lug'at", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&tab=vocabulary" })
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithWebApp("📱 Mini App'ni ochish", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl })
-                }
-            });
+                    new[]
+                    {
+                        InlineKeyboardButton.WithWebApp($"💳 Balansni to'ldirish (Minimal {minAmount:N0} so'm)", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&open_plans=1" })
+                    },
+                    new[]
+                    {
+                        InlineKeyboardButton.WithWebApp("🎬 Kinolarni ko'rish", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&tab=movies" }),
+                        InlineKeyboardButton.WithWebApp("📖 Lug'at", new Telegram.Bot.Types.WebAppInfo { Url = $"{studentTmaUrl}&tab=vocabulary" })
+                    },
+                    new[]
+                    {
+                        InlineKeyboardButton.WithWebApp("📱 Mini App'ni ochish", new Telegram.Bot.Types.WebAppInfo { Url = studentTmaUrl }),
+                        InlineKeyboardButton.WithWebApp("👨‍🏫 O'qituvchi bo'limi", new Telegram.Bot.Types.WebAppInfo { Url = teacherTmaUrl })
+                    }
+                });
 
             await SendOrEditMessageAsync(chatId, messageIdToEdit, expiredMsg, expiredKb);
             return;
@@ -727,8 +746,8 @@ public class TelegramBotAppService : ITelegramBotAppService
         var botUsername = me.Username ?? "lanswitchbot";
 
         string frontend_host = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
-        var studentTmaUrl = $"https://{frontend_host}/student?user_id={user.Id}&telegram_id={user.TelegramId}";
-        var teacherTmaUrl = $"https://{frontend_host}/teacher?user_id={user.Id}&telegram_id={user.TelegramId}";
+        var studentTmaUrl = $"https://{frontend_host}/student?role=student&user_id={user.Id}&telegram_id={user.TelegramId}";
+        var teacherTmaUrl = $"https://{frontend_host}/teacher?role=teacher&user_id={user.Id}&telegram_id={user.TelegramId}";
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1162,6 +1181,18 @@ public class TelegramBotAppService : ITelegramBotAppService
         if (data != null && data.StartsWith("branch:"))
         {
             var branchKey = data.Replace("branch:", "");
+            if (branchKey == "student" || branchKey == "teacher")
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var dbUser = await db.Users.FindAsync(user.Id);
+                if (dbUser != null)
+                {
+                    dbUser.Role = branchKey == "teacher" ? "Teacher" : "Student";
+                    await db.SaveChangesAsync();
+                    user.Role = dbUser.Role;
+                }
+            }
             await SendBranchDetailsAsync(chatId, callbackQuery.Message!.MessageId, user, branchKey);
             try
             {
@@ -1243,10 +1274,10 @@ public class TelegramBotAppService : ITelegramBotAppService
                     _stateManager.ClearState(chatId);
 
                     string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
-                    var tmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+                    var studentTmaUrl = $"https://{frontendHost}/student?role=student&user_id={user.Id}&telegram_id={user.TelegramId}&tab=homework";
                     var backKeyboard = new InlineKeyboardMarkup(new[]
                     {
-                        new[] { InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new WebAppInfo { Url = $"{tmaUrl}?user_id={user.Id}" }) }
+                        new[] { InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new WebAppInfo { Url = studentTmaUrl }) }
                     });
 
                     await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Topshirig'ingiz qabul qilindi!");
@@ -1266,10 +1297,10 @@ public class TelegramBotAppService : ITelegramBotAppService
             await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Topshiriq yuklash bekor qilindi");
 
             string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
-            var tmaUrl = _configuration["Frontend:TmaUrl"] ?? $"https://{frontendHost}/tma";
+            var studentTmaUrl = $"https://{frontendHost}/student?role=student&user_id={user.Id}&telegram_id={user.TelegramId}&tab=homework";
             var backKeyboard = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new WebAppInfo { Url = $"{tmaUrl}?user_id={user.Id}" }) }
+                new[] { InlineKeyboardButton.WithWebApp("📱 Mini App ga qaytish", new WebAppInfo { Url = studentTmaUrl }) }
             });
 
             await _botClient.EditMessageText(

@@ -289,7 +289,10 @@ export default function TeacherDashboardPage() {
   useEffect(() => {
     localStorage.setItem('lanswitch_last_route', '/teacher');
     checkSubscription();
-  }, []);
+    if (user && user.role !== 'Teacher') {
+      setRole('Teacher').catch(console.warn);
+    }
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     localStorage.setItem('lanswitch_teacher_main_tab', mainTab);

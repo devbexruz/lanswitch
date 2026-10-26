@@ -45,6 +45,7 @@ public class AuthController : ControllerBase
         public string? Username { get; set; }
         public string? PhotoUrl { get; set; }
         public string? InitData { get; set; }
+        public string? Role { get; set; }
     }
 
     [HttpPost("telegram-auto-login")]
@@ -53,6 +54,14 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(req.TelegramId) && (!req.UserId.HasValue || req.UserId <= 0))
         {
             return BadRequest(new { message = "TelegramId or UserId is required" });
+        }
+
+        string? targetRole = null;
+        if (!string.IsNullOrEmpty(req.Role))
+        {
+            var r = req.Role.Trim().ToLower();
+            if (r == "teacher") targetRole = "Teacher";
+            else if (r == "student") targetRole = "Student";
         }
 
         User? user = null;
@@ -81,6 +90,7 @@ public class AuthController : ControllerBase
                 FullName = fullName,
                 ProfileImage = req.PhotoUrl,
                 NativeLanguageId = 1,
+                Role = targetRole ?? "Student",
                 IsAdmin = false,
                 CreatedAt = DateTime.UtcNow
             };
@@ -92,6 +102,11 @@ public class AuthController : ControllerBase
             if (!string.IsNullOrEmpty(req.PhotoUrl) && user.ProfileImage != req.PhotoUrl)
             {
                 user.ProfileImage = req.PhotoUrl;
+                updated = true;
+            }
+            if (!string.IsNullOrEmpty(targetRole) && user.Role != targetRole)
+            {
+                user.Role = targetRole;
                 updated = true;
             }
             if (updated)

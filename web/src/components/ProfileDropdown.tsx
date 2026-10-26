@@ -12,7 +12,7 @@ interface ProfileDropdownProps {
   variant?: 'teacher' | 'student';
 }
 
-export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps) {
+export default function ProfileDropdown({ onNavigateTab, variant }: ProfileDropdownProps) {
   const { user, isAuthenticated, logout, setRole, login, hasSubscription, subscription, checkSubscription, canClaimBonus, bonusAmount } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
@@ -21,8 +21,8 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isTeacherRoute = location.pathname.startsWith('/teacher');
-  const currentRole = user?.role === 'Teacher' || (!user?.role && isTeacherRoute) ? 'Teacher' : 'Student';
+  const isTeacherRoute = variant ? variant === 'teacher' : location.pathname.startsWith('/teacher');
+  const currentRole = isTeacherRoute ? 'Teacher' : 'Student';
   const isRoleSubActive = user?.isAdmin || (hasSubscription && (isTeacherRoute ? subscription?.targetRole === 'Teacher' : true));
 
   // Close when clicking outside

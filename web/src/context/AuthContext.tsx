@@ -160,6 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const queryTgId = urlParams.get('telegram_id') || tgUser?.id?.toString();
       const queryUserId = urlParams.get('user_id');
 
+      const isTeacherRoute = window.location.pathname.startsWith('/teacher') || urlParams.get('role')?.toLowerCase() === 'teacher';
+      const isStudentRoute = window.location.pathname.startsWith('/student') || urlParams.get('role')?.toLowerCase() === 'student';
+      const requestedRole = isTeacherRoute ? 'Teacher' : (isStudentRoute ? 'Student' : undefined);
+
       if (tgUser || queryTgId || queryUserId) {
         try {
           const autoRes = await fetch('/api/auth/telegram-auto-login', {
@@ -172,7 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               lastName: tgUser?.last_name,
               username: tgUser?.username,
               photoUrl: tgUser?.photo_url,
-              initData: tg?.initData
+              initData: tg?.initData,
+              role: requestedRole
             })
           });
           if (autoRes.ok) {

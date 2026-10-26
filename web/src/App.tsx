@@ -22,6 +22,16 @@ function SmartRoleRoute() {
   const [searchParams] = useSearchParams();
   const search = searchParams.toString() ? `?${searchParams.toString()}` : '';
 
+  // 1. Agar URL da role yoki branch parametri aniq berilgan bo'lsa (eng yuqori prioritet)
+  const roleParam = searchParams.get('role')?.toLowerCase() || searchParams.get('branch')?.toLowerCase();
+  if (roleParam === 'teacher') {
+    return <Navigate to={`/teacher${search}`} replace />;
+  }
+  if (roleParam === 'student') {
+    return <Navigate to={`/student${search}`} replace />;
+  }
+
+  // 2. Foydalanuvchining aktiv roli (state yoki localStorage)
   let role = user?.role;
   if (!role) {
     try {
@@ -39,6 +49,7 @@ function SmartRoleRoute() {
     return <Navigate to={`/student${search}`} replace />;
   }
 
+  // 3. Oxirgi kirilgan marshrut
   const savedRoute = localStorage.getItem('lanswitch_last_route');
   if (savedRoute && savedRoute.startsWith('/teacher')) {
     return <Navigate to={`/teacher${search}`} replace />;

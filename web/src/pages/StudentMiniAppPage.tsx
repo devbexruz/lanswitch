@@ -202,7 +202,10 @@ export default function StudentMiniAppPage() {
 
   useEffect(() => {
     localStorage.setItem('lanswitch_last_route', '/student');
-  }, []);
+    if (authUser && authUser.role !== 'Student') {
+      setRole('Student').catch(console.warn);
+    }
+  }, [authUser?.id, authUser?.role]);
 
   useEffect(() => {
     localStorage.setItem('lanswitch_student_main_tab', mainTab);
