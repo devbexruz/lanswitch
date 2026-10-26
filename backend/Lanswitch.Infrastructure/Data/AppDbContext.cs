@@ -38,6 +38,8 @@ public class AppDbContext : DbContext
     public DbSet<AssignmentItem> AssignmentItems { get; set; }
     public DbSet<AssignmentItemSubmission> AssignmentItemSubmissions { get; set; }
     public DbSet<ItemSubmissionAttachment> ItemSubmissionAttachments { get; set; }
+    public DbSet<TeacherHomeworkContext> TeacherHomeworkContexts { get; set; }
+    public DbSet<AiHomeworkDraft> AiHomeworkDrafts { get; set; }
 
     // Darslik kitoblar va Lug'at (Books & Vocabulary Engine)
     public DbSet<Book> Books { get; set; }

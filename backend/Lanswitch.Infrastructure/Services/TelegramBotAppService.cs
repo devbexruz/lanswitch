@@ -15,6 +15,9 @@ using System.Linq;
 using System;
 using Lanswitch.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace Lanswitch.Infrastructure.Services;
 
@@ -100,6 +103,35 @@ public class TelegramBotAppService : ITelegramBotAppService
         var chatId = message.Chat.Id;
         var user = await GetOrCreateUserAsync(message.From);
         var state = _stateManager.GetState(chatId);
+
+        // Guruh xabarlarini qayta ishlash (Group va Supergroup)
+        if (message.Chat.Type == ChatType.Group || message.Chat.Type == ChatType.Supergroup)
+        {
+            if (message.Type == MessageType.Text && message.Text != null && message.Text.StartsWith("/start", StringComparison.OrdinalIgnoreCase))
+            {
+                var me = await _botClient.GetMe();
+                var botUsername = me.Username ?? "lanswitchbot";
+                var targetCommand = $"/start@{botUsername}";
+
+                if (message.Text.Trim().Equals(targetCommand, StringComparison.OrdinalIgnoreCase) ||
+                    message.Text.StartsWith(targetCommand + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    await HandleGroupStartAsync(chatId, message.Chat.Title ?? "Telegram Group", user, message.From);
+                }
+                // Oddiy /start bo'lsa, guruhda umuman javob bermaymiz
+                return;
+            }
+
+            await HandleGroupMessageAsync(message, user);
+            return;
+        }
+
+        // Ustoz AI uyga vazifasini shaxsiy chatda ovozli yoki matnli xabar bilan o'zgartirganda / qo'shimcha kiritganda
+        if (message.Chat.Type == ChatType.Private && state.CurrentStep == AdminStep.EditingAiHomeworkDraft && state.Data.TryGetValue("DraftCode", out var rawDraftCode))
+        {
+            await HandleEditingAiHomeworkDraftInputAsync(chatId, message, rawDraftCode?.ToString() ?? "", user);
+            return;
+        }
 
         // O'quvchi 3-tur multimedia topshiriq yuborganda
         if (state.CurrentStep == AdminStep.WaitingMediaSubmission && state.Data.TryGetValue("ItemId", out var rawItemId))
@@ -291,6 +323,14 @@ public class TelegramBotAppService : ITelegramBotAppService
         if (parts.Length > 1)
         {
             var payload = parts[1];
+
+            // Ustoz guruhdan "➕ Qo'shimcha kiritish (Botda)" orqali kelganda: /start ahw_{draftCode}
+            if (payload.StartsWith("ahw_"))
+            {
+                var draftCode = payload.Replace("ahw_", "");
+                await HandleStartAiHomeworkDraftAsync(chatId, user, draftCode);
+                return;
+            }
 
             // 3-tur: O'quvchi "Yuborish" tugmasini bosib kelganda
             if (payload.StartsWith("item_"))
@@ -1202,6 +1242,13 @@ public class TelegramBotAppService : ITelegramBotAppService
             return;
         }
 
+        // AI Uyga vazifa callbacklari (ahw_)
+        if (data != null && data.StartsWith("ahw_"))
+        {
+            await HandleAiHomeworkCallbackAsync(callbackQuery, user);
+            return;
+        }
+
         // To'lov chekini botdan tasdiqlash yoki bekor qilish
         if (data != null && data.StartsWith("pay_approve:"))
         {
@@ -2004,6 +2051,656 @@ public class TelegramBotAppService : ITelegramBotAppService
                 await botClient.SendMessage(chatId, $"❌ Deepgram orqali subtitr yaratishda xatolik yuz berdi: {ex.Message}");
             }
             catch { }
+        }
+    }
+
+    private async Task HandleGroupMessageAsync(Message message, Lanswitch.Domain.Entities.User senderUser)
+    {
+        try
+        {
+            var chatId = message.Chat.Id;
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var gemini = scope.ServiceProvider.GetRequiredService<IGeminiAiService>();
+
+            var group = await db.TelegramGroups
+                .Include(g => g.Owner)
+                .Include(g => g.Admins)
+                .FirstOrDefaultAsync(g => g.TelegramChatId == chatId && g.IsActive);
+
+            if (group == null) return;
+
+            bool isTeacher = group.OwnerId == senderUser.Id ||
+                             group.Admins.Any(a => a.UserId == senderUser.Id && a.CanCreateHomework) ||
+                             senderUser.IsAdmin;
+
+            var me = await _botClient.GetMe();
+            var botUsername = me.Username ?? "lanswitchbot";
+            string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+
+            // 1. Agar xabar yuboruvchi o'quvchi / oddiy a'zo bo'lsa:
+            if (!isTeacher)
+            {
+                var text = message.Text ?? message.Caption ?? "";
+                if (string.IsNullOrWhiteSpace(text)) return;
+
+                // Guruhda o'quvchiga faqat "lanswitch" kalit so'zi qatnashganda javob beramiz
+                if (!text.Contains("lanswitch", StringComparison.OrdinalIgnoreCase)) return;
+
+                var lowerText = text.ToLowerInvariant();
+                bool isHomeworkQuestion = lowerText.Contains("uyga vazifa") ||
+                                          lowerText.Contains("homework") ||
+                                          lowerText.Contains("vazifa") ||
+                                          lowerText.Contains("topshiriq") ||
+                                          lowerText.Contains("nima edi") ||
+                                          lowerText.Contains("qachongacha");
+
+                if (isHomeworkQuestion)
+                {
+                    // AI SIZ (0 TOKEN): To'g'ridan-to'g'ri bazadan faol vazifalarni olib beramiz
+                    var activeAssignments = await db.Assignments
+                        .Include(a => a.Items)
+                        .Where(a => a.GroupId == group.Id && a.Status == "Published")
+                        .OrderByDescending(a => a.CreatedAt)
+                        .Take(1)
+                        .ToListAsync();
+
+                    if (!activeAssignments.Any())
+                    {
+                        await _botClient.SendMessage(
+                            chatId,
+                            "📚 <b>Hozirda ushbu guruhda e'lon qilingan faol uyga vazifa yo'q.</b>",
+                            parseMode: ParseMode.Html,
+                            replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                        return;
+                    }
+
+                    var latest = activeAssignments.First();
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"📚 <b>Guruhdagi joriy uyga vazifa:</b>");
+                    sb.AppendLine($"📌 <b>Dars:</b> {latest.Title}");
+                    sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {latest.Deadline:dd.MM.yyyy HH:mm}");
+                    sb.AppendLine();
+                    sb.AppendLine("<b>Topshiriq qismlari:</b>");
+
+                    int idx = 1;
+                    foreach (var it in latest.Items.OrderBy(i => i.OrderIndex))
+                    {
+                        string icon = it.ItemType switch
+                        {
+                            "Vocabulary" => "📖",
+                            "MediaSubmission" => "🎙️",
+                            _ => "📝"
+                        };
+                        sb.AppendLine($"{idx++}. {icon} <b>{it.Title}</b>");
+                        if (!string.IsNullOrWhiteSpace(it.Instructions))
+                        {
+                            sb.AppendLine($"   <i>{it.Instructions}</i>");
+                        }
+                    }
+
+                    var tmaUrl = $"https://{frontendHost}/student?role=student&user_id={senderUser.Id}&telegram_id={senderUser.TelegramId}&assignment_id={latest.Id}&group_id={group.Id}";
+                    var kb = new InlineKeyboardMarkup(new[]
+                    {
+                        new[] { InlineKeyboardButton.WithWebApp("📝 Vazifani bajarish (Mini App)", new WebAppInfo { Url = tmaUrl }) }
+                    });
+
+                    await _botClient.SendMessage(
+                        chatId,
+                        sb.ToString(),
+                        parseMode: ParseMode.Html,
+                        replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                        replyMarkup: kb);
+                    return;
+                }
+                else
+                {
+                    // Boshqa savollar bo'lsa: Faqat Pro obunasi bor o'quvchilargagina AI javob beradi
+                    var now = DateTime.UtcNow;
+                    var hasPro = await db.UserSubscriptions.AnyAsync(s =>
+                        s.UserId == senderUser.Id &&
+                        (s.Status == "Active" || s.IsActive) &&
+                        s.EndDate > now &&
+                        senderUser.Balance > 0);
+
+                    if (hasPro)
+                    {
+                        var aiAnswer = await gemini.AnswerStudentProQuestionAsync(text, group.Title);
+                        await _botClient.SendMessage(
+                            chatId,
+                            $"🤖 <b>Lanswitch AI:</b>\n\n{aiAnswer}",
+                            parseMode: ParseMode.Html,
+                            replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                    }
+                    else
+                    {
+                        var kb = new InlineKeyboardMarkup(new[]
+                        {
+                            new[] { InlineKeyboardButton.WithUrl("⭐ Pro obunani faollashtirish", $"https://t.me/{botUsername}?start=plans") }
+                        });
+
+                        await _botClient.SendMessage(
+                            chatId,
+                            "💡 <i>Lanswitch AI bilan guruhda ingliz tili bo'yicha to'liq savol-javob qilish uchun sizda <b>Lanswitch Pro</b> obunasi faol bo'lishi lozim.</i>",
+                            parseMode: ParseMode.Html,
+                            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                            replyMarkup: kb);
+                    }
+                    return;
+                }
+            }
+
+            // 2. Agar xabar yuboruvchi o'qituvchi bo'lsa (Teacher / Owner):
+            string rawContent = "";
+            string? audioFileId = null;
+
+            if (message.Voice != null || message.Audio != null)
+            {
+                audioFileId = message.Voice?.FileId ?? message.Audio?.FileId;
+                if (!string.IsNullOrEmpty(audioFileId))
+                {
+                    try
+                    {
+                        var file = await _botClient.GetFile(audioFileId);
+                        var botToken = _configuration["BotConfiguration:BotToken"];
+                        var downloadUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
+
+                        using var httpClient = new System.Net.Http.HttpClient();
+                        var audioBytes = await httpClient.GetByteArrayAsync(downloadUrl);
+                        rawContent = await gemini.TranscribeVoiceAudioAsync(audioBytes, "audio/ogg");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Voice transcription error: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                rawContent = message.Text ?? message.Caption ?? "";
+            }
+
+            if (string.IsNullOrWhiteSpace(rawContent)) return;
+
+            // AI dan avval oddiy tekshirish (Pre-filtering):
+            // Faqat uyga vazifa, homework, topshiriq, ro'yxat yoki lanswitch qatnashganda ishlaydi
+            var lowerContent = rawContent.ToLowerInvariant();
+            bool hasKeywords = lowerContent.Contains("uyga vazifa") ||
+                               lowerContent.Contains("homework") ||
+                               lowerContent.Contains("topshiriq") ||
+                               lowerContent.Contains("vazifa") ||
+                               lowerContent.Contains("mashq") ||
+                               lowerContent.Contains("exercise") ||
+                               lowerContent.Contains("darslik") ||
+                               lowerContent.Contains("lug'at") ||
+                               lowerContent.Contains("vocabulary") ||
+                               lowerContent.Contains("yodlash") ||
+                               lowerContent.Contains("yuboring") ||
+                               lowerContent.Contains("tayyorlab") ||
+                               lowerContent.Contains("lanswitch") ||
+                               lowerContent.Contains("deadline") ||
+                               lowerContent.Contains("muddat");
+
+            bool hasListPattern = Regex.IsMatch(rawContent, @"(?m)^\s*(\d+[\.\)]|[-•*])\s+");
+
+            if (!hasKeywords && !hasListPattern)
+            {
+                return;
+            }
+
+            // Uyga vazifa loyihasini (Draft) yaratamiz
+            var draftCode = Guid.NewGuid().ToString("N")[..8];
+            var draft = new AiHomeworkDraft
+            {
+                DraftCode = draftCode,
+                TeacherId = senderUser.Id,
+                GroupId = group.Id,
+                RawInputText = rawContent,
+                AudioFileId = audioFileId,
+                Title = "Yangi Uyga Vazifa",
+                Deadline = DateTime.UtcNow.AddDays(2),
+                ItemsJson = "[]",
+                Status = "PendingConfirm"
+            };
+            db.AiHomeworkDrafts.Add(draft);
+            await db.SaveChangesAsync();
+
+            var deepLinkPm = $"https://t.me/{botUsername}?start=ahw_{draftCode}";
+            var confirmKb = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("✅ Ha, uyga vazifa", $"ahw_yes:{draftCode}"),
+                    InlineKeyboardButton.WithCallbackData("❌ Yo'q", $"ahw_no:{draftCode}")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithUrl("➕ Qo'shimcha kiritish (Botda)", deepLinkPm)
+                }
+            });
+
+            var preview = rawContent.Length > 220 ? rawContent[..220] + "..." : rawContent;
+            var promptText = (message.Voice != null || message.Audio != null)
+                ? $"🎙️ <b>Ovozli xabar aniqlandi:</b>\n<i>\"{preview}\"</i>\n\n📚 <b>Ustoz, bu guruh uchun yangi uyga vazifami?</b>"
+                : $"📝 <b>Topshiriq xabari aniqlandi:</b>\n<i>\"{preview}\"</i>\n\n📚 <b>Ustoz, bu guruh uchun yangi uyga vazifami?</b>";
+
+            await _botClient.SendMessage(
+                chatId,
+                promptText,
+                parseMode: ParseMode.Html,
+                replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                replyMarkup: confirmKb);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"HandleGroupMessageAsync error: {ex}");
+        }
+    }
+
+    private async Task HandleAiHomeworkCallbackAsync(CallbackQuery callbackQuery, Lanswitch.Domain.Entities.User user)
+    {
+        var chatId = callbackQuery.Message!.Chat.Id;
+        var messageId = callbackQuery.Message.MessageId;
+        var data = callbackQuery.Data ?? "";
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var gemini = scope.ServiceProvider.GetRequiredService<IGeminiAiService>();
+        var assignmentService = scope.ServiceProvider.GetRequiredService<IAssignmentService>();
+
+        var parts = data.Split(':', 2);
+        var action = parts[0];
+        var draftCode = parts.Length > 1 ? parts[1] : "";
+
+        var draft = await db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null)
+        {
+            try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "❌ Ushbu loyiha topilmadi!"); } catch { }
+            return;
+        }
+
+        // Faqat o'qituvchi yoki admin boshqara oladi
+        if (draft.TeacherId != user.Id && !user.IsAdmin)
+        {
+            try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "❌ Bu amalni faqat topshiriq egasi bajarishi mumkin!", showAlert: true); } catch { }
+            return;
+        }
+
+        var me = await _botClient.GetMe();
+        var botUsername = me.Username ?? "lanswitchbot";
+        var deepLinkPm = $"https://t.me/{botUsername}?start=ahw_{draft.DraftCode}";
+
+        switch (action)
+        {
+            case "ahw_yes":
+            {
+                try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "🤖 AI tahlil qilmoqda... Bir necha soniya kuting."); } catch { }
+
+                // O'qituvchining o'rganilgan kontekstini yuklaymiz
+                var teacherContext = await db.TeacherHomeworkContexts
+                    .FirstOrDefaultAsync(c => c.TeacherId == user.Id && (c.GroupId == draft.GroupId || c.GroupId == null));
+
+                var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(draft.RawInputText, teacherContext?.LearnedContext);
+
+                draft.Title = analysis.Title;
+                draft.Deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
+                draft.ItemsJson = JsonSerializer.Serialize(analysis.Items);
+                draft.Explanation = analysis.Explanation;
+                draft.Status = "DraftReady";
+                await db.SaveChangesAsync();
+
+                var sb = new StringBuilder();
+                sb.AppendLine("🤖 <b>AI Tavsiya etgan Uyga Vazifa:</b>");
+                sb.AppendLine($"📌 <b>Mavzu:</b> {draft.Title}");
+                sb.AppendLine($"⏰ <b>Tavsiya muddati:</b> {draft.Deadline:dd.MM.yyyy HH:mm}");
+                sb.AppendLine();
+                sb.AppendLine("<b>Topshiriq tarkibi:</b>");
+
+                int idx = 1;
+                foreach (var item in analysis.Items)
+                {
+                    string icon = item.ItemType switch
+                    {
+                        "Vocabulary" => "📖",
+                        "MediaSubmission" => "🎙️",
+                        _ => "📝"
+                    };
+                    sb.AppendLine($"{idx++}. {icon} <b>{item.Title}</b>");
+                    if (!string.IsNullOrWhiteSpace(item.Instructions))
+                        sb.AppendLine($"   <i>{item.Instructions}</i>");
+                }
+
+                if (!string.IsNullOrWhiteSpace(analysis.UnsupportedRequests))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine($"⚠️ <b>Eslatma:</b> {analysis.UnsupportedRequests}");
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("<i>Guruhga hozir e'lon qilasizmi yoki o'zgartirish kiritasizmi?</i>");
+
+                var kb = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("🚀 Guruhga e'lon qilish", $"ahw_pub:{draft.DraftCode}"),
+                        InlineKeyboardButton.WithCallbackData("❌ Bekor qilish", $"ahw_no:{draft.DraftCode}")
+                    },
+                    new[]
+                    {
+                        InlineKeyboardButton.WithUrl("➕ O'zgartirish / Qo'shimcha kiritish (Botda)", deepLinkPm)
+                    }
+                });
+
+                await _botClient.EditMessageText(chatId, messageId, sb.ToString(), parseMode: ParseMode.Html, replyMarkup: kb);
+                break;
+            }
+
+            case "ahw_pub":
+            {
+                try
+                {
+                    var items = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+                    var dto = new CreateAssignmentDto
+                    {
+                        GroupId = draft.GroupId,
+                        Title = draft.Title,
+                        Deadline = draft.Deadline,
+                        Items = items.Select((it, i) => new CreateAssignmentItemDto
+                        {
+                            OrderIndex = i + 1,
+                            ItemType = it.ItemType,
+                            Title = it.Title,
+                            Instructions = it.Instructions,
+                            TargetUnitId = it.TargetUnitId
+                        }).ToList()
+                    };
+
+                    var createdAssignment = await assignmentService.CreateAssignmentAsync(draft.TeacherId, dto);
+                    draft.Status = "Published";
+                    await db.SaveChangesAsync();
+
+                    // O'qituvchining shablonini o'rganish va yangilash
+                    await UpdateTeacherLearnedContextAsync(draft.TeacherId, draft.GroupId, createdAssignment, db, gemini);
+
+                    try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "✅ Muvaffaqiyatli e'lon qilindi!"); } catch { }
+                    await _botClient.EditMessageText(
+                        chatId,
+                        messageId,
+                        $"✅ <b>Uyga vazifa muvaffaqiyatli guruhga e'lon qilindi!</b> 🎉\n\n📌 <b>Mavzu:</b> {createdAssignment.Title}\n⏰ <b>Topshirish muddati:</b> {createdAssignment.Deadline:dd.MM.yyyy HH:mm}",
+                        parseMode: ParseMode.Html);
+                }
+                catch (Exception ex)
+                {
+                    try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, $"❌ Xatolik: {ex.Message}", showAlert: true); } catch { }
+                }
+                break;
+            }
+
+            case "ahw_no":
+            {
+                draft.Status = "Cancelled";
+                await db.SaveChangesAsync();
+                try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Bekor qilindi"); } catch { }
+                await _botClient.EditMessageText(chatId, messageId, "❌ <i>Uyga vazifa loyihasi bekor qilindi.</i>", parseMode: ParseMode.Html);
+                break;
+            }
+
+            case "ahw_pub_pm":
+            {
+                try
+                {
+                    var items = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+                    var dto = new CreateAssignmentDto
+                    {
+                        GroupId = draft.GroupId,
+                        Title = draft.Title,
+                        Deadline = draft.Deadline,
+                        Items = items.Select((it, i) => new CreateAssignmentItemDto
+                        {
+                            OrderIndex = i + 1,
+                            ItemType = it.ItemType,
+                            Title = it.Title,
+                            Instructions = it.Instructions,
+                            TargetUnitId = it.TargetUnitId
+                        }).ToList()
+                    };
+
+                    var createdAssignment = await assignmentService.CreateAssignmentAsync(draft.TeacherId, dto);
+                    draft.Status = "Published";
+                    await db.SaveChangesAsync();
+
+                    await UpdateTeacherLearnedContextAsync(draft.TeacherId, draft.GroupId, createdAssignment, db, gemini);
+                    _stateManager.ClearState(chatId);
+
+                    try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "✅ Muvaffaqiyatli e'lon qilindi!"); } catch { }
+                    await _botClient.EditMessageText(
+                        chatId,
+                        messageId,
+                        $"✅ <b>Uyga vazifa muvaffaqiyatli '{draft.Group?.Title}' guruhiga e'lon qilindi!</b> 🎉\n\n📌 <b>Mavzu:</b> {createdAssignment.Title}\n⏰ <b>Topshirish muddati:</b> {createdAssignment.Deadline:dd.MM.yyyy HH:mm}",
+                        parseMode: ParseMode.Html);
+                }
+                catch (Exception ex)
+                {
+                    try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, $"❌ Xatolik: {ex.Message}", showAlert: true); } catch { }
+                }
+                break;
+            }
+
+            case "ahw_cancel_pm":
+            {
+                draft.Status = "Cancelled";
+                await db.SaveChangesAsync();
+                _stateManager.ClearState(chatId);
+                try { await _botClient.AnswerCallbackQuery(callbackQuery.Id, "Bekor qilindi"); } catch { }
+                await _botClient.EditMessageText(chatId, messageId, "❌ <i>Uyga vazifa loyihasi bekor qilindi.</i>", parseMode: ParseMode.Html);
+                break;
+            }
+        }
+    }
+
+    private async Task HandleStartAiHomeworkDraftAsync(long chatId, Lanswitch.Domain.Entities.User user, string draftCode)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var gemini = scope.ServiceProvider.GetRequiredService<IGeminiAiService>();
+
+        var draft = await db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null)
+        {
+            await _botClient.SendMessage(chatId, "❌ <b>Uyga vazifa loyihasi topilmadi yoki eskirgan.</b>", parseMode: ParseMode.Html);
+            return;
+        }
+
+        if (draft.Status == "Published")
+        {
+            await _botClient.SendMessage(chatId, "✅ <b>Ushbu uyga vazifa allaqachon guruhga e'lon qilingan.</b>", parseMode: ParseMode.Html);
+            return;
+        }
+
+        if (draft.Status == "PendingConfirm")
+        {
+            var teacherContext = await db.TeacherHomeworkContexts
+                .FirstOrDefaultAsync(c => c.TeacherId == user.Id && (c.GroupId == draft.GroupId || c.GroupId == null));
+
+            var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(draft.RawInputText, teacherContext?.LearnedContext);
+            draft.Title = analysis.Title;
+            draft.Deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
+            draft.ItemsJson = JsonSerializer.Serialize(analysis.Items);
+            draft.Explanation = analysis.Explanation;
+            draft.Status = "DraftReady";
+            await db.SaveChangesAsync();
+        }
+
+        var state = new AdminState { CurrentStep = AdminStep.EditingAiHomeworkDraft };
+        state.Data["DraftCode"] = draftCode;
+        _stateManager.SetState(chatId, state);
+
+        await SendDraftInteractiveMenuAsync(chatId, draft, null);
+    }
+
+    private async Task SendDraftInteractiveMenuAsync(long chatId, AiHomeworkDraft draft, string? unsupported)
+    {
+        var items = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"🛠️ <b>Uyga Vazifani Tahrirlash & Qo'shimcha kiritish</b>\n");
+        sb.AppendLine($"👥 <b>Guruh:</b> {draft.Group?.Title}");
+        sb.AppendLine($"📌 <b>Sarlavha:</b> {draft.Title}");
+        sb.AppendLine($"⏰ <b>Topshirish muddati:</b> {draft.Deadline:dd.MM.yyyy HH:mm}");
+        sb.AppendLine();
+        sb.AppendLine("<b>📋 Topshiriqlar:</b>");
+
+        int idx = 1;
+        foreach (var item in items)
+        {
+            string icon = item.ItemType switch
+            {
+                "Vocabulary" => "📖 Lug'at",
+                "MediaSubmission" => "🎙️ Audio/Video topshirish",
+                _ => "📝 Matnli eslatma"
+            };
+            sb.AppendLine($"{idx++}. <b>{item.Title}</b> ({icon})");
+            if (!string.IsNullOrWhiteSpace(item.Instructions))
+                sb.AppendLine($"   <i>{item.Instructions}</i>");
+        }
+
+        if (!string.IsNullOrWhiteSpace(unsupported))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"⚠️ <b>Eslatma:</b> {unsupported}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("🎙️ <b>O'zgartirish kiritish:</b>");
+        sb.AppendLine("Siz botga <b>ovozli xabar (voice)</b> yoki <b>matn</b> yozib yuborishingiz mumkin. Masalan:");
+        sb.AppendLine("• <i>\"Topshirish muddati ertaga soat 21:00 bo'lsin\"</i>");
+        sb.AppendLine("• <i>\"3-mashqni olib tashla va yangi so'zlarni audio yuborishni qo'sh\"</i>");
+        sb.AppendLine("• <i>\"Sarlavhani Unit 5 deb o'zgartir\"</i>");
+        sb.AppendLine();
+        sb.AppendLine("<i>Har bir xabaringizdan so'ng AI vazifani yangilab boradi. Tayyor bo'lgach, e'lon qilish tugmasini bosing:</i>");
+
+        var kb = new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🚀 Guruhga e'lon qilish", $"ahw_pub_pm:{draft.DraftCode}"),
+                InlineKeyboardButton.WithCallbackData("❌ Bekor qilish", $"ahw_cancel_pm:{draft.DraftCode}")
+            }
+        });
+
+        await _botClient.SendMessage(chatId, sb.ToString(), parseMode: ParseMode.Html, replyMarkup: kb);
+    }
+
+    private async Task HandleEditingAiHomeworkDraftInputAsync(long chatId, Message message, string draftCode, Lanswitch.Domain.Entities.User user)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var gemini = scope.ServiceProvider.GetRequiredService<IGeminiAiService>();
+
+        var draft = await db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null || draft.Status == "Published" || draft.Status == "Cancelled")
+        {
+            _stateManager.ClearState(chatId);
+            await _botClient.SendMessage(chatId, "❌ Ushbu loyiha allaqachon yakunlangan yoki topilmadi.");
+            return;
+        }
+
+        string inputPrompt = "";
+        if (message.Voice != null || message.Audio != null)
+        {
+            var audioFileId = message.Voice?.FileId ?? message.Audio?.FileId;
+            if (!string.IsNullOrEmpty(audioFileId))
+            {
+                await _botClient.SendMessage(chatId, "🎙️ <i>Ovozli xabaringiz tahlil qilinmoqda... ⏳</i>", parseMode: ParseMode.Html);
+                try
+                {
+                    var file = await _botClient.GetFile(audioFileId);
+                    var botToken = _configuration["BotConfiguration:BotToken"];
+                    var downloadUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
+
+                    using var httpClient = new System.Net.Http.HttpClient();
+                    var audioBytes = await httpClient.GetByteArrayAsync(downloadUrl);
+                    inputPrompt = await gemini.TranscribeVoiceAudioAsync(audioBytes, "audio/ogg");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Voice transcription error: {ex.Message}");
+                }
+            }
+        }
+        else
+        {
+            inputPrompt = message.Text ?? message.Caption ?? "";
+        }
+
+        if (string.IsNullOrWhiteSpace(inputPrompt))
+        {
+            await _botClient.SendMessage(chatId, "Iltimos, o'zgartirish matnini yoki ovozli xabarni yuboring.");
+            return;
+        }
+
+        var currentItems = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+        var currentAnalysis = new AiHomeworkAnalysisResult
+        {
+            Title = draft.Title,
+            DeadlineDays = Math.Max(1, (int)Math.Ceiling((draft.Deadline - DateTime.UtcNow.Date).TotalDays)),
+            DeadlineTime = draft.Deadline.ToString("HH:mm"),
+            Explanation = draft.Explanation,
+            Items = currentItems
+        };
+
+        var refined = await gemini.RefineHomeworkDraftAsync(currentAnalysis, inputPrompt);
+
+        draft.Title = refined.Title;
+        draft.Deadline = DateTime.UtcNow.Date.AddDays(refined.DeadlineDays).Add(refined.GetDeadlineTimeSpan());
+        draft.ItemsJson = JsonSerializer.Serialize(refined.Items);
+        draft.Explanation = refined.Explanation;
+        await db.SaveChangesAsync();
+
+        await SendDraftInteractiveMenuAsync(chatId, draft, refined.UnsupportedRequests);
+    }
+
+    private async Task UpdateTeacherLearnedContextAsync(long teacherId, long groupId, Assignment assignment, AppDbContext db, IGeminiAiService gemini)
+    {
+        try
+        {
+            var context = await db.TeacherHomeworkContexts
+                .FirstOrDefaultAsync(c => c.TeacherId == teacherId && (c.GroupId == groupId || c.GroupId == null));
+
+            if (context == null)
+            {
+                context = new TeacherHomeworkContext
+                {
+                    TeacherId = teacherId,
+                    GroupId = groupId,
+                    LearnedContext = "",
+                    TotalAssignmentsCreated = 0
+                };
+                db.TeacherHomeworkContexts.Add(context);
+            }
+
+            var itemsDesc = string.Join("; ", assignment.Items.Select(i => $"{i.Title} ({i.ItemType}: {i.Instructions})"));
+            var summary = $"Mavzu: {assignment.Title}, Muddat: {assignment.Deadline:dd.MM.yyyy HH:mm}, Topshiriqlar: {itemsDesc}";
+
+            var newContext = await gemini.LearnAndUpdateTeacherContextAsync(context.LearnedContext, summary);
+            context.LearnedContext = newContext;
+            context.TotalAssignmentsCreated += 1;
+            context.LastTemplateJson = JsonSerializer.Serialize(assignment.Items.Select(i => new { i.Title, i.ItemType, i.Instructions }));
+            await db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"UpdateTeacherLearnedContextAsync error: {ex.Message}");
         }
     }
 

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Lanswitch.Application.Interfaces;
+using Lanswitch.Application.Models;
 using Lanswitch.Domain.Entities;
 using Lanswitch.Infrastructure.Data;
 using Lanswitch.Domain.Interfaces;
@@ -577,5 +578,320 @@ ASOSIY TALABLAR (TOKEN TEJASH VA ANIQLIK):
         }
 
         return word;
+    }
+
+    public async Task<string> TranscribeVoiceAudioAsync(byte[] audioBytes, string mimeType = "audio/ogg")
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || audioBytes == null || audioBytes.Length == 0)
+            return "";
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+        var base64Data = Convert.ToBase64String(audioBytes);
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+                new
+                {
+                    parts = new object[]
+                    {
+                        new { inlineData = new { mimeType = mimeType, data = base64Data } },
+                        new { text = "Transcribe this audio precisely into plain text. Return ONLY the spoken words in their original language (Uzbek, Russian or English) without any explanations, formatting, markdown or preamble." }
+                    }
+                }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.1,
+                maxOutputTokens = 400
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+
+            return textResult?.Trim() ?? "";
+        }
+
+        var err = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"TranscribeVoiceAudioAsync error: {err}");
+        return "";
+    }
+
+    public async Task<AiHomeworkAnalysisResult> AnalyzeAndGenerateHomeworkAsync(string text, string? teacherContext)
+    {
+        var result = new AiHomeworkAnalysisResult();
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(text))
+            return result;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var systemInstruction = @"Siz ingliz tili o'qituvchisiga guruh uchun uyga vazifani avtomatlashtirishda yordam beruvchi aqlli AI yordamchisiz.
+Platformada faqat 3 xil topshiriq turi qo'llab-quvvatlanadi:
+1. 'TextReminder': Darslikdagi mashqlar, o'qish, grammatika qoidalari (matnli eslatma).
+2. 'Vocabulary': Lug'at va yangi so'zlarni yodlash.
+3. 'MediaSubmission': Audio/voice xabar, video yoki rasm yuklash orqali tekshirish.
+
+QAT'IY QOIDALAR (TOKEN TEJASH VA ANIQLIK):
+1. Faqat toza JSON formatida javob bering, hech qanday markdown (` ```json ` yoki tushuntirish)siz.
+2. Agar o'qituvchi platforma qila olmaydigan vazifa so'rasa (masalan, offline uyga borib tekshirish yoki noaniq narsa), 'unsupportedRequests' maydonida 'Mening imkoniyatlarim doirasida ... qila olmayman. Platformada matnli eslatma, so'z yodlash va audio/video/rasm topshirish qo'llab-quvvatlanadi' deb qisqa yozing.
+3. JSON formati:
+{
+  ""isHomework"": true,
+  ""title"": ""Unit 4. Past Simple & Words"",
+  ""deadlineDays"": 2,
+  ""deadlineTime"": ""20:00"",
+  ""explanation"": ""Qisqa tavsiya"",
+  ""unsupportedRequests"": null,
+  ""items"": [
+    {
+      ""itemType"": ""TextReminder"" | ""Vocabulary"" | ""MediaSubmission"",
+      ""title"": ""Qism nomi"",
+      ""instructions"": ""O'quvchiga aniq vazifa yo'riqnomasi""
+    }
+  ]
+}";
+
+        var userPrompt = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(teacherContext))
+        {
+            userPrompt.AppendLine($"O'qituvchining oldingi odatiy uslubi va shabloni:\n{teacherContext}\n");
+        }
+        userPrompt.AppendLine($"O'qituvchi yuborgan topshiriq matni:\n\"{text}\"");
+
+        var requestBody = new
+        {
+            systemInstruction = new { parts = new[] { new { text = systemInstruction } } },
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = userPrompt.ToString() } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.1,
+                maxOutputTokens = 650
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString()?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(textResult))
+            {
+                var cleanJson = CleanJsonText(textResult);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var parsed = JsonSerializer.Deserialize<AiHomeworkAnalysisResult>(cleanJson, options);
+                if (parsed != null) return parsed;
+            }
+        }
+
+        // Fallback default
+        result.Items.Add(new AiHomeworkAnalysisItem
+        {
+            ItemType = "TextReminder",
+            Title = "Dars topshiriqlari",
+            Instructions = text
+        });
+        return result;
+    }
+
+    public async Task<AiHomeworkAnalysisResult> RefineHomeworkDraftAsync(AiHomeworkAnalysisResult currentDraft, string modificationPrompt)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+            return currentDraft;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var systemInstruction = @"Siz mavjud uyga vazifani o'qituvchi xohishiga ko'ra tahrirlovchi AI yordamchisiz.
+O'qituvchining yangi ko'rsatmasi bo'yicha sarlavha, topshirish muddati yoki topshiriq qismlarini o'zgartiring/qo'shing/olib tashlang.
+Platforma topshiriq turlari: 'TextReminder', 'Vocabulary', 'MediaSubmission'.
+Agar o'qituvchi platforma imkoniyatidan tashqari narsa talab qilsa, 'unsupportedRequests' maydonida 'Mening imkoniyatlarim doirasida ... qila olmayman' deb yozing.
+Faqat toza JSON qaytaring, markdown yoki tashqi so'zlarsiz. Format:
+{
+  ""isHomework"": true,
+  ""title"": ""..."",
+  ""deadlineDays"": 2,
+  ""deadlineTime"": ""20:00"",
+  ""explanation"": ""Qanday o'zgartirish kiritilgani haqida qisqa"",
+  ""unsupportedRequests"": null,
+  ""items"": [
+    {
+      ""itemType"": ""TextReminder"" | ""Vocabulary"" | ""MediaSubmission"",
+      ""title"": ""..."",
+      ""instructions"": ""...""
+    }
+  ]
+}";
+
+        var draftJson = JsonSerializer.Serialize(currentDraft);
+        var userPrompt = $"Joriy vazifa loyihasi (Draft):\n{draftJson}\n\nO'qituvchining o'zgartirish ko'rsatmasi:\n\"{modificationPrompt}\"";
+
+        var requestBody = new
+        {
+            systemInstruction = new { parts = new[] { new { text = systemInstruction } } },
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = userPrompt } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.1,
+                maxOutputTokens = 650
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString()?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(textResult))
+            {
+                var cleanJson = CleanJsonText(textResult);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var parsed = JsonSerializer.Deserialize<AiHomeworkAnalysisResult>(cleanJson, options);
+                if (parsed != null) return parsed;
+            }
+        }
+
+        return currentDraft;
+    }
+
+    public async Task<string> LearnAndUpdateTeacherContextAsync(string currentContext, string publishedHomeworkSummary)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+            return currentContext;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var prompt = $@"O'qituvchining yangi e'lon qilingan uyga vazifasi asosida uning shablon va odatlarini yangilang.
+Mavjud kontekst: {currentContext}
+Yangi e'lon qilingan vazifa: {publishedHomeworkSummary}
+Talab: O'qituvchining odatiy topshiriq turlari (masalan qaysi mashqlar, audio topshiriqlar, lug'at), odatiy muddatlari va topshirish uslubi haqida 2-3 ta ixcham jumla yozing (maksimal 70-100 so'z).";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+                new { parts = new[] { new { text = prompt } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.1,
+                maxOutputTokens = 200
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+
+            return textResult?.Trim() ?? currentContext;
+        }
+
+        return currentContext;
+    }
+
+    public async Task<string> AnswerStudentProQuestionAsync(string question, string groupTitle)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+            return "Kechirasiz, AI xizmati vaqtincha mavjud emas.";
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var systemInstruction = $@"Siz '{groupTitle}' ta'lim guruhida ingliz tili bo'yicha aniq, chuqur va ixcham AI konsultantsiz.
+Talablar:
+1. Salom-alik yoki umumiy so'zlarsiz, to'g'ridan-to'g'ri, lo'nda va tushunarli javob bering.
+2. Savolga ingliz tili qoidalari, so'z ma'nolari yoki to'g'ri qo'llanishi bo'yicha aniq misol bilan javob bering.
+3. Maksimal 120-150 so'zdan oshmasin.";
+
+        var requestBody = new
+        {
+            systemInstruction = new { parts = new[] { new { text = systemInstruction } } },
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = question } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.2,
+                maxOutputTokens = 350
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+
+            return textResult?.Trim() ?? "Savolingizga javob tayyorlashda xatolik yuz berdi.";
+        }
+
+        return "Kechirasiz, javob olishda xatolik yuz berdi.";
+    }
+
+    private static string CleanJsonText(string raw)
+    {
+        var clean = raw.Trim();
+        if (clean.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+            clean = clean.Substring(7);
+        else if (clean.StartsWith("```"))
+            clean = clean.Substring(3);
+
+        if (clean.EndsWith("```"))
+            clean = clean.Substring(0, clean.Length - 3);
+
+        return clean.Trim();
     }
 }

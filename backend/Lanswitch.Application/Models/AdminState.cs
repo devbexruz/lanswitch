@@ -29,7 +29,8 @@ public enum AdminStep
     AddEpisodeToSeason_EpisodeTitle,
     AddEpisodeToSeason_EpisodeLevel,
     AddEpisodeToSeason_Video,
-    WaitingMediaSubmission
+    WaitingMediaSubmission,
+    EditingAiHomeworkDraft
 }
 
 public class AdminState

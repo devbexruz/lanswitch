@@ -36,6 +36,33 @@ namespace Lanswitch.Api.Extensions
                         ALTER TABLE ""CardPaymentSettings"" ADD COLUMN IF NOT EXISTS ""InitialBonusAmount"" numeric NOT NULL DEFAULT 25000;
                         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""HasReceivedInitialBonus"" boolean NOT NULL DEFAULT false;
                         ALTER TABLE ""Users"" ALTER COLUMN ""HasReceivedInitialBonus"" SET DEFAULT false;
+
+                        CREATE TABLE IF NOT EXISTS ""TeacherHomeworkContexts"" (
+                            ""Id"" bigserial PRIMARY KEY,
+                            ""TeacherId"" bigint NOT NULL,
+                            ""GroupId"" bigint,
+                            ""LearnedContext"" text NOT NULL DEFAULT '',
+                            ""LastTemplateJson"" text,
+                            ""TotalAssignmentsCreated"" integer NOT NULL DEFAULT 0,
+                            ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+                        );
+
+                        CREATE TABLE IF NOT EXISTS ""AiHomeworkDrafts"" (
+                            ""Id"" bigserial PRIMARY KEY,
+                            ""DraftCode"" character varying(64) NOT NULL,
+                            ""TeacherId"" bigint NOT NULL,
+                            ""GroupId"" bigint NOT NULL,
+                            ""RawInputText"" text NOT NULL,
+                            ""AudioFileId"" text,
+                            ""Title"" text NOT NULL DEFAULT 'Yangi Uyga Vazifa',
+                            ""Deadline"" timestamp with time zone NOT NULL,
+                            ""ItemsJson"" text NOT NULL DEFAULT '[]',
+                            ""Explanation"" text,
+                            ""Status"" character varying(32) NOT NULL DEFAULT 'PendingConfirm',
+                            ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+                        );
                     ");
                 }
                 catch (Exception rawEx)

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Lanswitch.Domain.Entities;
+using Lanswitch.Application.Models;
 
 namespace Lanswitch.Application.Interfaces;
 
@@ -28,4 +29,9 @@ public interface IGeminiAiService
     Task<string> ChatWithContextAsync(string userMessage, List<EpisodeChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz");
     Task<string> ChatWithContextAsync(string userMessage, List<MediaChatMessage> history, List<Subtitle> contextSubtitles, long? currentSubtitleId = null, string targetLanguage = "Ingliz");
     Task<string> TranslateWordAsync(string word);
+    Task<string> TranscribeVoiceAudioAsync(byte[] audioBytes, string mimeType = "audio/ogg");
+    Task<AiHomeworkAnalysisResult> AnalyzeAndGenerateHomeworkAsync(string text, string? teacherContext);
+    Task<AiHomeworkAnalysisResult> RefineHomeworkDraftAsync(AiHomeworkAnalysisResult currentDraft, string modificationPrompt);
+    Task<string> LearnAndUpdateTeacherContextAsync(string currentContext, string publishedHomeworkSummary);
+    Task<string> AnswerStudentProQuestionAsync(string question, string groupTitle);
 }
