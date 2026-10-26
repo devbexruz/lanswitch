@@ -841,11 +841,13 @@ Talab: O'qituvchining odatiy topshiriq turlari (masalan qaysi mashqlar, audio to
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
 
-        var systemInstruction = $@"Siz '{groupTitle}' ta'lim guruhida ingliz tili bo'yicha aniq, chuqur va ixcham AI konsultantsiz.
-Talablar:
-1. Salom-alik yoki umumiy so'zlarsiz, to'g'ridan-to'g'ri, lo'nda va tushunarli javob bering.
-2. Savolga ingliz tili qoidalari, so'z ma'nolari yoki to'g'ri qo'llanishi bo'yicha aniq misol bilan javob bering.
-3. Maksimal 120-150 so'zdan oshmasin.";
+        var systemInstruction = $@"Siz '{groupTitle}' ta'lim guruhida ingliz tili bo'yicha insondek samimiy, lo'nda va tez javob beruvchi AI ustozsiz.
+QAT'IY QOIDALAR:
+1. SAVOLLARDAN KELIB CHIQIB JAVOB BERING:
+   - Oddiy savollarga insondek ILOJI BORICHA QISQA, LO'NDA va aniq javob bering (ko'pincha 1-3 ta qisqa jumla yoki bitta aniq misol yetarli!).
+   - Ortiqcha kirish so'zlarsiz, to'g'ridan-to'g'ri savolning javobini va qisqa misolini bering.
+   - FAQAT va FAQAT talaba 'batafsil tushuntir', 'kengroq aytib ber' deb so'ragandagina yoki mavzu chuqur tahlilni talab qilsagina batafsilroq yozing.
+2. FORMATLASH: Telegram HTML formatida javob bering. Hech qachon markdown formatidagi yulduzchalar (**matn**) ishlatmang! Qalin matn uchun <b>matn</b>, kursiv uchun <i>matn</i> teglaridan foydalaning.";
 
         var requestBody = new
         {
@@ -875,7 +877,10 @@ Talablar:
                 .GetProperty("parts")[0]
                 .GetProperty("text").GetString();
 
-            return textResult?.Trim() ?? "Savolingizga javob tayyorlashda xatolik yuz berdi.";
+            if (!string.IsNullOrWhiteSpace(textResult))
+                return ConvertMarkdownToTelegramHtml(textResult.Trim());
+
+            return "Savolingizga javob tayyorlashda xatolik yuz berdi.";
         }
 
         return "Kechirasiz, javob olishda xatolik yuz berdi.";
@@ -974,7 +979,7 @@ Javobni FAQAT toza JSON formatida bering, markdown (` ```json `) siz:
         }
 
         var systemInstruction = $@"Siz '{groupTitle}' ta'lim guruhida ingliz tili o'qituvchisining do'stona, samimiy va jonli yordamchisisiz.
-Talaba '{studentName}' guruhda uyga vazifa haqida so'radi.
+Talaba '{studentName}' uyga vazifa haqida so'radi.
 
 Guruhdagi joriy uyga vazifa ma'lumotlari:
 - Mavzu: {assignmentTitle}
@@ -982,12 +987,10 @@ Guruhdagi joriy uyga vazifa ma'lumotlari:
 - Topshiriqlar tarkibi:
 {itemsSb}
 
-TALABLAR:
-1. Salomlashib ('Salom, {studentName}! 😊'), talabaning savoliga mos ravishda uyga vazifani insondek sodda, qiziqarli va tushunarli qilib TUSHUNTIRIB BERING.
-2. Faqat ro'yxat qilib tashlamang, har bir topshiriq nima haqida ekanligini va qanday bajarish kerakligini (lug'at, audio/video yozib yuborish, mashqlar) samimiy tilda izohlang.
-3. Topshirish muddatini va Mini App orqali yuborish kerakligini qisqa eslatib, rag'batlantiring.
-4. Javobingiz ixcham bo'lsin (maksimal 100-140 so'z).
-5. Javobni Telegram HTML formatida bering (<b>, <i>).";
+QAT'IY TALABLAR:
+1. Insondek samimiy, ILOJI BORICHA QISQA va lo'nda tushuntiring (ko'pi bilan 2-3 ta ixcham jumla kifoya!). Masalan: 'Salom, {studentName}! 😊 Joriy vazifamiz: <b>{assignmentTitle}</b>. Unda yangi so'zlarni yodlab, topshiriqlarni bajarishingiz kerak. Muddati: <b>{deadline:dd.MM.yyyy HH:mm}</b> gacha.'
+2. FAQAT talaba 'batafsil tushuntir' deb so'ragandagina har bir topshiriqni alohida kengroq yoriting.
+3. FORMATLASH: Telegram HTML formatida yozing. Hech qachon markdown formatidagi yulduzchalar (**so'z**) ishlatmang! Qalin matn uchun <b>matn</b>, kursiv uchun <i>matn</i> teglaridan foydalaning.";
 
         var requestBody = new
         {
@@ -1020,7 +1023,7 @@ TALABLAR:
                     .GetProperty("text").GetString()?.Trim();
 
                 if (!string.IsNullOrWhiteSpace(textResult))
-                    return textResult;
+                    return ConvertMarkdownToTelegramHtml(textResult);
             }
         }
         catch (Exception ex)
@@ -1029,6 +1032,31 @@ TALABLAR:
         }
 
         return $"Salom, {studentName}! 😊 Guruhimizdagi joriy uyga vazifa: <b>{assignmentTitle}</b>.\nTopshirish muddati: <b>{deadline:dd.MM.yyyy HH:mm}</b> gacha.";
+    }
+
+    public static string ConvertMarkdownToTelegramHtml(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+
+        // 1. Kod bloklari: ```code``` -> <pre>code</pre>, `code` -> <code>code</code>
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"```(?:[a-zA-Z0-9_-]+)?\n?(.*?)```", "<pre>$1</pre>", System.Text.RegularExpressions.RegexOptions.Singleline);
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"`([^`\n]+)`", "<code>$1</code>");
+
+        // 2. Ro'yxatlar (bullet points): qator boshidagi * yoki - larni • ga aylantiramiz (kursivdan oldin bajarilishi shart!)
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"(?m)^\s*[\*\-]\s+", "• ");
+
+        // 3. Sarlavhalar: ### Header -> <b>Header</b>
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"(?m)^#{1,6}\s*(.+)$", "<b>$1</b>");
+
+        // 4. Qalin matn: **matn** yoki __matn__ -> <b>matn</b>
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"\*\*(.+?)\*\*", "<b>$1</b>", System.Text.RegularExpressions.RegexOptions.Singleline);
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"__(.+?)__", "<b>$1</b>", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        // 5. Qiya matn: *matn* yoki _matn_ -> <i>matn</i> (bir qatorda, yangi qatorga o'tmagan holda)
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"(?<![a-zA-Z0-9*])\*([^\n*]+?)\*(?![a-zA-Z0-9*])", "<i>$1</i>");
+        input = System.Text.RegularExpressions.Regex.Replace(input, @"(?<![a-zA-Z0-9_])_([^\n_]+?)_(?![a-zA-Z0-9_])", "<i>$1</i>");
+
+        return input.Trim();
     }
 
     private static string CleanJsonText(string raw)

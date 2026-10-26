@@ -686,6 +686,8 @@ public class SubscriptionController : ControllerBase
         if (sub == null) return NotFound("Obuna topilmadi");
 
         sub.Status = "Cancelled";
+        sub.IsActive = false;
+        sub.EndDate = DateTime.UtcNow;
 
         var log = new SubscriptionLog
         {

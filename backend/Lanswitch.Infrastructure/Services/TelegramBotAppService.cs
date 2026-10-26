@@ -2267,12 +2267,25 @@ public class TelegramBotAppService : ITelegramBotAppService
 
                     var replyText = $"{explanation}\n\nQuyidagi tugma orqali topshiriqni ochib, bajarishingiz mumkin 👇";
 
-                    await _botClient.SendMessage(
-                        chatId,
-                        replyText,
-                        parseMode: ParseMode.Html,
-                        replyParameters: new ReplyParameters { MessageId = message.MessageId },
-                        replyMarkup: replyKb);
+                    try
+                    {
+                        await _botClient.SendMessage(
+                            chatId,
+                            replyText,
+                            parseMode: ParseMode.Html,
+                            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                            replyMarkup: replyKb);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"SendMessage HTML parsing error in AskHomework: {ex.Message}. Retrying as plain text...");
+                        var plainText = System.Text.RegularExpressions.Regex.Replace(replyText, "<.*?>", string.Empty);
+                        await _botClient.SendMessage(
+                            chatId,
+                            plainText,
+                            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                            replyMarkup: replyKb);
+                    }
                     return;
                 }
                 else
@@ -2347,11 +2360,24 @@ public class TelegramBotAppService : ITelegramBotAppService
             if (intent == "AskEnglishQuestion")
             {
                 var aiAnswer = await gemini.AnswerStudentProQuestionAsync(rawContent, group.Title);
-                await _botClient.SendMessage(
-                    chatId,
-                    $"🤖 <b>Lanswitch AI:</b>\n\n{aiAnswer}",
-                    parseMode: ParseMode.Html,
-                    replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                var fullText = $"🤖 <b>Lanswitch AI:</b>\n\n{aiAnswer}";
+                try
+                {
+                    await _botClient.SendMessage(
+                        chatId,
+                        fullText,
+                        parseMode: ParseMode.Html,
+                        replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SendMessage HTML parsing error in AskEnglishQuestion: {ex.Message}. Retrying as plain text...");
+                    var plainText = System.Text.RegularExpressions.Regex.Replace(fullText, "<.*?>", string.Empty);
+                    await _botClient.SendMessage(
+                        chatId,
+                        plainText,
+                        replyParameters: new ReplyParameters { MessageId = message.MessageId });
+                }
                 return;
             }
 
