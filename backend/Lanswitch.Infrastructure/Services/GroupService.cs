@@ -246,6 +246,15 @@ public class GroupService : IGroupService
         if (!hasAccess)
             throw new System.UnauthorizedAccessException("Sizda bu guruh a'zolarini yangilash huquqi yo'q!");
 
+        var now = System.DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+            throw new System.InvalidOperationException("Guruh egasining 'Ustoz' tarifi muddati tugagan yoki faol emas.");
+
         int syncedCount = 0;
         var usersWithTg = await _db.Users
             .Where(u => !string.IsNullOrEmpty(u.TelegramId))

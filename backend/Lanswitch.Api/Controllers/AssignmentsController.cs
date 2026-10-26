@@ -79,10 +79,16 @@ public class AssignmentsController : ControllerBase
         var tId = teacherId ?? GetUserId();
         if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
 
-        var success = await _assignmentService.GradeItemSubmissionAsync(submissionId, tId, dto);
-        if (!success) return BadRequest(new { message = "Failed to grade submission" });
-
-        return Ok(new { success = true });
+        try
+        {
+            var success = await _assignmentService.GradeItemSubmissionAsync(submissionId, tId, dto);
+            if (!success) return BadRequest(new { message = "Failed to grade submission" });
+            return Ok(new { success = true });
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -120,10 +126,16 @@ public class AssignmentsController : ControllerBase
         var tId = teacherId ?? GetUserId();
         if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
 
-        var success = await _assignmentService.CheckTextReminderAsync(itemId, studentId, tId);
-        if (!success) return BadRequest(new { message = "Failed to check reminder" });
-
-        return Ok(new { success = true });
+        try
+        {
+            var success = await _assignmentService.CheckTextReminderAsync(itemId, studentId, tId);
+            if (!success) return BadRequest(new { message = "Failed to check reminder" });
+            return Ok(new { success = true });
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -148,10 +160,16 @@ public class AssignmentsController : ControllerBase
         var tId = teacherId ?? GetUserId();
         if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
 
-        var report = await _assignmentService.GetAssignmentReportAsync(id, tId);
-        if (report == null) return NotFound(new { message = "Assignment not found or access denied" });
-
-        return Ok(report);
+        try
+        {
+            var report = await _assignmentService.GetAssignmentReportAsync(id, tId);
+            if (report == null) return NotFound(new { message = "Assignment not found or access denied" });
+            return Ok(report);
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -199,10 +217,16 @@ public class AssignmentsController : ControllerBase
         var tId = teacherId ?? GetUserId();
         if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
 
-        var success = await _assignmentService.ToggleStudentAssignmentStatusAsync(id, studentId, isCompleted, tId);
-        if (!success) return BadRequest(new { message = "Failed to toggle assignment status" });
-
-        return Ok(new { success = true });
+        try
+        {
+            var success = await _assignmentService.ToggleStudentAssignmentStatusAsync(id, studentId, isCompleted, tId);
+            if (!success) return BadRequest(new { message = "Failed to toggle assignment status" });
+            return Ok(new { success = true });
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>

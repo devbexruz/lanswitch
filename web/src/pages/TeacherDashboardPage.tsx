@@ -399,13 +399,23 @@ export default function TeacherDashboardPage() {
 
   // Report & Review Full-Screen View
   const handleOpenReport = async (assignmentId: number) => {
-    const rep = await api.getAssignmentReport(assignmentId, user?.id);
-    if (rep) {
-      setSelectedReport(rep);
-      setShowReportModal(true);
-      setReportFilter('all');
-      setRemindSuccess(null);
-      setDetailReviewStudent(null);
+    if (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) {
+      alert("Tarifingiz muddati tugagan. Hisobotlar bo'limidan foydalanish uchun balansingizni to'ldiring!");
+      setShowSubscriptionModal(true);
+      return;
+    }
+    try {
+      const rep = await api.getAssignmentReport(assignmentId, user?.id);
+      if (rep) {
+        setSelectedReport(rep);
+        setShowReportModal(true);
+        setReportFilter('all');
+        setRemindSuccess(null);
+        setDetailReviewStudent(null);
+      }
+    } catch (err: any) {
+      alert(err.message || "Hisobotlar bo'limidan foydalanish uchun balansingizni to'ldiring!");
+      setShowSubscriptionModal(true);
     }
   };
 
@@ -1251,9 +1261,18 @@ export default function TeacherDashboardPage() {
                             <button
                               onClick={() => handleOpenReport(ass.id)}
                               className="btn-big-blue"
-                              style={{ minHeight: '40px', padding: '0 18px', fontSize: '13px' }}
+                              style={{
+                                minHeight: '40px',
+                                padding: '0 18px',
+                                fontSize: '13px',
+                                ...( (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) ? {
+                                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+                                  border: 'none'
+                                } : {} )
+                              }}
                             >
-                              <span>Hisobot & Tekshirish</span>
+                              <span>{(selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) ? "🔒 Hisobot (Balansni to'ldiring)" : "Hisobot & Tekshirish"}</span>
                             </button>
 
                             <button

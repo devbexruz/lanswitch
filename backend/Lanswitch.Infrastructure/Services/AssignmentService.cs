@@ -254,11 +254,20 @@ public class AssignmentService : IAssignmentService
     {
         var group = await _db.TelegramGroups
             .Include(g => g.Admins)
+            .Include(g => g.Owner)
             .FirstOrDefaultAsync(g => g.Id == groupId);
 
         if (group == null) return new();
         bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return new();
+
+        var now = DateTime.UtcNow;
+        var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub) return new();
 
         var query = _db.AssignmentItemSubmissions
             .Include(s => s.Assignment)
@@ -321,6 +330,15 @@ public class AssignmentService : IAssignmentService
         var group = sub.Assignment.Group;
         bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return false;
+
+        var now = DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+            throw new InvalidOperationException("Ustozlik tarifi faol emas yoki muddati tugagan. Tekshirish va baholash uchun hisobingizni to'ldiring va tarifni yangilang.");
 
         if (dto.Status == 0 && string.IsNullOrWhiteSpace(dto.Comment))
         {
@@ -495,6 +513,15 @@ public class AssignmentService : IAssignmentService
         bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return false;
 
+        var now = DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+            throw new InvalidOperationException("Ustozlik tarifi faol emas yoki muddati tugagan. Tekshirish uchun hisobingizni to'ldiring va tarifni yangilang.");
+
         var sub = await _db.AssignmentItemSubmissions
             .FirstOrDefaultAsync(s => s.AssignmentItemId == assignmentItemId && s.StudentId == studentId);
 
@@ -618,6 +645,17 @@ public class AssignmentService : IAssignmentService
         var group = assignment.Group;
         bool hasAccess = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId);
         if (!hasAccess) return null;
+
+        var now = DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+        {
+            throw new InvalidOperationException("Ustozlik tarifi muddati tugagan. Hisobotlarni ko'rish uchun balansingizni to'ldiring va tarifni yangilang!");
+        }
 
         var activeMembers = group.Members.Where(m => m.IsActive).ToList();
         var totalMembers = activeMembers.Count;
@@ -802,11 +840,20 @@ public class AssignmentService : IAssignmentService
     {
         var group = await _db.TelegramGroups
             .Include(g => g.Admins)
+            .Include(g => g.Owner)
             .FirstOrDefaultAsync(g => g.Id == groupId);
 
         if (group == null) return new();
         bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return new();
+
+        var now = DateTime.UtcNow;
+        var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub) return new();
 
         var query = _db.AssignmentItemSubmissions
             .Include(s => s.Assignment)
@@ -954,8 +1001,18 @@ public class AssignmentService : IAssignmentService
             .FirstOrDefaultAsync(a => a.Id == assignmentId);
 
         if (assignment == null) return false;
-        bool canReview = assignment.Group.OwnerId == teacherId || assignment.Group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
+        var group = assignment.Group;
+        bool canReview = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanReviewHomework);
         if (!canReview) return false;
+
+        var now = DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+
+        if (!hasActiveTeacherSub)
+            throw new InvalidOperationException("Ustozlik tarifi faol emas yoki muddati tugagan. Vazifa holatini o'zgartirish uchun hisobingizni to'ldiring va tarifni yangilang.");
 
         if (isCompleted)
         {

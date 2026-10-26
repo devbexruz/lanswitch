@@ -523,7 +523,13 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/report?teacherId=${teacherId}`);
       if (res.ok) return await res.json();
-    } catch {}
+      const err = await res.json().catch(() => null);
+      if (err?.message) {
+        throw new Error(err.message);
+      }
+    } catch (e: any) {
+      if (e?.message) throw e;
+    }
     return null;
   },
 

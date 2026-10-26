@@ -74,18 +74,12 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           alignItems: 'center',
           gap: '10px',
           padding: '6px 12px 6px 8px',
-          background: hasSubscription 
-            ? 'linear-gradient(135deg, #FFFFFF 0%, #FEF9C3 100%)' 
-            : 'var(--pure-white)',
-          border: hasSubscription 
-            ? '1.5px solid #F59E0B' 
-            : '1.5px solid var(--sky-border)',
+          background: 'var(--pure-white)',
+          border: '1.5px solid var(--sky-border)',
           borderRadius: 'var(--radius-pill)',
           cursor: 'pointer',
           transition: 'all 0.15s ease',
-          boxShadow: hasSubscription 
-            ? '0 0 14px rgba(245, 158, 11, 0.28), 0 2px 6px rgba(0,0,0,0.06)' 
-            : 'var(--shadow-subtle)'
+          boxShadow: 'var(--shadow-subtle)'
         }}
       >
         {user?.profileImage ? (
@@ -96,9 +90,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
               width: '34px',
               height: '34px',
               borderRadius: '50%',
-              objectFit: 'cover',
-              border: hasSubscription ? '2px solid #F59E0B' : 'none',
-              boxShadow: hasSubscription ? '0 0 8px rgba(245, 158, 11, 0.45)' : 'none'
+              objectFit: 'cover'
             }}
           />
         ) : (
@@ -106,17 +98,13 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
             width: '34px',
             height: '34px',
             borderRadius: '50%',
-            background: hasSubscription 
-              ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' 
-              : 'var(--primary-blue)',
+            background: 'var(--primary-blue)',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '13px',
-            fontWeight: 800,
-            border: hasSubscription ? '1.5px solid #FEF08A' : 'none',
-            boxShadow: hasSubscription ? '0 0 8px rgba(245, 158, 11, 0.4)' : 'none'
+            fontWeight: 800
           }}>
             {getInitials(user?.fullName)}
           </div>
@@ -128,7 +116,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           </span>
           <span style={{
             fontSize: '10.5px',
-            color: hasSubscription ? '#B45309' : 'var(--primary-blue)',
+            color: hasSubscription ? '#059669' : '#DC2626',
             fontWeight: 800,
             whiteSpace: 'nowrap',
             display: 'flex',
@@ -136,17 +124,14 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
             gap: '3px'
           }}>
             {hasSubscription ? (
-              <>
-                <span>👑</span>
-                <span>{subscription?.planName ? subscription.planName.replace('Ustoz - ', '') : (user?.isAdmin ? 'Admin' : 'Premium')}</span>
-              </>
+              <span>{subscription?.planName ? subscription.planName.replace('Ustoz - ', '') : (user?.isAdmin ? 'Admin' : 'Premium')}</span>
             ) : (
-              currentRole === 'Teacher' ? "👨‍🏫 O'qituvchi" : '🎓 Talaba'
+              <span>🔴 Tugagan</span>
             )}
           </span>
         </div>
 
-        <ChevronDown size={16} color={hasSubscription ? '#D97706' : 'var(--text-muted)'} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+        <ChevronDown size={16} color="var(--text-muted)" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
       </button>
 
       {/* Dropdown Menu (Underneath profile button) */}
@@ -155,13 +140,11 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           position: 'absolute',
           top: 'calc(100% + 8px)',
           right: 0,
-          width: '300px',
+          width: '290px',
           background: 'var(--pure-white)',
-          border: hasSubscription ? '2px solid rgba(245, 158, 11, 0.5)' : '2px solid var(--sky-border)',
+          border: '2px solid var(--sky-border)',
           borderRadius: '18px',
-          boxShadow: hasSubscription 
-            ? '0 16px 40px -8px rgba(0, 0, 0, 0.2), 0 0 25px rgba(245, 158, 11, 0.18)' 
-            : 'var(--shadow-modal)',
+          boxShadow: 'var(--shadow-modal)',
           zIndex: 1000,
           padding: '16px',
           display: 'flex',
@@ -175,7 +158,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
             alignItems: 'center',
             gap: '12px',
             paddingBottom: '12px',
-            borderBottom: hasSubscription ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid var(--sky-border)'
+            borderBottom: '1px solid var(--sky-border)'
           }}>
             {user?.profileImage ? (
               <img
@@ -185,9 +168,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                   width: '46px',
                   height: '46px',
                   borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: hasSubscription ? '2.5px solid #F59E0B' : 'none',
-                  boxShadow: hasSubscription ? '0 0 10px rgba(245, 158, 11, 0.4)' : 'none'
+                  objectFit: 'cover'
                 }}
               />
             ) : (
@@ -195,25 +176,20 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                 width: '46px',
                 height: '46px',
                 borderRadius: '50%',
-                background: hasSubscription 
-                  ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' 
-                  : 'var(--primary-blue)',
+                background: 'var(--primary-blue)',
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '16px',
-                fontWeight: 900,
-                border: hasSubscription ? '2px solid #FEF08A' : 'none',
-                boxShadow: hasSubscription ? '0 0 10px rgba(245, 158, 11, 0.35)' : 'none'
+                fontWeight: 900
               }}>
                 {getInitials(user?.fullName)}
               </div>
             )}
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <div style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span>{user?.fullName || 'Profil'}</span>
-                {hasSubscription && <span title="Premium A'zo" style={{ fontSize: '13px' }}>👑</span>}
+              <div style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user?.fullName || 'Profil'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 ID: {user?.id || '—'} {user?.telegramId ? `• @${user.telegramId}` : ''}
@@ -223,34 +199,34 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
-                  border: '1px solid #F59E0B',
-                  color: '#92400E',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid #10B981',
+                  color: '#065F46',
                   padding: '2px 8px',
                   borderRadius: '999px',
                   fontSize: '10.5px',
-                  fontWeight: 900,
+                  fontWeight: 800,
                   marginTop: '4px'
                 }}>
-                  <span>👑</span>
-                  <span>{subscription?.planName || (user?.isAdmin ? 'Administrator (VIP)' : 'Student Premium')}</span>
+                  <span>✓</span>
+                  <span>{subscription?.planName || (user?.isAdmin ? 'Administrator' : 'Student Premium')}</span>
                 </div>
               ) : (
                 <div style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  background: 'var(--ice-blue-bg)',
-                  border: '1px solid var(--sky-border)',
-                  color: 'var(--text-muted)',
+                  background: '#FEE2E2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
                   padding: '2px 8px',
                   borderRadius: '999px',
                   fontSize: '10.5px',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   marginTop: '4px'
                 }}>
-                  <span>🎓</span>
-                  <span>Tarifsiz rejim</span>
+                  <span>🔴</span>
+                  <span>Tarif muddati tugagan</span>
                 </div>
               )}
             </div>
@@ -345,39 +321,43 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
               padding: '11px 12px',
               borderRadius: '12px',
               background: hasSubscription 
-                ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.26))' 
+                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.15))' 
                 : canClaimBonus
                   ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.2))'
-                  : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.14))',
+                  : 'linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.14))',
               border: hasSubscription 
-                ? '1.5px solid #F59E0B' 
+                ? '1.5px solid #10B981' 
                 : canClaimBonus
                   ? '1.5px solid #10B981'
-                  : '1.5px solid rgba(245, 158, 11, 0.35)',
-              color: canClaimBonus ? '#065F46' : '#92400E',
+                  : '1.5px solid #FCA5A5',
+              color: hasSubscription ? '#065F46' : canClaimBonus ? '#065F46' : '#991B1B',
               fontSize: '13px',
               fontWeight: 800,
               cursor: 'pointer',
               textAlign: 'left',
-              transition: 'all 0.15s ease',
-              boxShadow: hasSubscription ? '0 4px 14px rgba(245, 158, 11, 0.2)' : canClaimBonus ? '0 4px 14px rgba(16, 185, 129, 0.2)' : 'none'
+              transition: 'all 0.15s ease'
             }}
           >
-            <Crown size={18} color={canClaimBonus ? '#10B981' : '#D97706'} />
+            <Crown size={18} color={hasSubscription ? '#10B981' : canClaimBonus ? '#10B981' : '#DC2626'} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: canClaimBonus ? '#065F46' : '#78350F', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span>👑</span> Tariflar va Balans
+              <span style={{ color: hasSubscription ? '#065F46' : canClaimBonus ? '#065F46' : '#991B1B', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>Tariflar va Balans</span>
+                {!hasSubscription && !canClaimBonus && (
+                  <span style={{ background: '#DC2626', color: '#fff', fontSize: '9.5px', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                    Tugagan
+                  </span>
+                )}
                 {canClaimBonus && (
                   <span style={{ background: '#10B981', color: '#fff', fontSize: '9.5px', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
                     🎁 {bonusAmount.toLocaleString('uz-UZ')} bonus
                   </span>
                 )}
               </span>
-              <span style={{ fontSize: '11px', color: hasSubscription ? '#047857' : canClaimBonus ? '#059669' : '#B45309', fontWeight: 800 }}>
+              <span style={{ fontSize: '11px', color: hasSubscription ? '#047857' : canClaimBonus ? '#059669' : '#DC2626', fontWeight: 800 }}>
                 {hasSubscription ? (
                   subscription?.formattedRemainingTime ? `⏳ ${subscription.formattedRemainingTime}` : '✨ Obuna faol'
                 ) : (
-                  canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonusni oling!` : "Hisobni to'ldirish & boshlash"
+                  canClaimBonus ? `🎁 ${bonusAmount.toLocaleString('uz-UZ')} bonusni oling!` : "🔴 Tarif muddati tugagan"
                 )}
               </span>
             </div>
