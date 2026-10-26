@@ -20,6 +20,12 @@ public class SentenceAnalysisResult
     public List<long> GrammarContextIds { get; set; } = new List<long>();
 }
 
+public class GroupMessageIntentResult
+{
+    public string Intent { get; set; } = "CasualChat"; // "AssignHomework", "AskHomework", "AskEnglishQuestion", "CasualChat"
+    public string? Reason { get; set; }
+}
+
 public interface IGeminiAiService
 {
     Task<List<Subtitle>> TranscribeAudioAsync(List<string> audioFilePaths, long mediaId, int chunkMinutes = 11, int overlapMinutes = 1);
@@ -34,4 +40,5 @@ public interface IGeminiAiService
     Task<AiHomeworkAnalysisResult> RefineHomeworkDraftAsync(AiHomeworkAnalysisResult currentDraft, string modificationPrompt);
     Task<string> LearnAndUpdateTeacherContextAsync(string currentContext, string publishedHomeworkSummary);
     Task<string> AnswerStudentProQuestionAsync(string question, string groupTitle);
+    Task<GroupMessageIntentResult> ClassifyGroupMessageIntentAsync(string text, bool isTeacher);
 }

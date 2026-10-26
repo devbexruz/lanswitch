@@ -881,6 +881,76 @@ Talablar:
         return "Kechirasiz, javob olishda xatolik yuz berdi.";
     }
 
+    public async Task<GroupMessageIntentResult> ClassifyGroupMessageIntentAsync(string text, bool isTeacher)
+    {
+        var result = new GroupMessageIntentResult();
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(text))
+            return result;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var systemInstruction = $@"Siz ta'lim guruhidagi Telegram xabarlarini tahlil qiluvchi AI intellektsiz.
+Xabar yuboruvchi shaxs o'qituvchimi: {(isTeacher ? "HA (Ustoz/Admin)" : "YO'Q (O'quvchi)")}.
+
+Xabarni quyidagi 4 ta toifadan faqat bittasiga ajrating:
+1. 'AssignHomework': FAQAT o'qituvchi o'quvchilarga yangi uyga vazifa yoki yangi topshiriq topshirayotgan bo'lsa (masalan: 'Bolalar uyga vazifa: 5-mashq', 'Yangi so'zlarni yodlang va audio yuboring'). O'quvchi hech qachon vazifa bera olmaydi!
+2. 'AskHomework': Foydalanuvchi (o'quvchi yoki boshqa a'zo) mavjud uyga vazifani so'rayotgan bo'lsa, vazifa nimaligini, muddati qachonligini yoki topshiriq haqida ma'lumot so'rayotgan bo'lsa (masalan: 'Uyga vazifa nima?', 'Bugun vazifa bormi?', 'Topshiriqni tashlang', 'What is the homework?').
+3. 'AskEnglishQuestion': Foydalanuvchi ingliz tili qoidalari, grammatika, so'z tarjimasi yoki dars yuzasidan bevosita savol so'rayotgan bo'lsa.
+4. 'CasualChat': Shunchaki salomlashish, minnatdorchilik, darsga oid bo'lmagan oddiy gaplar yoki guruh a'zolari o'rtasidagi erkin suhbat (masalan: 'Salom hammaga', 'Rahmat ustoz', 'Ha tushundim', 'OK').
+
+Javobni FAQAT toza JSON formatida bering, markdown (` ```json `) siz:
+{{
+  ""intent"": ""AssignHomework"" | ""AskHomework"" | ""AskEnglishQuestion"" | ""CasualChat""
+}}";
+
+        var requestBody = new
+        {
+            systemInstruction = new { parts = new[] { new { text = systemInstruction } } },
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = text } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.0,
+                maxOutputTokens = 35
+            }
+        };
+
+        try
+        {
+            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseJson = await response.Content.ReadAsStringAsync();
+                using var jsonDoc = JsonDocument.Parse(responseJson);
+                var textResult = jsonDoc.RootElement
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text").GetString()?.Trim();
+
+                if (!string.IsNullOrWhiteSpace(textResult))
+                {
+                    var cleanJson = CleanJsonText(textResult);
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var parsed = JsonSerializer.Deserialize<GroupMessageIntentResult>(cleanJson, options);
+                    if (parsed != null && !string.IsNullOrWhiteSpace(parsed.Intent))
+                        return parsed;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ClassifyGroupMessageIntentAsync error: {ex.Message}");
+        }
+
+        return result;
+    }
+
     private static string CleanJsonText(string raw)
     {
         var clean = raw.Trim();
