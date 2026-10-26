@@ -512,75 +512,24 @@ public class SubscriptionService : ISubscriptionService
 
         DateTime newEnd = now;
 
-        if (activeSub != null && !activeSub.IsTrial)
+        // Expired check: agar muddati o'tgan bo'lsa (now >= activeSub.EndDate) yoki activeSub == null
+        bool isExpired = activeSub == null || now >= activeSub.EndDate || !activeSub.IsActive;
+
+        if (isExpired)
         {
-            var monthlyPrice = activeSub.Price > 0 ? activeSub.Price : 50000m;
-            var perSecRate = monthlyPrice / (30m * 24m * 3600m);
-
-            if (now >= activeSub.EndDate)
+            // Barcha eski faol obunalarni Expired qilish
+            var oldSubs = await _context.UserSubscriptions
+                .Where(s => s.UserId == req.UserId && (s.IsActive || s.Status == "Active"))
+                .ToListAsync();
+            foreach (var os in oldSubs)
             {
-                // Avvalgi muddat to'liq tugagan
-                activeSub.IsActive = false;
-                activeSub.Status = "Expired";
-                activeSub.FinishedDate = activeSub.EndDate;
-                user.Balance = finalAmount; // Faqat yangi to'ldirilgan summa
-
-                var newSeconds = (double)(user.Balance / perSecRate);
-                newEnd = now.AddSeconds(newSeconds);
-
-                activeSub = new UserSubscription
-                {
-                    UserId = user.Id,
-                    PlanId = activeSub.PlanId,
-                    PlanName = activeSub.PlanName,
-                    TargetRole = activeSub.TargetRole,
-                    MaxGroups = activeSub.MaxGroups,
-                    Price = monthlyPrice,
-                    IsTrial = false,
-                    StartDate = now,
-                    EndDate = newEnd,
-                    InitialBalance = user.Balance,
-                    DeductedAmount = 0,
-                    IsActive = true,
-                    Status = "Active",
-                    LastActivatedAt = now,
-                    TotalPaidAmount = finalAmount,
-                    Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm) va obuna davom ettirildi."
-                };
-                _context.UserSubscriptions.Add(activeSub);
-            }
-            else
-            {
-                // Hali muddati davom etmoqda -> StartDate dan now gacha sarflangan qismini yechamiz
-                var elapsedSecs = Math.Max(0, (now - activeSub.StartDate).TotalSeconds);
-                var spentSoFar = Math.Round((decimal)elapsedSecs * perSecRate);
-                spentSoFar = Math.Min(user.Balance, spentSoFar);
-
-                user.Balance = Math.Max(0, user.Balance - spentSoFar) + finalAmount;
-
-                activeSub.DeductedAmount += spentSoFar;
-                activeSub.StartDate = now;
-                activeSub.InitialBalance = user.Balance;
-
-                var newSeconds = (double)(user.Balance / perSecRate);
-                newEnd = now.AddSeconds(newSeconds);
-                activeSub.EndDate = newEnd;
-                activeSub.LastActivatedAt = now;
-                activeSub.TotalPaidAmount += finalAmount;
-                activeSub.Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm). Yangi muddat: {newEnd:yyyy-MM-dd HH:mm} gacha.";
-            }
-        }
-        else
-        {
-            // Faol pullik obunasi yo'q (yoki sinov muddati edi)
-            if (activeSub != null && activeSub.IsTrial)
-            {
-                activeSub.IsActive = false;
-                activeSub.Status = "TrialEnded";
-                activeSub.FinishedDate = now;
+                os.IsActive = false;
+                os.Status = "Expired";
+                os.FinishedDate = os.EndDate < now ? os.EndDate : now;
             }
 
-            user.Balance += finalAmount;
+            // Pul to'langanda: eski muddat o'tganligi sababli yangi to'lov ayni hozirdan boshlab hisoblanadi
+            user.Balance = finalAmount;
 
             var targetPlan = plan;
             var monthlyPrice = targetPlan.MonthlyPrice > 0 ? targetPlan.MonthlyPrice : 50000m;
@@ -597,17 +546,40 @@ public class SubscriptionService : ISubscriptionService
                 MaxGroups = targetPlan.MaxGroups,
                 Price = monthlyPrice,
                 IsTrial = false,
-                StartDate = now,
-                EndDate = newEnd,
+                StartDate = now, // Ayni hozirdan boshlab!
+                EndDate = newEnd, // Balansdagi pul asosida
                 InitialBalance = user.Balance,
                 DeductedAmount = 0,
                 IsActive = true,
                 Status = "Active",
                 LastActivatedAt = now,
                 TotalPaidAmount = finalAmount,
-                Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm) va {targetPlan.Name} tarifi faollashtirildi."
+                Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm) va {targetPlan.Name} tarifi ayni hozirdan boshlab faollashtirildi ({newEnd:yyyy-MM-dd HH:mm} gacha)."
             };
             _context.UserSubscriptions.Add(activeSub);
+        }
+        else
+        {
+            // Hali faol, muddati davom etmoqda -> StartDate dan now gacha sarflangan qismini yechamiz
+            var monthlyPrice = activeSub.Price > 0 ? activeSub.Price : 50000m;
+            var perSecRate = monthlyPrice / (30m * 24m * 3600m);
+
+            var elapsedSecs = Math.Max(0, (now - activeSub.StartDate).TotalSeconds);
+            var spentSoFar = Math.Round((decimal)elapsedSecs * perSecRate);
+            spentSoFar = Math.Min(user.Balance, spentSoFar);
+
+            user.Balance = Math.Max(0, user.Balance - spentSoFar) + finalAmount;
+
+            activeSub.DeductedAmount += spentSoFar;
+            activeSub.StartDate = now;
+            activeSub.InitialBalance = user.Balance;
+
+            var newSeconds = (double)(user.Balance / perSecRate);
+            newEnd = now.AddSeconds(newSeconds);
+            activeSub.EndDate = newEnd;
+            activeSub.LastActivatedAt = now;
+            activeSub.TotalPaidAmount += finalAmount;
+            activeSub.Notes = $"Balans to'ldirildi (+{finalAmount:N0} so'm). Yangi muddat: {newEnd:yyyy-MM-dd HH:mm} gacha.";
         }
 
         if (plan.TargetRole == "Teacher" && user.Role == "Student")
@@ -935,15 +907,21 @@ public class SubscriptionService : ISubscriptionService
 
         var activeSub = subs.FirstOrDefault(s => (s.Status == "Active" || s.IsActive) && s.EndDate >= now);
 
-        // Muddati o'tib ketgan faol obunani aniqlash va balansni 0 qilish
-        var potentiallyExpired = subs.FirstOrDefault(s => (s.Status == "Active" || s.IsActive) && s.EndDate < now);
-        if (potentiallyExpired != null)
+        // Muddati o'tib ketgan barcha faol obunalarni aniqlash va active=False qilish
+        var expiredSubs = subs.Where(s => (s.Status == "Active" || s.IsActive) && s.EndDate < now).ToList();
+        if (expiredSubs.Any())
         {
-            potentiallyExpired.IsActive = false;
-            potentiallyExpired.Status = "Expired";
-            potentiallyExpired.FinishedDate = potentiallyExpired.EndDate;
-            potentiallyExpired.DeductedAmount += potentiallyExpired.InitialBalance > 0 ? potentiallyExpired.InitialBalance : user.Balance;
-            user.Balance = 0;
+            foreach (var exp in expiredSubs)
+            {
+                exp.IsActive = false;
+                exp.Status = "Expired";
+                exp.FinishedDate = exp.EndDate;
+                exp.DeductedAmount += exp.InitialBalance > 0 ? exp.InitialBalance : user.Balance;
+            }
+            if (activeSub == null)
+            {
+                user.Balance = 0;
+            }
             await _context.SaveChangesAsync();
         }
 
@@ -967,6 +945,30 @@ public class SubscriptionService : ISubscriptionService
 
             currentLiveBalance = Math.Max(0, user.Balance - spentSoFar);
             remainingSeconds = Math.Max(0, (activeSub.EndDate - now).TotalSeconds);
+
+            // Muddat o'tgani aniqlanganda birdan pul 0 ga tushirish va objectni active=False qilish
+            if (remainingSeconds <= 0 || currentLiveBalance <= 0)
+            {
+                activeSub.IsActive = false;
+                activeSub.Status = "Expired";
+                activeSub.FinishedDate = activeSub.EndDate < now ? activeSub.EndDate : now;
+                activeSub.DeductedAmount += user.Balance;
+                user.Balance = 0;
+                currentLiveBalance = 0;
+                remainingSeconds = 0;
+                activeSub = null;
+                await _context.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            // Faol obuna bo'lmasa va o'tgan obunasi mavjud bo'lsa, balans 0 ga tushirilgan bo'lishi kerak
+            if (subs.Any(s => s.EndDate < now))
+            {
+                user.Balance = 0;
+                currentLiveBalance = 0;
+                await _context.SaveChangesAsync();
+            }
         }
 
         int daysLeft = (int)(remainingSeconds / 86400);

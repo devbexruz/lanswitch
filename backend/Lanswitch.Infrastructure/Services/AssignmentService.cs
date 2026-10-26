@@ -44,12 +44,13 @@ public class AssignmentService : IAssignmentService
 
         var now = DateTime.UtcNow;
         var owner = group.Owner ?? await _db.Users.FindAsync(group.OwnerId);
-        bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var creator = await _db.Users.FindAsync(teacherId);
+        bool isOwnerAdmin = owner?.IsAdmin == true || creator?.IsAdmin == true;
+        bool hasActiveSub = isOwnerAdmin || await _db.UserSubscriptions
+            .AnyAsync(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now);
 
-        if (!hasActiveTeacherSub)
-            throw new InvalidOperationException("Guruh o'qituvchisining 'Ustoz' tarifi faol emas yoki muddati tugagan. Topshiriq yaratish uchun tarifni yangilang.");
+        if (!hasActiveSub)
+            throw new InvalidOperationException("Guruhda yangi vazifa yaratish uchun hisobingizda faol obuna (kamida Student Premium yoki Ustoz tarifi) bo'lishi lozim. Iltimos, balansingizni to'ldiring!");
 
         var assignment = new Assignment
         {
@@ -334,11 +335,21 @@ public class AssignmentService : IAssignmentService
         var now = DateTime.UtcNow;
         var owner = await _db.Users.FindAsync(group.OwnerId);
         bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeSub = await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        bool hasActiveTeacherSub = isOwnerAdmin || (activeSub != null && activeSub.TargetRole == "Teacher");
 
         if (!hasActiveTeacherSub)
-            throw new InvalidOperationException("Ustozlik tarifi faol emas yoki muddati tugagan. Tekshirish va baholash uchun hisobingizni to'ldiring va tarifni yangilang.");
+        {
+            if (activeSub != null && activeSub.TargetRole == "Student")
+            {
+                throw new InvalidOperationException("Vazifalarni tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
 
         if (dto.Status == 0 && string.IsNullOrWhiteSpace(dto.Comment))
         {
@@ -516,11 +527,21 @@ public class AssignmentService : IAssignmentService
         var now = DateTime.UtcNow;
         var owner = await _db.Users.FindAsync(group.OwnerId);
         bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeSub = await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        bool hasActiveTeacherSub = isOwnerAdmin || (activeSub != null && activeSub.TargetRole == "Teacher");
 
         if (!hasActiveTeacherSub)
-            throw new InvalidOperationException("Ustozlik tarifi faol emas yoki muddati tugagan. Tekshirish uchun hisobingizni to'ldiring va tarifni yangilang.");
+        {
+            if (activeSub != null && activeSub.TargetRole == "Student")
+            {
+                throw new InvalidOperationException("Vazifalarni tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
 
         var sub = await _db.AssignmentItemSubmissions
             .FirstOrDefaultAsync(s => s.AssignmentItemId == assignmentItemId && s.StudentId == studentId);
@@ -649,12 +670,20 @@ public class AssignmentService : IAssignmentService
         var now = DateTime.UtcNow;
         var owner = await _db.Users.FindAsync(group.OwnerId);
         bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeSub = await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        bool hasActiveTeacherSub = isOwnerAdmin || (activeSub != null && activeSub.TargetRole == "Teacher");
 
         if (!hasActiveTeacherSub)
         {
-            throw new InvalidOperationException("Ustozlik tarifi muddati tugagan. Hisobotlarni ko'rish uchun balansingizni to'ldiring va tarifni yangilang!");
+            if (activeSub != null && activeSub.TargetRole == "Student")
+            {
+                throw new InvalidOperationException("Hisobotlarni ko'rish va tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Hisobotlarni ko'rish va tekshirish uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
         }
 
         var activeMembers = group.Members.Where(m => m.IsActive).ToList();
@@ -1008,11 +1037,21 @@ public class AssignmentService : IAssignmentService
         var now = DateTime.UtcNow;
         var owner = await _db.Users.FindAsync(group.OwnerId);
         bool isOwnerAdmin = owner?.IsAdmin == true;
-        bool hasActiveTeacherSub = isOwnerAdmin || await _db.UserSubscriptions
-            .AnyAsync(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher");
+        var activeSub = await _db.UserSubscriptions
+            .Where(s => s.UserId == group.OwnerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        bool hasActiveTeacherSub = isOwnerAdmin || (activeSub != null && activeSub.TargetRole == "Teacher");
 
         if (!hasActiveTeacherSub)
-            throw new InvalidOperationException("Ustozlik tarifi faol emas yoki muddati tugagan. Vazifa holatini o'zgartirish uchun hisobingizni to'ldiring va tarifni yangilang.");
+        {
+            if (activeSub != null && activeSub.TargetRole == "Student")
+            {
+                throw new InvalidOperationException("Vazifa holatini o'zgartirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Tekshirish va baholash uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
 
         if (isCompleted)
         {

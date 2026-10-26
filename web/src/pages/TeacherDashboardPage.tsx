@@ -400,7 +400,13 @@ export default function TeacherDashboardPage() {
   // Report & Review Full-Screen View
   const handleOpenReport = async (assignmentId: number) => {
     if (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) {
-      alert("Tarifingiz muddati tugagan. Hisobotlar bo'limidan foydalanish uchun balansingizni to'ldiring!");
+      if (subscription?.targetRole === 'Student') {
+        alert("Topshiriqlarni tekshirish faqat 'Ustoz' tarifida mavjud. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else if ((user?.balance || 0) > 0) {
+        alert("Ustozlik tarifi faol emas. Balansingizdagi mablag' bilan tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Topshiriqlarni tekshirish va hisobotlar uchun hisobingizga pul tashlang (balansni to'ldiring) va 'Ustoz Standart' tarifini faollashtiring!");
+      }
       setShowSubscriptionModal(true);
       return;
     }
@@ -730,8 +736,8 @@ export default function TeacherDashboardPage() {
   };
 
   const handleOpenCreateModal = () => {
-    if (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) {
-      alert("Ustozlik tarifi muddati tugaganligi sababli yangi topshiriq yarata olmaysiz. Iltimos, avval tarifni yangilang.");
+    if (!hasSubscription && !user?.isAdmin) {
+      alert("Yangi topshiriq yaratish uchun hisobingizda faol tarif (kamida Student Premium yoki Ustoz tarifi) bo'lishi lozim. Iltimos, avval tarif rejasini faollashtiring.");
       setShowSubscriptionModal(true);
       return;
     }
@@ -1239,6 +1245,23 @@ export default function TeacherDashboardPage() {
                           }}
                         >
                           <div>
+                            {(!isTeacherSubActive || selectedGroup?.isSubscriptionExpired) && (
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                background: '#FEE2E2',
+                                border: '1px solid #FECACA',
+                                color: '#DC2626',
+                                borderRadius: '8px',
+                                padding: '3px 10px',
+                                fontSize: '11.5px',
+                                fontWeight: 800,
+                                marginBottom: '6px'
+                              }}>
+                                <span>⚠️ Ushbu topshiriq o'quvchi va talabalarga ko'rinmaydi!</span>
+                              </div>
+                            )}
                             <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px' }}>
                               {ass.title}
                             </div>
@@ -1272,7 +1295,9 @@ export default function TeacherDashboardPage() {
                                 } : {} )
                               }}
                             >
-                              <span>{(selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) ? "🔒 Hisobot (Balansni to'ldiring)" : "Hisobot & Tekshirish"}</span>
+                              <span>{(selectedGroup?.isSubscriptionExpired || !isTeacherSubActive)
+                                ? (subscription?.targetRole === 'Student' ? "🔒 Hisobot (Tarifni o'tkazing)" : "🔒 Hisobot (Balansni to'ldiring)")
+                                : "Hisobot & Tekshirish"}</span>
                             </button>
 
                             <button
