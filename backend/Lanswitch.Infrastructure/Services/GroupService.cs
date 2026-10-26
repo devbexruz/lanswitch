@@ -166,8 +166,19 @@ public class GroupService : IGroupService
 
     public async Task<bool> ManageAdminAsync(long groupId, long ownerId, long targetUserId, bool canCreate, bool canReview, bool canManage)
     {
-        var group = await _db.TelegramGroups.FirstOrDefaultAsync(g => g.Id == groupId && g.OwnerId == ownerId);
+        var group = await _db.TelegramGroups.FirstOrDefaultAsync(g => g.Id == groupId && g.OwnerId == ownerId && g.IsActive);
         if (group == null) return false;
+
+        var now = System.DateTime.UtcNow;
+        var owner = await _db.Users.FindAsync(ownerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true;
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => s.UserId == ownerId && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        if (!isOwnerAdmin && activeTeacherSub == null)
+            throw new System.InvalidOperationException("Guruh adminlarini boshqarish faqat 'Ustoz' tarifida mavjud!");
 
         var admin = await _db.GroupAdmins.FirstOrDefaultAsync(ga => ga.GroupId == groupId && ga.UserId == targetUserId);
         if (admin == null)
@@ -198,11 +209,23 @@ public class GroupService : IGroupService
     {
         var group = await _db.TelegramGroups
             .Include(g => g.Admins)
-            .FirstOrDefaultAsync(g => g.Id == groupId);
+            .FirstOrDefaultAsync(g => g.Id == groupId && g.IsActive);
 
         if (group == null) return false;
         bool canManage = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanManageMembers);
         if (!canManage) return false;
+
+        var now = System.DateTime.UtcNow;
+        var caller = await _db.Users.FindAsync(teacherId);
+        var owner = group.OwnerId == teacherId ? caller : await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true || caller?.IsAdmin == true;
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        if (!isOwnerAdmin && activeTeacherSub == null)
+            throw new System.InvalidOperationException("O'quvchilarni guruhdan chiqarish faqat 'Ustoz' tarifida mavjud!");
 
         var member = await _db.GroupMembers.FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.StudentId == studentId);
         if (member != null)
@@ -218,11 +241,23 @@ public class GroupService : IGroupService
     {
         var group = await _db.TelegramGroups
             .Include(g => g.Admins)
-            .FirstOrDefaultAsync(g => g.Id == groupId);
+            .FirstOrDefaultAsync(g => g.Id == groupId && g.IsActive);
 
         if (group == null) return false;
         bool canManage = group.OwnerId == teacherId || group.Admins.Any(a => a.UserId == teacherId && a.CanManageMembers);
         if (!canManage) return false;
+
+        var now = System.DateTime.UtcNow;
+        var caller = await _db.Users.FindAsync(teacherId);
+        var owner = group.OwnerId == teacherId ? caller : await _db.Users.FindAsync(group.OwnerId);
+        bool isOwnerAdmin = owner?.IsAdmin == true || caller?.IsAdmin == true;
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+
+        if (!isOwnerAdmin && activeTeacherSub == null)
+            throw new System.InvalidOperationException("O'quvchilarni guruhga qayta qo'shish faqat 'Ustoz' tarifida mavjud!");
 
         var member = await _db.GroupMembers.FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.StudentId == studentId);
         if (member != null)
@@ -324,7 +359,17 @@ public class GroupService : IGroupService
             .FirstOrDefaultAsync();
 
         if (!isOwnerAdmin && activeTeacherSub == null)
+        {
+            var activeStudentSub = await _db.UserSubscriptions
+                .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Student")
+                .FirstOrDefaultAsync();
+
+            if (activeStudentSub != null)
+            {
+                throw new System.InvalidOperationException("Guruh a'zolarini yangilash va sinxronlash faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
             throw new System.InvalidOperationException("Guruh egasining 'Ustoz' tarifi muddati tugagan yoki faol emas.");
+        }
 
         if (!isOwnerAdmin && activeTeacherSub != null)
         {

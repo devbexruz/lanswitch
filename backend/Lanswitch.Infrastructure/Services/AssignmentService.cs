@@ -49,20 +49,30 @@ public class AssignmentService : IAssignmentService
         var creator = await _db.Users.FindAsync(teacherId);
         bool isOwnerAdmin = owner?.IsAdmin == true || creator?.IsAdmin == true;
 
-        var activeSub = isOwnerAdmin ? null : await _db.UserSubscriptions
-            .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now)
+        var activeTeacherSub = isOwnerAdmin ? null : await _db.UserSubscriptions
+            .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Teacher")
             .OrderByDescending(s => s.Id)
             .FirstOrDefaultAsync();
 
-        if (!isOwnerAdmin && activeSub == null)
-            throw new InvalidOperationException("Guruhda yangi vazifa yaratish uchun hisobingizda faol obuna (kamida Student Premium yoki Ustoz tarifi) bo'lishi lozim. Iltimos, balansingizni to'ldiring!");
+        if (!isOwnerAdmin && activeTeacherSub == null)
+        {
+            var activeStudentSub = await _db.UserSubscriptions
+                .Where(s => (s.UserId == group.OwnerId || s.UserId == teacherId) && (s.Status == "Active" || s.IsActive) && s.EndDate > now && s.TargetRole == "Student")
+                .FirstOrDefaultAsync();
 
-        if (!isOwnerAdmin && activeSub != null)
+            if (activeStudentSub != null)
+            {
+                throw new InvalidOperationException("Guruhda yangi vazifa yaratish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+            }
+            throw new InvalidOperationException("Guruhda yangi vazifa yaratish va guruhni boshqarish uchun hisobingizga pul tashlang va 'Ustoz Standart' tarifini faollashtiring!");
+        }
+
+        if (!isOwnerAdmin && activeTeacherSub != null)
         {
             var activeCount = await _db.TelegramGroups.CountAsync(g => g.OwnerId == group.OwnerId && g.IsActive);
-            if (activeCount > activeSub.MaxGroups)
+            if (activeCount > activeTeacherSub.MaxGroups)
             {
-                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+                throw new InvalidOperationException($"Guruhlaringiz soni ({activeCount} ta) tarifingizdagi limitdan ({activeTeacherSub.MaxGroups} ta) ko'p bo'lganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
             }
         }
 

@@ -7,9 +7,9 @@ import type {
   Book, BookPart, BookUnit, BookWord, QuizQuestion
 } from '../utils/api';
 import { 
-  PlusCircle, CheckCircle2, XCircle, AlertTriangle, 
+  PlusCircle, CheckCircle2, XCircle, AlertTriangle, Lock,
   Send, BookOpen, ChevronRight, RefreshCw, Clock, Shield,
-  Trash2, UserCheck, Eye, Volume2, Play, Search, ArrowLeft, Trophy, Sparkles, Check,
+  Trash2, Eye, Volume2, Play, Search, ArrowLeft, Trophy, Sparkles, Check,
   Film, Library, X, ChevronDown, Users, Maximize2, Minimize2, FileText, Video, Save, Download, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -29,7 +29,11 @@ export default function TeacherDashboardPage() {
 
   const handleAddGroupClick = () => {
     if (!isTeacherSubActive) {
-      alert("Yangi guruh qo'shish uchun faol 'Ustoz' tarifiga ega bo'lishingiz kerak. Iltimos, avval tarif rejasini faollashtiring.");
+      if (subscription?.targetRole === 'Student') {
+        alert("Yangi guruh qo'shish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Yangi guruh qo'shish uchun faol 'Ustoz' tarifiga ega bo'lishingiz kerak. Iltimos, avval tarif rejasini faollashtiring.");
+      }
       setShowSubscriptionModal(true);
       return;
     }
@@ -339,6 +343,15 @@ export default function TeacherDashboardPage() {
 
   const handleSyncMembers = async () => {
     if (!selectedGroup) return;
+    if (!isTeacherSubActive) {
+      if (subscription?.targetRole === 'Student') {
+        alert("Guruh a'zolarini yangilash va sinxronlash faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Guruh a'zolarini yangilash va boshqarish uchun faol 'Ustoz' tarifi talab qilinadi!");
+      }
+      setShowSubscriptionModal(true);
+      return;
+    }
     setIsSyncing(true);
     try {
       const res = await api.syncGroupMembers(selectedGroup.id, user?.id);
@@ -634,6 +647,15 @@ export default function TeacherDashboardPage() {
 
   const handleRemoveMember = async (studentId: number) => {
     if (!selectedGroup) return;
+    if (!isTeacherSubActive) {
+      if (subscription?.targetRole === 'Student') {
+        alert("O'quvchilarni guruhdan chiqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Guruh a'zolarini boshqarish uchun faol 'Ustoz' tarifi talab qilinadi!");
+      }
+      setShowSubscriptionModal(true);
+      return;
+    }
     if (!window.confirm("Haqiqatdan ham ushbu o'quvchini tizimdan o'chirmoqchimisiz? (Telegram guruhdan chiqarilmaydi, faqat tizimda yashiriladi)")) return;
     const ok = await api.removeMember(selectedGroup.id, studentId, user?.id);
     if (ok) {
@@ -644,6 +666,15 @@ export default function TeacherDashboardPage() {
 
   const handleRestoreMember = async (studentId: number) => {
     if (!selectedGroup) return;
+    if (!isTeacherSubActive) {
+      if (subscription?.targetRole === 'Student') {
+        alert("O'quvchilarni guruhga qayta qo'shish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Guruh a'zolarini boshqarish uchun faol 'Ustoz' tarifi talab qilinadi!");
+      }
+      setShowSubscriptionModal(true);
+      return;
+    }
     const ok = await api.restoreMember(selectedGroup.id, studentId, user?.id);
     if (ok) {
       await loadMembers(selectedGroup.id);
@@ -664,6 +695,15 @@ export default function TeacherDashboardPage() {
   // Create Assignment
   const handleCreateAssignment = async () => {
     if (!selectedGroup) return;
+    if (!isTeacherSubActive) {
+      if (subscription?.targetRole === 'Student') {
+        alert("Guruhda yangi vazifa yaratish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Talaba rejimida guruhlarni boshqarish mumkin emas! Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Guruhda vazifa yaratish uchun hisobingizda faol 'Ustoz' tarifi bo'lishi lozim.");
+      }
+      setShowSubscriptionModal(true);
+      return;
+    }
     if (items.length === 0) {
       alert("Topshiriq e'lon qilish uchun kamida 1 ta vazifa bo'limi qo'shilishi shart!");
       return;
@@ -764,8 +804,21 @@ export default function TeacherDashboardPage() {
   };
 
   const handleOpenCreateModal = () => {
-    if (!hasSubscription && !user?.isAdmin) {
-      alert("Yangi topshiriq yaratish uchun hisobingizda faol tarif (kamida Student Premium yoki Ustoz tarifi) bo'lishi lozim. Iltimos, avval tarif rejasini faollashtiring.");
+    if (!isTeacherSubActive) {
+      if (subscription?.targetRole === 'Student') {
+        alert("Guruhda yangi vazifa yaratish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Talaba rejimida guruhlarni boshqarish cheklangan. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
+      } else {
+        alert("Guruhda yangi vazifa yaratish uchun hisobingizda faol 'Ustoz' tarifi bo'lishi lozim. Iltimos, tarif rejasini faollashtiring.");
+      }
+      setShowSubscriptionModal(true);
+      return;
+    }
+    if (selectedGroup?.isSubscriptionExpired || selectedGroup?.isGroupLimitExceeded) {
+      if (selectedGroup?.isGroupLimitExceeded) {
+        alert("Guruhlaringiz soni tarif limitidan oshib ketganligi sababli hech qaysi guruh ishlamaydi. Iltimos, ortiqcha guruhlarni o'chiring yoki tarifingizni upgrade qiling!");
+      } else {
+        alert("Ustoz tarifi muddati tugaganligi sababli yangi vazifa yarata olmaysiz. Iltimos, tarifni yangilang!");
+      }
       setShowSubscriptionModal(true);
       return;
     }
@@ -1247,10 +1300,10 @@ export default function TeacherDashboardPage() {
                           </button>
                         </div>
                       </div>
-                    ) : selectedGroup?.isSubscriptionExpired && (
+                    ) : (!isTeacherSubActive || selectedGroup?.isSubscriptionExpired) && (
                       <div style={{
                         background: '#FEF2F2',
-                        border: '1.5px solid #FCA5A5',
+                        border: '2px solid #FCA5A5',
                         borderRadius: '16px',
                         padding: '16px 20px',
                         display: 'flex',
@@ -1258,13 +1311,13 @@ export default function TeacherDashboardPage() {
                         justifyContent: 'space-between',
                         flexWrap: 'wrap',
                         gap: '12px',
-                        boxShadow: '0 2px 10px rgba(239, 68, 68, 0.08)',
+                        boxShadow: '0 4px 16px rgba(239, 68, 68, 0.12)',
                         margin: '6px 0 16px 0'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 280px' }}>
                           <div style={{
-                            width: '40px',
-                            height: '40px',
+                            width: '42px',
+                            height: '42px',
                             borderRadius: '50%',
                             background: '#FEE2E2',
                             display: 'flex',
@@ -1272,14 +1325,18 @@ export default function TeacherDashboardPage() {
                             justifyContent: 'center',
                             flexShrink: 0
                           }}>
-                            <AlertTriangle size={22} color="#DC2626" />
+                            <Lock size={22} color="#DC2626" />
                           </div>
                           <div>
-                            <div style={{ fontWeight: 900, color: '#B91C1C', fontSize: '15px' }}>
-                              ⚠️ Ustoz tarifi muddati tugagan!
+                            <div style={{ fontWeight: 900, color: '#B91C1C', fontSize: '15.5px' }}>
+                              {subscription?.targetRole === 'Student'
+                                ? "🔒 Guruh boshqaruvi cheklangan (Joriy tarif: Student Premium)"
+                                : "⚠️ Ustoz tarifi muddati tugagan yoki faol emas!"}
                             </div>
-                            <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '2px', lineHeight: 1.4 }}>
-                              Ushbu guruhdagi barcha topshiriqlar talabalarga ko'rinmaydi va yangi guruh qo'sha olmaysiz. Tizimdan to'liq foydalanish uchun tarifni yangilang.
+                            <div style={{ color: '#DC2626', fontSize: '13px', marginTop: '2px', lineHeight: 1.45 }}>
+                              {subscription?.targetRole === 'Student'
+                                ? "Guruhda dars topshiriqlarini yaratish, o'quvchilarni nazorat qilish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud. Student (talaba) rejimida guruhlarni boshqarish umuman mumkin emas! Tizimdan to'liq foydalanish uchun tarifingizni 'Ustoz Standart'ga o'tkazing."
+                                : "Ushbu guruhdagi barcha topshiriqlar talabalarga ko'rinmaydi va guruhni boshqarish cheklangan. Tizimdan to'liq foydalanish uchun tarifni yangilang."}
                             </div>
                           </div>
                         </div>
@@ -1299,7 +1356,7 @@ export default function TeacherDashboardPage() {
                             whiteSpace: 'nowrap'
                           }}
                         >
-                          Tarifni yangilash
+                          {subscription?.targetRole === 'Student' ? "⭐ Tarifni Ustozga o'tkazish" : "Tarifni yangilash"}
                         </button>
                       </div>
                     )}
@@ -1345,10 +1402,19 @@ export default function TeacherDashboardPage() {
                           onClick={handleOpenCreateModal}
                           disabled={!selectedGroup}
                           className="btn-big-blue"
-                          style={{ minHeight: '40px', padding: '0 18px', fontSize: '13px' }}
+                          style={{
+                            minHeight: '40px',
+                            padding: '0 18px',
+                            fontSize: '13px',
+                            ...(!isTeacherSubActive || selectedGroup?.isSubscriptionExpired ? {
+                              background: '#EF4444',
+                              borderColor: '#DC2626',
+                              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)'
+                            } : {})
+                          }}
                         >
                           <PlusCircle size={16} />
-                          <span>Yangi Vazifa Tuzish</span>
+                          <span>{(!isTeacherSubActive || selectedGroup?.isSubscriptionExpired) ? "🔒 Yangi Vazifa (Cheklangan)" : "Yangi Vazifa Tuzish"}</span>
                         </button>
                       </div>
                     </div>
@@ -1476,10 +1542,15 @@ export default function TeacherDashboardPage() {
                         disabled={isSyncing || !selectedGroup}
                         title="Guruhdagi yangi start bosgan o'quvchilarni sinxronlashtirish"
                         className="btn-big-white"
-                        style={{ minHeight: '40px', padding: '0 16px', fontSize: '13px' }}
+                        style={{
+                          minHeight: '40px',
+                          padding: '0 16px',
+                          fontSize: '13px',
+                          ...(!isTeacherSubActive ? { borderColor: '#FCA5A5', color: '#DC2626' } : {})
+                        }}
                       >
                         <RefreshCw size={15} className={isSyncing ? 'spin' : ''} />
-                        <span>{isSyncing ? "Yangilanmoqda..." : "A'zolarni yangilash"}</span>
+                        <span>{isSyncing ? "Yangilanmoqda..." : !isTeacherSubActive ? "🔒 A'zolarni yangilash (Cheklangan)" : "A'zolarni yangilash"}</span>
                       </button>
                     </div>
 
@@ -1550,18 +1621,30 @@ export default function TeacherDashboardPage() {
                           {m.isActive ? (
                             <button
                               onClick={() => handleRemoveMember(m.studentId)}
-                              title="Tizimdan o'chirish"
-                              style={{ background: 'none', border: 'none', color: 'var(--status-danger)', cursor: 'pointer', padding: '6px' }}
+                              title={!isTeacherSubActive ? "Cheklangan (Faqat Ustoz tarifi)" : "Tizimdan o'chirish"}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: !isTeacherSubActive ? '#94A3B8' : 'var(--status-danger)',
+                                cursor: 'pointer',
+                                padding: '6px'
+                              }}
                             >
                               <Trash2 size={16} />
                             </button>
                           ) : (
                             <button
                               onClick={() => handleRestoreMember(m.studentId)}
-                              title="Qayta qo'shish"
-                              style={{ background: 'none', border: 'none', color: 'var(--primary-blue)', cursor: 'pointer', padding: '6px' }}
+                              title={!isTeacherSubActive ? "Cheklangan (Faqat Ustoz tarifi)" : "Qayta qo'shish"}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: !isTeacherSubActive ? '#94A3B8' : 'var(--primary-blue)',
+                                cursor: 'pointer',
+                                padding: '6px'
+                              }}
                             >
-                              <UserCheck size={18} />
+                              <RefreshCw size={15} />
                             </button>
                           )}
                         </div>
@@ -4370,7 +4453,7 @@ export default function TeacherDashboardPage() {
                               <AlertTriangle size={12} color="#DC2626" />
                               <span>Limit oshib ketgan ({g.currentGroupCount}/{g.groupLimit}) - Guruh ishlamaydi</span>
                             </div>
-                          ) : g.isSubscriptionExpired && (
+                          ) : (!isTeacherSubActive || g.isSubscriptionExpired) && (
                             <div style={{
                               fontSize: '11px',
                               fontWeight: 800,
@@ -4385,7 +4468,7 @@ export default function TeacherDashboardPage() {
                               marginBottom: '6px'
                             }}>
                               <AlertTriangle size={12} color="#DC2626" />
-                              <span>Tarif muddati tugagan (Topshiriqlar ko'rinmaydi)</span>
+                              <span>{subscription?.targetRole === 'Student' ? "🔒 Boshqaruv cheklangan (Student Premium)" : "Tarif muddati tugagan (Topshiriqlar ko'rinmaydi)"}</span>
                             </div>
                           )}
                           <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

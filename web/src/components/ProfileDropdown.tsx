@@ -23,6 +23,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
 
   const isTeacherRoute = location.pathname.startsWith('/teacher');
   const currentRole = user?.role === 'Teacher' || (!user?.role && isTeacherRoute) ? 'Teacher' : 'Student';
+  const isRoleSubActive = user?.isAdmin || (hasSubscription && (isTeacherRoute ? subscription?.targetRole === 'Teacher' : true));
 
   // Close when clicking outside
   useEffect(() => {
@@ -116,14 +117,14 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
           </span>
           <span style={{
             fontSize: '10.5px',
-            color: hasSubscription ? '#059669' : '#DC2626',
+            color: isRoleSubActive ? '#059669' : '#DC2626',
             fontWeight: 800,
             whiteSpace: 'nowrap',
             display: 'flex',
             alignItems: 'center',
             gap: '3px'
           }}>
-            {hasSubscription ? (
+            {isRoleSubActive ? (
               <span>{subscription?.planName ? subscription.planName.replace('Ustoz - ', '') : (user?.isAdmin ? 'Admin' : 'Premium')}</span>
             ) : (
               <span>🔴 Tugagan</span>
@@ -194,7 +195,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 ID: {user?.id || '—'} {user?.telegramId ? `• @${user.telegramId}` : ''}
               </div>
-              {hasSubscription ? (
+              {isRoleSubActive ? (
                 <div style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -209,7 +210,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                   marginTop: '4px'
                 }}>
                   <span>✓</span>
-                  <span>{subscription?.planName || (user?.isAdmin ? 'Administrator' : 'Student Premium')}</span>
+                  <span>{subscription?.planName || (user?.isAdmin ? 'Administrator' : 'Premium')}</span>
                 </div>
               ) : (
                 <div style={{
@@ -226,7 +227,7 @@ export default function ProfileDropdown({ onNavigateTab }: ProfileDropdownProps)
                   marginTop: '4px'
                 }}>
                   <span>🔴</span>
-                  <span>Tarif muddati tugagan</span>
+                  <span>{subscription?.targetRole === 'Student' && isTeacherRoute ? "Ustoz tarifi faol emas" : "Tarif muddati tugagan"}</span>
                 </div>
               )}
             </div>
