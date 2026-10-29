@@ -230,8 +230,16 @@
     z-index: 20;
     padding: 0 24px;
     transform: translateY(0);
-    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform;
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease, visibility 0.18s ease;
+    will-change: transform, opacity;
+}
+
+/* Hide subtitles while scrolling / scrubbing on the progress seek bar */
+.is-scrubbing .video-subtitle-overlay {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: opacity 0.15s ease, visibility 0.15s ease !important;
 }
 
 /* Smoothly elevate subtitles when player scroller and bottom options are visible */

@@ -117,6 +117,42 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Center play/pause pulse animation
   const [centerPulse, setCenterPulse] = useState<'play' | 'pause' | null>(null);
 
+  // Track user scrubbing on seek bar (hides subtitles while active)
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const scrubbingTimerRef = useRef<any>(null);
+
+  const handleScrubStart = useCallback(() => {
+    if (scrubbingTimerRef.current) clearTimeout(scrubbingTimerRef.current);
+    setIsScrubbing(true);
+  }, []);
+
+  const handleScrubEnd = useCallback(() => {
+    if (scrubbingTimerRef.current) clearTimeout(scrubbingTimerRef.current);
+    scrubbingTimerRef.current = setTimeout(() => {
+      setIsScrubbing(false);
+    }, 120);
+  }, []);
+
+  useEffect(() => {
+    if (!isScrubbing) return;
+
+    const handleGlobalRelease = () => {
+      handleScrubEnd();
+    };
+
+    window.addEventListener('pointerup', handleGlobalRelease);
+    window.addEventListener('mouseup', handleGlobalRelease);
+    window.addEventListener('touchend', handleGlobalRelease);
+    window.addEventListener('touchcancel', handleGlobalRelease);
+
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalRelease);
+      window.removeEventListener('mouseup', handleGlobalRelease);
+      window.removeEventListener('touchend', handleGlobalRelease);
+      window.removeEventListener('touchcancel', handleGlobalRelease);
+    };
+  }, [isScrubbing, handleScrubEnd]);
+
   const controlsTimeoutRef = useRef<any>(null);
   const seekFeedbackTimerRef = useRef<any>(null);
   const accumulatedSeekRef = useRef<{ direction: 'left' | 'right'; amount: number }>({
@@ -176,6 +212,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
       if (singleTapTimeoutRef.current) clearTimeout(singleTapTimeoutRef.current);
       if (seekFeedbackTimerRef.current) clearTimeout(seekFeedbackTimerRef.current);
+      if (scrubbingTimerRef.current) clearTimeout(scrubbingTimerRef.current);
     };
   }, []);
 
@@ -490,6 +527,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = Number(e.target.value);
+    if (!isScrubbing) {
+      setIsScrubbing(true);
+    }
+    if (scrubbingTimerRef.current) {
+      clearTimeout(scrubbingTimerRef.current);
+    }
+    scrubbingTimerRef.current = setTimeout(() => {
+      setIsScrubbing(false);
+    }, 250);
+
     if (videoRef.current) {
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
@@ -690,7 +737,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   return (
     <div
-      className={`custom-video-container ${isFullscreen ? 'fullscreen' : ''} ${showControls ? 'show-controls' : 'hide-controls'}`}
+      className={`custom-video-container ${isFullscreen ? 'fullscreen' : ''} ${showControls ? 'show-controls' : 'hide-controls'} ${isScrubbing ? 'is-scrubbing' : ''}`}
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -870,6 +917,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               step="any"
               value={currentTime}
               onChange={handleProgressChange}
+              onPointerDown={handleScrubStart}
+              onPointerUp={handleScrubEnd}
+              onTouchStart={handleScrubStart}
+              onTouchEnd={handleScrubEnd}
+              onMouseDown={handleScrubStart}
+              onMouseUp={handleScrubEnd}
               className="progress-slider"
               title="Vaqtni o'tkazish"
               aria-label="Vaqt o'tkazgich"
@@ -896,8 +949,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 )}
               </button>
 
-              <span className="time-display">
-                {formatSecondsToMMSS(currentTime)} / {formatSecondsToMMSS(duration)}
+              <span className="time-display" aria-label="Vaqt ko'rsatkichi">
+                <span className="time-current">{formatSecondsToMMSS(currentTime)}</span>
+                <span className="time-sep">/</span>
+                <span className="time-duration">{formatSecondsToMMSS(duration)}</span>
               </span>
 
               {/* Volume / Mute Control */}
