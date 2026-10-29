@@ -318,21 +318,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         singleTapTimeoutRef.current = null;
         lastTouchTapRef.current = null;
 
-        if (!wasVisible) {
-          // If controls were hidden: SHOW THEM! (Keep open for 3.5s)
+        const isCurrentlyPaused = videoRef.current ? videoRef.current.paused : !isPlaying;
+
+        if (isCurrentlyPaused) {
+          // 1. Agar video pause bo'lsa: keyingi touch ijro qiladi (play) va biroz turib panel avtomatik yashirinadi
+          togglePlay();
+        } else if (!wasVisible) {
+          // 2. Agar video ijro bo'layotgan bo'lsa va panel yashirin bo'lsa: touch panelni visible qiladi (va 3.5s dan keyin hide qiladi)
           setShowControls(true);
           showControlsRef.current = true;
           resetControlsTimeout();
         } else {
-          // If controls were already visible: HIDE THEM!
-          setShowControls(false);
-          showControlsRef.current = false;
-          setShowSpeedMenu(false);
-          if (controlsTimeoutRef.current) {
-            clearTimeout(controlsTimeoutRef.current);
-          }
+          // 3. Agar video ijro bo'layotgan bo'lsa va panel visible bo'lsa: touch videoni PAUSE qiladi!
+          // Pause paytida esa panel doimiy ravishda visible bo'lib turadi.
+          togglePlay();
         }
-      }, 180);
+      }, 220);
     }
   };
 
@@ -470,6 +471,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       videoRef.current.pause();
       setIsPlaying(false);
       setShowControls(true);
+      showControlsRef.current = true;
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
       targetEndTimeRef.current = null;
     }
   };
@@ -492,6 +495,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setCurrentTime(newTime);
       onTimeUpdate(newTime);
       updateBufferedAmount();
+      resetControlsTimeout();
     }
   };
 
@@ -502,6 +506,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         videoRef.current.pause();
         setIsPlaying(false);
         setShowControls(true);
+        showControlsRef.current = true;
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
         targetEndTimeRef.current = null;
       }
     };
@@ -733,6 +739,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onEnded={() => {
           setIsPlaying(false);
           setShowControls(true);
+          showControlsRef.current = true;
+          if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
         }}
       />
 
