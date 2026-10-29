@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import VideoPlayer from '../features/player/components/VideoPlayer';
 import CommentsSection from '../features/player/components/CommentsSection';
@@ -426,11 +427,48 @@ const PlayerPage: React.FC = () => {
     }
   };
 
+  // Dynamic mount node for AI Tutor modal (in Fullscreen mode, it mounts inside the fullscreen element)
+  const [modalMountNode, setModalMountNode] = useState<Element | null>(null);
+
+  useEffect(() => {
+    const updateMountNode = () => {
+      if (typeof document === 'undefined') return;
+      const fsEl = 
+        document.fullscreenElement || 
+        (document as any).webkitFullscreenElement || 
+        document.querySelector('.custom-video-container.fullscreen') || 
+        document.body;
+      setModalMountNode(fsEl);
+    };
+
+    updateMountNode();
+    document.addEventListener('fullscreenchange', updateMountNode);
+    document.addEventListener('webkitfullscreenchange', updateMountNode);
+    window.addEventListener('resize', updateMountNode);
+    return () => {
+      document.removeEventListener('fullscreenchange', updateMountNode);
+      document.removeEventListener('webkitfullscreenchange', updateMountNode);
+      window.removeEventListener('resize', updateMountNode);
+    };
+  }, [isFullscreen, showAiTutorModal]);
+
   // Open AI Tutor Modal & automatically pause video
-  const handleOpenAiTutorModal = () => {
+  const handleOpenAiTutorModal = (targetSubtitleIndex?: number | React.MouseEvent) => {
+    if (typeof targetSubtitleIndex === 'number' && targetSubtitleIndex >= 0 && targetSubtitleIndex < subtitles.length) {
+      setSelectedSubtitleIndex(targetSubtitleIndex);
+    }
     window.dispatchEvent(new CustomEvent('pause-video'));
     const video = document.querySelector('video');
     if (video) video.pause();
+
+    const fsEl = 
+      (typeof document !== 'undefined' && (
+        document.fullscreenElement || 
+        (document as any).webkitFullscreenElement || 
+        document.querySelector('.custom-video-container.fullscreen')
+      )) || 
+      (typeof document !== 'undefined' ? document.body : null);
+    setModalMountNode(fsEl);
     setShowAiTutorModal(true);
   };
 
@@ -624,9 +662,19 @@ const PlayerPage: React.FC = () => {
         {/* Main Subtitle Focus Card */}
         <div className="current-sub-box">
           <div className="sub-box-header">
-            <span className="sub-box-badge">
-              {currentSub ? `${selectedSubtitleIndex + 1} / ${subtitles.length}` : 'Subtitr'}
-            </span>
+            <div className="sub-header-left-group">
+              <span className="sub-box-badge">
+                {currentSub ? `${selectedSubtitleIndex + 1} / ${subtitles.length}` : 'Subtitr'}
+              </span>
+              <button
+                className="sub-header-ai-quick-btn"
+                onClick={() => handleOpenAiTutorModal()}
+                title="AI Ustoz bilan muloqot va tahlil"
+              >
+                <span className="quick-ai-sparkle">✨</span>
+                <span className="quick-ai-label">AI Chat</span>
+              </button>
+            </div>
             <div className="sub-nav-btns">
               <button
                 className="sub-nav-arrow"
@@ -723,7 +771,7 @@ const PlayerPage: React.FC = () => {
           <div className="ai-tutor-launch-row">
             <button
               className="btn-ai-tutor-launch"
-              onClick={handleOpenAiTutorModal}
+              onClick={() => handleOpenAiTutorModal()}
               title="AI Ustoz bilan tahlil qilish va savol-javob oynasini ochish"
             >
               <div className="launch-btn-left">
@@ -982,24 +1030,38 @@ const PlayerPage: React.FC = () => {
               onToggleAnalysis={() => setIsFullscreenDrawerOpen(prev => !prev)}
               isAnalysisOpen={isFullscreenDrawerOpen}
               onFullscreenChange={setIsFullscreen}
+              onOpenAiChat={() => handleOpenAiTutorModal()}
             >
               {/* Subtitles Overlay inside Video (Hidden on mobile non-fullscreen) */}
               {shouldShowVideoSubtitles && (
                 <div className="video-subtitle-overlay" onClick={handleSubtitleOverlayClick}>
                   <div className="subtitle-stack">
                     {activeSubtitles.map((activeSub) => (
-                      <div key={activeSub.id} className="video-subtitle-text subtitle-animate">
-                        {activeSub.text.split(' ').map((w, i) => (
-                          <span
-                            key={i}
-                            className="subtitleWord"
-                            onClick={(e) => handleWordClick(e, w)}
-                            onContextMenu={(e) => handleWordClick(e, w)}
-                            title="So'z tarjimasi"
-                          >
-                            {w}{' '}
-                          </span>
-                        ))}
+                      <div key={activeSub.id} className="video-subtitle-line-wrap">
+                        <div className="video-subtitle-text subtitle-animate">
+                          {activeSub.text.split(' ').map((w, i) => (
+                            <span
+                              key={i}
+                              className="subtitleWord"
+                              onClick={(e) => handleWordClick(e, w)}
+                              onContextMenu={(e) => handleWordClick(e, w)}
+                              title="So'z tarjimasi"
+                            >
+                              {w}{' '}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          className="video-sub-ai-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const realIdx = subtitles.findIndex(s => s.id === activeSub.id);
+                            handleOpenAiTutorModal(realIdx !== -1 ? realIdx : undefined);
+                          }}
+                          title="AI Ustoz bilan gap tahlili va chat"
+                        >
+                          ✨ AI
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1155,9 +1217,15 @@ const PlayerPage: React.FC = () => {
         )}
       </main>
 
-      {/* AI Ustoz Bilan Tahlil - Dark Style Popup Screen Modal */}
-      {showAiTutorModal && (
-        <div className="ai-tutor-modal-overlay" onClick={handleCloseAiTutorModal}>
+      {/* AI Ustoz Bilan Tahlil - Dark Style Popup Screen Modal (Portaled into fullscreen element when in fullscreen) */}
+      {showAiTutorModal && (modalMountNode || typeof document !== 'undefined') && createPortal(
+        <div 
+          className={`ai-tutor-modal-overlay ${(isFullscreen || Boolean(typeof document !== 'undefined' && document.fullscreenElement)) ? 'in-fullscreen' : ''}`} 
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCloseAiTutorModal();
+          }}
+        >
           <div className="ai-tutor-modal-container" onClick={(e) => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="ai-modal-header">
@@ -1395,7 +1463,8 @@ const PlayerPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        modalMountNode || document.body
       )}
 
       {/* Subscription Plans Modal */}

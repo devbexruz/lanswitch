@@ -11,6 +11,7 @@ interface VideoPlayerProps {
   onToggleAnalysis?: () => void;
   isAnalysisOpen?: boolean;
   onFullscreenChange?: (isFullscreen: boolean) => void;
+  onOpenAiChat?: () => void;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -21,7 +22,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   children,
   onToggleAnalysis,
   isAnalysisOpen,
-  onFullscreenChange
+  onFullscreenChange,
+  onOpenAiChat
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -349,6 +351,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                   </svg>
                   <span className="btn-label-text">Tahlil</span>
+                </button>
+              )}
+
+              {/* AI Chat quick button in video player controls */}
+              {onOpenAiChat && (
+                <button
+                  className="control-btn ai-chat-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenAiChat();
+                  }}
+                  title="AI Ustoz bilan tahlil va chat"
+                >
+                  <span className="ai-btn-sparkle">✨</span>
+                  <span className="btn-label-text">AI Ustoz</span>
                 </button>
               )}
 
