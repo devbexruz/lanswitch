@@ -2661,7 +2661,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                     contextSb.ToString(),
                     senderUser.FullName);
 
-                var fullText = $"🤖 <b>Lanswitch AI:</b>\n\n{aiResponse}";
+                var fullText = aiResponse;
                 try
                 {
                     await _botClient.SendMessage(
