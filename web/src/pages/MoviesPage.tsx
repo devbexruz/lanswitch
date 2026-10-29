@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './MoviesPage.css';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { formatSecondsToMMSS } from '../utils/timeUtils';
 
 const MoviesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -13,8 +15,54 @@ const MoviesPage: React.FC = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategory, setEditingCategory] = useState<any | null>(null);
+  const [continueWatching, setContinueWatching] = useState<any[]>([]);
   const { learningLanguage } = useLanguage();
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  const fetchContinueWatching = async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/watchhistory/continue-watching/${user.id}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setContinueWatching(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Error fetching continue watching", err);
+    }
+  };
+
+  const handleRemoveHistory = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/watchhistory/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setContinueWatching(prev => prev.filter(item => item.id !== id));
+      }
+    } catch (err) {
+      console.error("Error removing from history", err);
+    }
+  };
+
+  const handleResumeWatching = (item: any) => {
+    let url = `/player/${item.mediaId}`;
+    const params = new URLSearchParams();
+    if (item.episodeId) {
+      params.set('episodeId', String(item.episodeId));
+    }
+    if (item.currentTimeSeconds > 0) {
+      params.set('time', String(item.currentTimeSeconds));
+    }
+    const query = params.toString();
+    if (query) {
+      url += `?${query}`;
+    }
+    navigate(url);
+  };
 
   const fetchMovies = async () => {
     try {
@@ -40,6 +88,14 @@ const MoviesPage: React.FC = () => {
     fetchMovies();
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchContinueWatching();
+    } else {
+      setContinueWatching([]);
+    }
+  }, [user?.id]);
 
   const targetLanguageId = learningLanguage === 'en' ? 2 : (learningLanguage === 'ru' ? 3 : 1);
   let currentMovies = movies.filter(m => m.languageId === targetLanguageId || m.languageId === 1);
@@ -103,6 +159,113 @@ const MoviesPage: React.FC = () => {
         <h1 className="page-title">Kinolar Katalogi</h1>
         <p className="page-subtitle">O'zingizga mos kino va seriallarni toping</p>
       </div>
+
+      {/* Continue Watching Section (Eng yuqorida, ketma-ket 10 tagacha) */}
+      {continueWatching.length > 0 && (
+        <section className="continue-watching-section glass-panel animate-slide-up">
+          <div className="continue-watching-header">
+            <div className="continue-title-group">
+              <span className="continue-eyebrow">DAVOM ETTIRISH</span>
+              <h2 className="continue-main-title">
+                <span className="continue-icon">⏳</span> Oxirgi ko'rilayotgan kinolar
+              </h2>
+            </div>
+            <div className="continue-counter-pill">
+              <span>{continueWatching.length} / 10 ta</span>
+            </div>
+          </div>
+
+          <div className="continue-carousel-container">
+            <div className="continue-track">
+              {continueWatching.map((item: any, index: number) => {
+                const media = item.media || {};
+                const episode = item.episode;
+                const durationSeconds = item.durationSeconds || ((episode?.durationalMinutes || media.durationalMinutes || 0) * 60);
+                const currentSec = item.currentTimeSeconds || 0;
+                const progress = item.progressPercentage ?? (durationSeconds > 0 ? Math.min(100, Math.round((currentSec / durationSeconds) * 100)) : 0);
+                const title = media.title || "Kino";
+                const epLabel = episode ? `${episode.episodeNumber}-qism` : null;
+                const remainingMinutes = Math.max(0, Math.round((durationSeconds - currentSec) / 60));
+
+                return (
+                  <div
+                    key={item.id}
+                    className="continue-movie-card"
+                    onClick={() => handleResumeWatching(item)}
+                    title={`${title} - davom ettirish`}
+                  >
+                    {/* Top Order Badge & Remove Button */}
+                    <div className="continue-card-top-bar">
+                      <span className="continue-order-badge">#{index + 1}</span>
+                      <button
+                        className="continue-remove-btn"
+                        onClick={(e) => handleRemoveHistory(e, item.id)}
+                        title="Tarixdan o'chirish"
+                        aria-label="Tarixdan o'chirish"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Thumbnail Image with Badges & Progress */}
+                    <div className="continue-poster-wrap">
+                      <img
+                        src={episode?.thumbnailUrl || media.thumbnailUrl || "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=400&q=80"}
+                        alt={title}
+                        loading="lazy"
+                      />
+
+                      {/* Type Badge */}
+                      <span className={`continue-type-pill ${media.isFilm ? 'type-film' : 'type-serial'}`}>
+                        {media.isFilm ? 'KINO' : (epLabel || 'SERIAL')}
+                      </span>
+
+                      {/* Level Badge */}
+                      {media.level && (
+                        <span className="continue-level-pill">
+                          {media.level}
+                        </span>
+                      )}
+
+                      {/* Center Play Overlay */}
+                      <div className="continue-play-overlay">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                          <polygon points="6 4 20 12 6 20 6 4" />
+                        </svg>
+                      </div>
+
+                      {/* In-poster Progress Bar at bottom */}
+                      <div className="continue-progress-bg">
+                        <div
+                          className="continue-progress-fill"
+                          style={{ width: `${Math.max(3, progress)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meta info below image */}
+                    <div className="continue-meta-info">
+                      <h4 className="continue-card-title">
+                        {title}
+                        {epLabel && <span className="continue-card-ep"> · {epLabel}</span>}
+                      </h4>
+                      <div className="continue-stats-row">
+                        <span className="continue-timestamp">
+                          {formatSecondsToMMSS(currentSec)} / {durationSeconds > 0 ? formatSecondsToMMSS(durationSeconds) : '--:--'}
+                        </span>
+                        <span className="continue-pct-badge">{progress}%</span>
+                      </div>
+                      <span className="continue-remaining-text">
+                        {remainingMinutes > 0 ? `${remainingMinutes} daq qoldi` : 'Oz qoldi'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="movies-layout">
         {/* Filters Sidebar */}
@@ -202,11 +365,16 @@ const MoviesPage: React.FC = () => {
                 </div>
                 <div className="movie-info">
                   <h4 className="movie-title">{movie.title}</h4>
-                  <span className="movie-genre" style={{ color: 'var(--text-secondary)' }}>
-                    {movie.isFilm
-                      ? (movie.durationalMinutes ? movie.durationalMinutes + ' daqiqa' : '')
-                      : (movie.episodeCount ? movie.episodeCount + ' ta qism' : 'Qismlar')}
-                  </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="movie-genre" style={{ color: 'var(--text-secondary)' }}>
+                      {movie.isFilm
+                        ? (movie.durationalMinutes ? movie.durationalMinutes + ' daqiqa' : '')
+                        : (movie.episodeCount ? movie.episodeCount + ' ta qism' : 'Qismlar')}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      👁 {(movie.viewsCount || 0).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}

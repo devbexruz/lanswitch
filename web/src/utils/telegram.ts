@@ -176,3 +176,39 @@ export function hideTelegramBackButton() {
     console.warn('Telegram BackButton hide error:', e);
   }
 }
+
+/**
+ * Telegram WebApp Safe Area insets (Bot API 8.0+)
+ * contentSafeAreaInset va safeAreaInset ni o'qib :root ga CSS o'zgaruvchilari sifatida yuklaydi
+ */
+export function initTelegramSafeAreas() {
+  if (typeof window === 'undefined') return;
+  const tg = (window as any).Telegram?.WebApp;
+  if (!tg) return;
+
+  const update = () => {
+    try {
+      const cs = tg.contentSafeAreaInset || tg.safeAreaInset;
+      const sa = tg.safeAreaInset;
+      const top = cs?.top ?? sa?.top ?? 0;
+      const bottom = cs?.bottom ?? sa?.bottom ?? 0;
+      const left = cs?.left ?? sa?.left ?? 0;
+      const right = cs?.right ?? sa?.right ?? 0;
+
+      document.documentElement.style.setProperty('--tg-safe-area-top', `${top}px`);
+      document.documentElement.style.setProperty('--tg-safe-area-bottom', `${bottom}px`);
+      document.documentElement.style.setProperty('--tg-safe-area-left', `${left}px`);
+      document.documentElement.style.setProperty('--tg-safe-area-right', `${right}px`);
+    } catch (e) {
+      console.warn('Error reading Telegram safe area insets', e);
+    }
+  };
+
+  update();
+  try {
+    tg.onEvent?.('contentSafeAreaChanged', update);
+    tg.onEvent?.('safeAreaChanged', update);
+    tg.onEvent?.('fullscreenChanged', update);
+    tg.onEvent?.('viewportChanged', update);
+  } catch {}
+}

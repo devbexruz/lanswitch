@@ -36,6 +36,17 @@ namespace Lanswitch.Api.Extensions
                         ALTER TABLE ""CardPaymentSettings"" ADD COLUMN IF NOT EXISTS ""InitialBonusAmount"" numeric NOT NULL DEFAULT 25000;
                         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""HasReceivedInitialBonus"" boolean NOT NULL DEFAULT false;
                         ALTER TABLE ""Users"" ALTER COLUMN ""HasReceivedInitialBonus"" SET DEFAULT false;
+                        ALTER TABLE ""Medias"" ADD COLUMN IF NOT EXISTS ""ViewsCount"" bigint NOT NULL DEFAULT 0;
+                        ALTER TABLE ""CommentLikes"" ADD COLUMN IF NOT EXISTS ""IsDislike"" boolean NOT NULL DEFAULT false;
+
+                        CREATE TABLE IF NOT EXISTS ""MediaLikes"" (
+                            ""Id"" bigserial PRIMARY KEY,
+                            ""MediaId"" bigint NOT NULL,
+                            ""UserId"" bigint NOT NULL,
+                            ""IsDislike"" boolean NOT NULL DEFAULT false,
+                            ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+                        );
 
                         CREATE TABLE IF NOT EXISTS ""TeacherHomeworkContexts"" (
                             ""Id"" bigserial PRIMARY KEY,

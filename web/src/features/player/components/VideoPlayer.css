@@ -1,13 +1,27 @@
+/* =======================================================
+   Custom Video Player Styles (YouTube / Netflix Quality)
+   ======================================================= */
+
+/* Safe Area Variables supporting Browser env() & Telegram Mini App insets */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), var(--tg-safe-area-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-content-safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--tg-safe-area-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tg-content-safe-area-inset-left, 0px), var(--tg-safe-area-inset-left, 0px), var(--tg-safe-area-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tg-content-safe-area-inset-right, 0px), var(--tg-safe-area-inset-right, 0px), var(--tg-safe-area-right, 0px));
+}
+
 .custom-video-container {
     position: relative;
     width: 100%;
     height: 100%;
-    background: #1c264a;
+    background: #000;
     overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
     border-radius: 12px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .custom-video-container.fullscreen {
@@ -19,27 +33,208 @@
     bottom: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
+    height: 100dvh !important;
     max-height: 100vh !important;
+    max-height: 100dvh !important;
     z-index: 99999 !important;
     background: #000 !important;
     margin: 0 !important;
+}
+
+/* Fullscreen Top Bar with Safe Area and Telegram Clearance */
+.fullscreen-top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: max(14px, var(--safe-top));
+    padding-bottom: 12px;
+    padding-left: max(16px, var(--safe-left));
+    padding-right: max(16px, var(--safe-right));
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0) 100%);
+    z-index: 12;
+    pointer-events: auto;
+}
+
+.fullscreen-top-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s;
+}
+
+.fullscreen-top-back-btn:hover {
+    background: rgba(255, 255, 255, 0.32);
+    transform: scale(1.02);
+}
+
+.fullscreen-top-back-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.fullscreen-top-title {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    max-width: 55%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+    text-align: center;
+}
+
+/* Telegram Native Header clearance spacer (Clearance for Telegram's top-right X and ... buttons) */
+.fullscreen-tg-spacer {
+    width: 80px;
+    height: 32px;
+    flex-shrink: 0;
 }
 
 .video-element {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    background: #000;
 }
 
+/* --- Dedicated Gesture Layer for Tap & Double-Tap --- */
+.video-gesture-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    cursor: pointer;
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* --- YouTube-Style Double-Tap Seek Ripples --- */
+.seek-ripple-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 42%;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 75%);
+    animation: ripplePulse 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.seek-ripple-left {
+    left: 0;
+    border-radius: 0 100% 100% 0 / 0 50% 50% 0;
+}
+
+.seek-ripple-right {
+    right: 0;
+    border-radius: 100% 0 0 100% / 50% 0 0 50%;
+}
+
+.seek-ripple-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: #ffffff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    transform: scale(0.9);
+    animation: seekScale 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.seek-arrows {
+    font-size: 26px;
+    letter-spacing: -2px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.seek-amount-text {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 3px 10px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@keyframes ripplePulse {
+    0% { opacity: 0; }
+    30% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+@keyframes seekScale {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+/* --- Center Play / Pause Indicator Pulse --- */
+.center-pulse-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    z-index: 18;
+    pointer-events: none;
+}
+
+.center-pulse-indicator svg {
+    width: 36px;
+    height: 36px;
+}
+
+.animate-pulse-fade {
+    animation: centerPulseAnim 0.6s ease forwards;
+}
+
+@keyframes centerPulseAnim {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+
+/* --- Controls Overlay --- */
 .video-controls {
     position: absolute;
     inset: 0;
+    z-index: 10;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     opacity: 1;
-    transition: opacity 0.3s ease;
-    background: rgba(0, 0, 0, 0.2);
+    pointer-events: none; /* Allows gestures to pass through background gaps */
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.2) 45%, rgba(0, 0, 0, 0) 100%);
 }
 
 .hide-controls .video-controls {
@@ -47,86 +242,303 @@
     pointer-events: none;
 }
 
-.center-controls {
+/* Re-enable pointer events for interactive buttons & sliders */
+.video-controls button,
+.video-controls input,
+.video-controls .progress-container,
+.video-controls .speed-menu-popover {
+    pointer-events: auto;
+}
+
+/* --- Single Center Play Action (Only when Paused) --- */
+.center-pause-action {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     display: flex;
     align-items: center;
-    gap: 40px;
+    justify-content: center;
+    pointer-events: auto;
+    z-index: 14;
+    animation: centerFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.center-btn {
-    background: none;
-    border: 2px solid white;
+@keyframes centerFadeIn {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.center-single-play-btn {
+    width: 76px;
+    height: 76px;
     border-radius: 50%;
-    color: white;
-    width: 50px;
-    height: 50px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 2.5px solid rgba(255, 255, 255, 0.9);
+    color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 24px rgba(37, 99, 235, 0.3);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, box-shadow 0.2s ease;
 }
-.center-btn.play-btn {
-    width: 64px;
-    height: 64px;
+
+.center-single-play-btn svg {
+    width: 40px;
+    height: 40px;
+    margin-left: 4px;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
+.center-single-play-btn:hover {
+    transform: scale(1.12);
+    background: rgba(37, 99, 235, 0.88);
+    border-color: #ffffff;
+    box-shadow: 0 10px 40px rgba(37, 99, 235, 0.6), 0 0 30px rgba(255, 255, 255, 0.4);
+}
+
+.center-single-play-btn:active {
+    transform: scale(0.92);
+}
+
+/* Bottom Bar Play / Pause Button */
+.bottom-play-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
     border: none;
-}
-.center-btn.play-btn svg {
-    width: 48px;
-    height: 48px;
-}
-.center-btn.skip-btn svg {
-    width: 32px;
-    height: 32px;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.15s;
+    padding: 0;
 }
 
-.center-btn:hover {
-    transform: scale(1.1);
-    background: rgba(255, 255, 255, 0.2);
+.bottom-play-btn svg {
+    width: 24px;
+    height: 24px;
 }
 
+.bottom-play-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    transform: scale(1.08);
+}
+
+.bottom-play-btn:active {
+    transform: scale(0.92);
+}
+
+/* --- Controls Bottom Bar --- */
 .controls-bottom {
     display: flex;
     flex-direction: column;
-    padding: 20px 30px;
-    gap: 10px;
+    padding: 14px 24px 20px 24px;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.custom-video-container.fullscreen .controls-bottom {
+    padding-bottom: max(18px, var(--safe-bottom));
+    padding-left: max(24px, var(--safe-left));
+    padding-right: max(24px, var(--safe-right));
 }
 
 .bottom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+}
+
+.bottom-left-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.time-display {
+    color: #f8fafc;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+/* --- Volume & Mute Control --- */
+.volume-control-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.volume-btn {
+    background: none;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.volume-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.volume-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.volume-slider {
+    width: 64px;
+    height: 4px !important;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    transition: width 0.2s;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+    background: #ffffff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+@media (max-width: 640px) {
+    .volume-slider {
+        display: none; /* Hide volume slider on mobile, use hardware keys */
+    }
+}
+
+/* --- Bottom Right Actions --- */
+.bottom-right-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .control-btn {
     background: none;
     border: none;
-    color: white;
+    color: #ffffff;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .control-btn:hover {
-    transform: scale(1.1);
+    transform: scale(1.08);
 }
 
 .control-btn svg {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
 }
 
-.analysis-btn {
-    background: rgba(255, 255, 255, 0.2);
+/* Speed Dropdown */
+.speed-dropdown-wrapper {
+    position: relative;
+}
+
+.speed-toggle-btn {
+    background: rgba(255, 255, 255, 0.14);
     border-radius: 8px;
-    padding: 6px 14px;
-    height: 44px;
+    padding: 4px 10px;
+    height: 38px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.speed-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: none;
+}
+
+.speed-menu-popover {
+    position: absolute;
+    bottom: 46px;
+    right: 0;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    min-width: 100px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    z-index: 50;
+}
+
+.speed-menu-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 4px;
+}
+
+.speed-option-btn {
+    background: transparent;
+    border: none;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.speed-option-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.speed-option-btn.is-selected {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.15);
+}
+
+.speed-check {
+    font-size: 11px;
+    font-weight: 900;
+}
+
+/* Analysis Button */
+.analysis-btn {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    padding: 6px 12px;
+    height: 38px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -145,16 +557,17 @@
 }
 
 .analysis-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
 }
 
+/* AI Chat Button */
 .ai-chat-btn {
-    background: linear-gradient(135deg, rgba(79, 70, 229, 0.4), rgba(37, 99, 235, 0.5));
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.5), rgba(37, 99, 235, 0.6));
     border: 1px solid rgba(147, 197, 253, 0.4);
     border-radius: 8px;
     padding: 6px 12px;
-    height: 44px;
+    height: 38px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -175,80 +588,247 @@
 }
 
 .ai-btn-sparkle {
-    font-size: 15px;
+    font-size: 14px;
 }
 
-@media (max-width: 540px) {
-    .ai-chat-btn .btn-label-text {
-        display: none;
-    }
-    .ai-chat-btn {
-        padding: 6px 10px;
-        width: 44px;
-        justify-content: center;
-    }
-}
-
+/* Fullscreen Button */
 .fullscreen-btn {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.16);
     border-radius: 8px;
-    padding: 8px;
-    width: 44px;
-    height: 44px;
+    padding: 6px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
 }
 
 .fullscreen-btn:hover {
-    background: rgba(255, 255, 255, 0.4);
-    transform: none; /* Prevents scaling that causes scrollbar loops/screen shaking */
+    background: rgba(255, 255, 255, 0.35);
+    transform: none;
 }
 
 .fullscreen-btn svg {
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
 }
 
-.time-display {
-    color: white;
-    font-size: 14px;
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
+/* --- Central Loading & Buffering Spinner Ring --- */
+.video-loading-spinner-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 17;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Custom Sliders */
-input[type=range] {
-    -webkit-appearance: none;
-    appearance: none;
-    background: rgba(255,255,255,0.3);
-    border-radius: 4px;
-    height: 6px;
-    outline: none;
-    cursor: pointer;
-}
-
-input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
-    background: white;
+.video-spinner-ring {
+    width: 58px;
+    height: 58px;
+    border: 4px solid rgba(255, 255, 255, 0.22);
+    border-top-color: #3b82f6;
+    border-left-color: #3b82f6;
     border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.1s;
+    animation: videoSpin 0.75s linear infinite;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
-input[type=range]::-webkit-slider-thumb:hover {
-    transform: scale(1.3);
+@keyframes videoSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
+@media (max-width: 640px) {
+    .video-spinner-ring {
+        width: 48px;
+        height: 48px;
+        border-width: 3.5px;
+    }
+}
+
+/* Custom Progress Range Slider with Buffered Track */
 .progress-container {
     width: 100%;
     display: flex;
     align-items: center;
-    height: 20px;
+    justify-content: center;
+    height: 24px;
+    position: relative;
+    cursor: pointer;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.progress-track-bg {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+    overflow: hidden;
+    pointer-events: none;
+    transition: height 0.15s ease;
+}
+
+.progress-container:hover .progress-track-bg {
+    height: 8px;
+}
+
+.progress-buffered-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 6px;
+    transition: width 0.2s linear;
+}
+
+.progress-played-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: #3b82f6;
+    border-radius: 6px;
 }
 
 .progress-slider {
+    position: relative;
+    z-index: 2;
     width: 100%;
-    background-image: linear-gradient(#4C75FF, #4C75FF); /* Blue progress */
-    background-repeat: no-repeat;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent !important;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    outline: none;
+    cursor: pointer;
+    display: block;
+}
+
+.progress-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 24px;
+    background: transparent !important;
+    border: none;
+}
+
+.progress-slider::-moz-range-track {
+    width: 100%;
+    height: 24px;
+    background: transparent !important;
+    border: none;
+}
+
+.progress-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    margin-top: 5px; /* (24px runnable track - 14px thumb) / 2 = 5px: mathematically vertical center */
+}
+
+.progress-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.progress-container:hover .progress-slider::-webkit-slider-thumb {
+    transform: scale(1.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
+.progress-container:hover .progress-slider::-moz-range-thumb {
+    transform: scale(1.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
+/* --- Isolated Custom Overlays Layer --- */
+.video-custom-overlays {
+    position: absolute;
+    inset: 0;
+    pointer-events: none; /* Pointer events pass through empty space */
+    z-index: 20;
+}
+
+.video-custom-overlays .video-subtitle-overlay {
+    pointer-events: none !important;
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    will-change: transform;
+}
+
+.video-custom-overlays .subtitle-stack,
+.video-custom-overlays .player-fullscreen-drawer,
+.video-custom-overlays .player-drawer-backdrop,
+.video-custom-overlays .player-translation-tooltip {
+    pointer-events: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .controls-bottom {
+        padding: 10px 14px 14px 14px;
+    }
+
+    .center-single-play-btn {
+        width: 62px;
+        height: 62px;
+    }
+
+    .center-single-play-btn svg {
+        width: 32px;
+        height: 32px;
+        margin-left: 3px;
+    }
+
+    .bottom-play-btn {
+        width: 30px;
+        height: 30px;
+    }
+
+    .bottom-play-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .btn-label-text {
+        display: none;
+    }
+
+    .analysis-btn,
+    .ai-chat-btn {
+        padding: 6px 8px;
+        width: 36px;
+        height: 36px;
+        justify-content: center;
+    }
+
+    .speed-toggle-btn {
+        height: 36px;
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+
+    .fullscreen-btn {
+        width: 36px;
+        height: 36px;
+    }
 }

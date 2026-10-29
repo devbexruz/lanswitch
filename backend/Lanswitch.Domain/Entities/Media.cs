@@ -12,6 +12,7 @@ public class Media : BaseEntity
     public string ThumbnailUrl { get; set; } = null!;
     public int? DurationalMinutes { get; set; }
     public bool IsFilm { get; set; }
+    public long ViewsCount { get; set; } = 0;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Language? Language { get; set; }

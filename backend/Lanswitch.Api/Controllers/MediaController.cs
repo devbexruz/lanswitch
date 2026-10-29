@@ -43,6 +43,7 @@ public class MediaController : ControllerBase
                 m.ThumbnailUrl,
                 m.DurationalMinutes,
                 m.IsFilm,
+                m.ViewsCount,
                 EpisodeCount = m.Episodes.Count()
             })
             .ToListAsync();
@@ -211,6 +212,15 @@ public class MediaController : ControllerBase
             .FirstOrDefaultAsync(m => m.Id == id);
             
         if (media == null) return NotFound();
+
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        long.TryParse(userIdString, out var currentUserId);
+
+        var likesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && !ml.IsDislike);
+        var dislikesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && ml.IsDislike);
+        var userLike = currentUserId > 0 
+            ? await context.MediaLikes.FirstOrDefaultAsync(ml => ml.MediaId == id && ml.UserId == currentUserId)
+            : null;
         
         // For TV series, return ordered episodes directly as a convenience
         var episodes = media.Episodes.OrderBy(e => e.EpisodeNumber).ToList();
@@ -223,6 +233,11 @@ public class MediaController : ControllerBase
             media.ThumbnailUrl,
             media.IsFilm,
             media.DurationalMinutes,
+            media.ViewsCount,
+            LikesCount = likesCount,
+            DislikesCount = dislikesCount,
+            UserHasLiked = userLike != null && !userLike.IsDislike,
+            UserHasDisliked = userLike != null && userLike.IsDislike,
             CategoryIds = media.Categories.Select(c => c.Id).ToList(),
             Episodes = episodes.Select(e => new {
                 e.Id,
@@ -234,5 +249,115 @@ public class MediaController : ControllerBase
         };
         
         return Ok(result);
+    }
+
+    [HttpPost("{id}/like")]
+    public async Task<IActionResult> ToggleLike(long id, [FromServices] AppDbContext context)
+    {
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!long.TryParse(userIdString, out var userId) || userId <= 0)
+        {
+            return Unauthorized(new { message = "Faqat tizimga kirgan foydalanuvchilar like bosa oladi." });
+        }
+
+        var media = await context.Medias.FindAsync(id);
+        if (media == null) return NotFound();
+
+        var existing = await context.MediaLikes.FirstOrDefaultAsync(ml => ml.MediaId == id && ml.UserId == userId);
+        if (existing == null)
+        {
+            context.MediaLikes.Add(new MediaLike { MediaId = id, UserId = userId, IsDislike = false });
+        }
+        else if (existing.IsDislike)
+        {
+            existing.IsDislike = false;
+        }
+        else
+        {
+            context.MediaLikes.Remove(existing);
+        }
+
+        await context.SaveChangesAsync();
+
+        var likesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && !ml.IsDislike);
+        var dislikesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && ml.IsDislike);
+        var current = await context.MediaLikes.FirstOrDefaultAsync(ml => ml.MediaId == id && ml.UserId == userId);
+
+        return Ok(new {
+            likesCount,
+            dislikesCount,
+            userHasLiked = current != null && !current.IsDislike,
+            userHasDisliked = current != null && current.IsDislike
+        });
+    }
+
+    [HttpPost("{id}/dislike")]
+    public async Task<IActionResult> ToggleDislike(long id, [FromServices] AppDbContext context)
+    {
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!long.TryParse(userIdString, out var userId) || userId <= 0)
+        {
+            return Unauthorized(new { message = "Faqat tizimga kirgan foydalanuvchilar dislike bosa oladi." });
+        }
+
+        var media = await context.Medias.FindAsync(id);
+        if (media == null) return NotFound();
+
+        var existing = await context.MediaLikes.FirstOrDefaultAsync(ml => ml.MediaId == id && ml.UserId == userId);
+        if (existing == null)
+        {
+            context.MediaLikes.Add(new MediaLike { MediaId = id, UserId = userId, IsDislike = true });
+        }
+        else if (!existing.IsDislike)
+        {
+            existing.IsDislike = true;
+        }
+        else
+        {
+            context.MediaLikes.Remove(existing);
+        }
+
+        await context.SaveChangesAsync();
+
+        var likesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && !ml.IsDislike);
+        var dislikesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && ml.IsDislike);
+        var current = await context.MediaLikes.FirstOrDefaultAsync(ml => ml.MediaId == id && ml.UserId == userId);
+
+        return Ok(new {
+            likesCount,
+            dislikesCount,
+            userHasLiked = current != null && !current.IsDislike,
+            userHasDisliked = current != null && current.IsDislike
+        });
+    }
+
+    [HttpGet("{id}/reactions")]
+    public async Task<IActionResult> GetReactions(long id, [FromServices] AppDbContext context)
+    {
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        long.TryParse(userIdString, out var userId);
+
+        var likesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && !ml.IsDislike);
+        var dislikesCount = await context.MediaLikes.CountAsync(ml => ml.MediaId == id && ml.IsDislike);
+        var current = userId > 0 ? await context.MediaLikes.FirstOrDefaultAsync(ml => ml.MediaId == id && ml.UserId == userId) : null;
+
+        return Ok(new {
+            likesCount,
+            dislikesCount,
+            userHasLiked = current != null && !current.IsDislike,
+            userHasDisliked = current != null && current.IsDislike
+        });
+    }
+
+    [HttpPost("{id}/view")]
+    public async Task<IActionResult> IncrementViewCount(long id, [FromServices] AppDbContext context)
+    {
+        var media = await context.Medias.FindAsync(id);
+        if (media == null) return NotFound();
+
+        media.ViewsCount += 1;
+        await context.SaveChangesAsync();
+
+        return Ok(new { viewsCount = media.ViewsCount });
     }
 }

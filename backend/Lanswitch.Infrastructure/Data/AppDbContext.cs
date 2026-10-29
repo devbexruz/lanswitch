@@ -25,6 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<SubtitleWord> SubtitleWords { get; set; }
     public DbSet<Comment> Comments { get; set; }
     public DbSet<CommentLike> CommentLikes { get; set; }
+    public DbSet<MediaLike> MediaLikes { get; set; }
     public DbSet<WatchHistory> WatchHistories { get; set; }
     public DbSet<AppNotification> AppNotifications { get; set; }
     public DbSet<EpisodeChatMessage> EpisodeChatMessages { get; set; }

@@ -5,7 +5,7 @@ import VideoPlayer from '../features/player/components/VideoPlayer';
 import CommentsSection from '../features/player/components/CommentsSection';
 import { parseTimeSpanToSeconds, formatSecondsToMMSS } from '../utils/timeUtils';
 import { useAuth } from '../context/AuthContext';
-import { showTelegramBackButton, hideTelegramBackButton } from '../utils/telegram';
+import { showTelegramBackButton, hideTelegramBackButton, initTelegramSafeAreas } from '../utils/telegram';
 import ReactMarkdown from 'react-markdown';
 import './PlayerPage.css';
 import SubscriptionPlansModal from '../components/SubscriptionPlansModal';
@@ -28,6 +28,11 @@ interface Media {
   level?: string;
   durationalMinutes?: number;
   thumbnailUrl?: string;
+  viewsCount?: number;
+  likesCount?: number;
+  dislikesCount?: number;
+  userHasLiked?: boolean;
+  userHasDisliked?: boolean;
   episodes?: Episode[];
 }
 
@@ -75,11 +80,20 @@ const PlayerPage: React.FC = () => {
 
   const [currentEpisodeId, setCurrentEpisodeId] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
+  const [resumeTime, setResumeTime] = useState<number | undefined>(undefined);
+
+  // Video reactions state (Like, Dislike, Share)
+  const [mediaLikesCount, setMediaLikesCount] = useState<number>(0);
+  const [mediaDislikesCount, setMediaDislikesCount] = useState<number>(0);
+  const [userHasLikedMedia, setUserHasLikedMedia] = useState<boolean>(false);
+  const [userHasDislikedMedia, setUserHasDislikedMedia] = useState<boolean>(false);
+  const [copiedShare, setCopiedShare] = useState<boolean>(false);
 
   // Subtitle selection & Drawer states
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isFullscreenDrawerOpen, setIsFullscreenDrawerOpen] = useState(false);
+  const wasFullscreenBeforeAiModalRef = useRef<boolean>(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
 
   // AI Tutor Modal & Streaming Chat state
@@ -140,27 +154,13 @@ const PlayerPage: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
+    initTelegramSafeAreas();
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // Telegram Native BackButton handling
-  useEffect(() => {
-    showTelegramBackButton(() => {
-      if (window.history.length > 1) {
-        navigate(-1);
-      } else {
-        navigate('/student');
-      }
-    });
-
-    return () => {
-      hideTelegramBackButton();
-    };
-  }, [navigate]);
 
   // Translation Tooltip state
   const [contextMenu, setContextMenu] = useState<{
@@ -177,20 +177,43 @@ const PlayerPage: React.FC = () => {
   const isUserBrowsingSubsRef = useRef<boolean>(false);
   const browsingTimeoutRef = useRef<any>(null);
   const activeSubScrollRef = useRef<HTMLDivElement>(null);
+  const hasIncrementedViewRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const mediaRes = await fetch(`/api/media/${mediaId}`);
+        const token = localStorage.getItem('token');
+        const mediaRes = await fetch(`/api/media/${mediaId}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (mediaRes.ok) {
           const found = await mediaRes.json();
           setMedia(found);
+          if (found.likesCount !== undefined) setMediaLikesCount(found.likesCount);
+          if (found.dislikesCount !== undefined) setMediaDislikesCount(found.dislikesCount);
+          if (found.userHasLiked !== undefined) setUserHasLikedMedia(found.userHasLiked);
+          if (found.userHasDisliked !== undefined) setUserHasDislikedMedia(found.userHasDisliked);
+
+          // Track view count (once per media load)
+          if (hasIncrementedViewRef.current !== Number(mediaId)) {
+            hasIncrementedViewRef.current = Number(mediaId);
+            fetch(`/api/media/${mediaId}/view`, { method: 'POST' })
+              .then(res => res.json())
+              .then(data => {
+                if (data?.viewsCount !== undefined) {
+                  setMedia(prev => prev ? { ...prev, viewsCount: data.viewsCount } : prev);
+                }
+              })
+              .catch(err => console.error("Error updating view count", err));
+          }
 
           let targetEpisodeId: number | null = null;
+          const params = new URLSearchParams(location.search);
+          const timeParam = params.get('time');
+          let initialSeekTime: number | undefined = timeParam && !isNaN(Number(timeParam)) ? Number(timeParam) : undefined;
 
           if (!found.isFilm) {
-            const params = new URLSearchParams(location.search);
             const epParam = params.get('episodeId');
             if (epParam) {
               targetEpisodeId = Number(epParam);
@@ -198,13 +221,22 @@ const PlayerPage: React.FC = () => {
               targetEpisodeId = found.episodes[0].id;
 
               if (user) {
-                const histRes = await fetch(`/api/watchhistory/continue-watching/${user.id}`);
-                if (histRes.ok) {
-                  const hist = await histRes.json();
-                  const mediaHist = hist.find((h: any) => h.mediaId === found.id);
-                  if (mediaHist && mediaHist.episodeId) {
-                    targetEpisodeId = mediaHist.episodeId;
+                try {
+                  const histRes = await fetch(`/api/watchhistory/continue-watching/${user.id}`);
+                  if (histRes.ok) {
+                    const hist = await histRes.json();
+                    const mediaHist = hist.find((h: any) => h.mediaId === found.id);
+                    if (mediaHist) {
+                      if (mediaHist.episodeId) {
+                        targetEpisodeId = mediaHist.episodeId;
+                      }
+                      if (initialSeekTime === undefined && mediaHist.currentTimeSeconds > 0) {
+                        initialSeekTime = mediaHist.currentTimeSeconds;
+                      }
+                    }
                   }
+                } catch (e) {
+                  console.warn("Could not fetch watch history:", e);
                 }
               }
             }
@@ -216,6 +248,24 @@ const PlayerPage: React.FC = () => {
             }
           } else {
             setVideoUrl(found.videoUrl || '');
+            if (initialSeekTime === undefined && user) {
+              try {
+                const histRes = await fetch(`/api/watchhistory/continue-watching/${user.id}`);
+                if (histRes.ok) {
+                  const hist = await histRes.json();
+                  const mediaHist = hist.find((h: any) => h.mediaId === found.id);
+                  if (mediaHist && mediaHist.currentTimeSeconds > 0) {
+                    initialSeekTime = mediaHist.currentTimeSeconds;
+                  }
+                }
+              } catch (e) {
+                console.warn("Could not fetch film watch history:", e);
+              }
+            }
+          }
+
+          if (initialSeekTime !== undefined && initialSeekTime > 0) {
+            setResumeTime(initialSeekTime);
           }
 
           // Fetch Subtitles with Gaps and Words
@@ -329,6 +379,83 @@ const PlayerPage: React.FC = () => {
     }
   };
 
+  const currentTimeRef = useRef<number>(0);
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    return () => {
+      if (currentTimeRef.current > 5 && mediaId) {
+        sendHeartbeat(currentTimeRef.current, false);
+      }
+    };
+  }, [mediaId, currentEpisodeId]);
+
+  const handleMediaReaction = async (type: 'like' | 'dislike') => {
+    if (!media) return;
+    if (!user) {
+      alert("Like yoki Dislike bosish uchun tizimga kiring.");
+      return;
+    }
+
+    // Optimistic UI updates
+    if (type === 'like') {
+      if (userHasLikedMedia) {
+        setUserHasLikedMedia(false);
+        setMediaLikesCount(prev => Math.max(0, prev - 1));
+      } else {
+        setUserHasLikedMedia(true);
+        setMediaLikesCount(prev => prev + 1);
+        if (userHasDislikedMedia) {
+          setUserHasDislikedMedia(false);
+          setMediaDislikesCount(prev => Math.max(0, prev - 1));
+        }
+      }
+    } else {
+      if (userHasDislikedMedia) {
+        setUserHasDislikedMedia(false);
+        setMediaDislikesCount(prev => Math.max(0, prev - 1));
+      } else {
+        setUserHasDislikedMedia(true);
+        setMediaDislikesCount(prev => prev + 1);
+        if (userHasLikedMedia) {
+          setUserHasLikedMedia(false);
+          setMediaLikesCount(prev => Math.max(0, prev - 1));
+        }
+      }
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/media/${media.id}/${type}`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMediaLikesCount(data.likesCount);
+        setMediaDislikesCount(data.dislikesCount);
+        setUserHasLikedMedia(data.userHasLiked);
+        setUserHasDislikedMedia(data.userHasDisliked);
+      }
+    } catch (err) {
+      console.error("Error updating media reaction:", err);
+    }
+  };
+
+  const handleShareMedia = () => {
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(window.location.href);
+      }
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2200);
+    } catch (e) {
+      console.warn("Could not copy link:", e);
+    }
+  };
+
   const handleWordClick = async (e: React.MouseEvent, word: string) => {
     e.stopPropagation();
     e.preventDefault();
@@ -406,9 +533,6 @@ const PlayerPage: React.FC = () => {
 
   const handleSubtitleOverlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isFullscreen) {
-      setIsFullscreenDrawerOpen(prev => !prev);
-    }
   };
 
   const currentSub = subtitles[selectedSubtitleIndex] || (subtitles.length > 0 ? subtitles[0] : null);
@@ -442,6 +566,10 @@ const PlayerPage: React.FC = () => {
   useEffect(() => {
     const updateMountNode = () => {
       if (typeof document === 'undefined') return;
+      if (wasFullscreenBeforeAiModalRef.current || (isMobile && showAiTutorModal)) {
+        setModalMountNode(document.body);
+        return;
+      }
       const fsEl = 
         document.fullscreenElement || 
         (document as any).webkitFullscreenElement || 
@@ -459,7 +587,7 @@ const PlayerPage: React.FC = () => {
       document.removeEventListener('webkitfullscreenchange', updateMountNode);
       window.removeEventListener('resize', updateMountNode);
     };
-  }, [isFullscreen, showAiTutorModal]);
+  }, [isFullscreen, showAiTutorModal, isMobile]);
 
   // Open AI Tutor Modal & automatically pause video
   const handleOpenAiTutorModal = (targetSubtitleIndex?: number | React.MouseEvent) => {
@@ -470,14 +598,26 @@ const PlayerPage: React.FC = () => {
     const video = document.querySelector('video');
     if (video) video.pause();
 
-    const fsEl = 
-      (typeof document !== 'undefined' && (
-        document.fullscreenElement || 
-        (document as any).webkitFullscreenElement || 
-        document.querySelector('.custom-video-container.fullscreen')
-      )) || 
-      (typeof document !== 'undefined' ? document.body : null);
-    setModalMountNode(fsEl);
+    const isMobileDevice = isMobile || (typeof window !== 'undefined' && window.innerWidth <= 768);
+
+    if (isMobileDevice && isFullscreen) {
+      wasFullscreenBeforeAiModalRef.current = true;
+      // Exit fullscreen so mobile switches to normal mode with standard header
+      window.dispatchEvent(new CustomEvent('exit-fullscreen'));
+      setIsFullscreen(false);
+      setModalMountNode(document.body);
+    } else {
+      wasFullscreenBeforeAiModalRef.current = false;
+      const fsEl = 
+        (typeof document !== 'undefined' && (
+          document.fullscreenElement || 
+          (document as any).webkitFullscreenElement || 
+          document.querySelector('.custom-video-container.fullscreen')
+        )) || 
+        (typeof document !== 'undefined' ? document.body : null);
+      setModalMountNode(fsEl);
+    }
+
     setShowAiTutorModal(true);
   };
 
@@ -489,7 +629,54 @@ const PlayerPage: React.FC = () => {
     }
     setIsStreaming(false);
     setStreamingAiText(null);
+
+    // If cinema was in fullscreen before opening on mobile, restore fullscreen when closing modal
+    if (wasFullscreenBeforeAiModalRef.current) {
+      wasFullscreenBeforeAiModalRef.current = false;
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('enter-fullscreen'));
+      }, 60);
+    }
   };
+
+  // Telegram Native BackButton handling (prioritizing modal -> drawer -> fullscreen -> navigate back)
+  useEffect(() => {
+    const handleTelegramBack = () => {
+      if (showAiTutorModal) {
+        handleCloseAiTutorModal();
+        return;
+      }
+      if (isFullscreenDrawerOpen) {
+        setIsFullscreenDrawerOpen(false);
+        return;
+      }
+      if (isFullscreen) {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else if ((document as any).webkitFullscreenElement) {
+          (document as any).webkitExitFullscreen().catch(() => {});
+        }
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg && typeof tg.exitFullscreen === 'function') {
+          try { tg.exitFullscreen(); } catch (e) {}
+        }
+        setIsFullscreen(false);
+        return;
+      }
+
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/student');
+      }
+    };
+
+    showTelegramBackButton(handleTelegramBack);
+
+    return () => {
+      hideTelegramBackButton();
+    };
+  }, [showAiTutorModal, isFullscreenDrawerOpen, isFullscreen, navigate]);
 
   // Close modal on Escape key
   useEffect(() => {
@@ -921,6 +1108,9 @@ const PlayerPage: React.FC = () => {
           {media.level && (
             <span className="player-level-badge">{media.level}</span>
           )}
+          <span className="player-views-badge" title="Ko'rishlar soni">
+            👁 {(media.viewsCount || 0).toLocaleString()} ko'rishlar
+          </span>
         </div>
       </header>
 
@@ -1028,6 +1218,8 @@ const PlayerPage: React.FC = () => {
             <VideoPlayer
               src={videoUrl}
               poster={media.thumbnailUrl}
+              title={!media.isFilm && currentEpisode ? `${media.title} (${currentEpisode.episodeNumber}-qism)` : media.title}
+              initialTime={resumeTime}
               onTimeUpdate={handleTimeUpdate}
               onDurationChange={setDuration}
               onToggleAnalysis={() => setIsFullscreenDrawerOpen(prev => !prev)}
@@ -1113,6 +1305,89 @@ const PlayerPage: React.FC = () => {
             </VideoPlayer>
           </div>
 
+          {/* Video Info, Views Count, Like/Dislike Action Bar (Directly below Video) */}
+          <div className="player-video-meta-bar">
+            <div className="video-meta-top">
+              <h1 className="video-main-title">
+                {!media.isFilm && currentEpisode 
+                  ? `${media.title} · ${currentEpisode.episodeNumber}-qism: ${currentEpisode.title}`
+                  : media.title}
+              </h1>
+            </div>
+
+            <div className="video-meta-bottom-row">
+              {/* Left: Views, Badges */}
+              <div className="video-stats-group">
+                <span className="video-views-badge" title="Ko'rishlar soni">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="views-eye-icon">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  <strong>{(media.viewsCount || 0).toLocaleString()}</strong> ko'rishlar
+                </span>
+
+                <span className={`video-type-pill ${media.isFilm ? 'pill-film' : 'pill-serial'}`}>
+                  {media.isFilm ? 'Film' : 'Serial'}
+                </span>
+
+                {media.level && (
+                  <span className="video-level-pill">
+                    {media.level}
+                  </span>
+                )}
+
+                {media.durationalMinutes && media.durationalMinutes > 0 && (
+                  <span className="video-duration-pill">
+                    ⏱ {media.durationalMinutes} daq
+                  </span>
+                )}
+              </div>
+
+              {/* Right: Like, Dislike, Share Buttons */}
+              <div className="video-actions-group">
+                <button
+                  type="button"
+                  className={`video-action-pill ${userHasLikedMedia ? 'is-active-like' : ''}`}
+                  onClick={() => handleMediaReaction('like')}
+                  title="Videoga Like bosish"
+                >
+                  <svg viewBox="0 0 24 24" fill={userHasLikedMedia ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                  <span>{mediaLikesCount > 0 ? mediaLikesCount.toLocaleString() : 'Like'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`video-action-pill ${userHasDislikedMedia ? 'is-active-dislike' : ''}`}
+                  onClick={() => handleMediaReaction('dislike')}
+                  title="Videoga Dislike bosish"
+                >
+                  <svg viewBox="0 0 24 24" fill={userHasDislikedMedia ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                  {mediaDislikesCount > 0 && <span>{mediaDislikesCount.toLocaleString()}</span>}
+                </button>
+
+                <button
+                  type="button"
+                  className="video-action-pill share-pill"
+                  onClick={handleShareMedia}
+                  title="Havoladan nusxa olish"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                  <span>{copiedShare ? "Nusxalandi! ✓" : "Ulashish"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Episodes List (Right below Video on both mobile and desktop if multiple episodes exist) */}
           {!media.isFilm && media.episodes && media.episodes.length > 1 && (
             <div className="player-episodes-panel">
@@ -1195,6 +1470,9 @@ const PlayerPage: React.FC = () => {
                 {media.durationalMinutes && media.durationalMinutes > 0 && (
                   <span className="badge-duration">{media.durationalMinutes} daqiqa</span>
                 )}
+                <span className="badge-views">
+                  👁 {(media.viewsCount || 0).toLocaleString()} ko'rishlar
+                </span>
               </div>
             </div>
             <p className="details-description-text">{media.description || "Ushbu film uchun batafsil tavsif kiritilmagan."}</p>

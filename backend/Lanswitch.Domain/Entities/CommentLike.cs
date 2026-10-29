@@ -4,6 +4,7 @@ public class CommentLike : BaseEntity
 {
     public long CommentId { get; set; }
     public long UserId { get; set; }
+    public bool IsDislike { get; set; } = false;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual Comment? Comment { get; set; }
