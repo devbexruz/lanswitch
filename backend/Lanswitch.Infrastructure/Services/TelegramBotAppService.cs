@@ -2276,6 +2276,57 @@ public class TelegramBotAppService : ITelegramBotAppService
 
             if (string.IsNullOrWhiteSpace(rawContent)) return;
 
+            // Replied (iqtibos qilingan) xabarni aniqlash va olish
+            string? repliedContext = null;
+            if (message.ReplyToMessage != null)
+            {
+                var quotedText = message.ReplyToMessage.Text ?? message.ReplyToMessage.Caption;
+                var quotedSender = message.ReplyToMessage.From?.FirstName ?? "Guruh a'zosi";
+
+                if (string.IsNullOrWhiteSpace(quotedText) && (message.ReplyToMessage.Voice != null || message.ReplyToMessage.Audio != null))
+                {
+                    var rAudioId = message.ReplyToMessage.Voice?.FileId ?? message.ReplyToMessage.Audio?.FileId;
+                    if (!string.IsNullOrEmpty(rAudioId))
+                    {
+                        try
+                        {
+                            var rFile = await _botClient.GetFile(rAudioId);
+                            var botToken = _configuration["BotConfiguration:BotToken"];
+                            var rUrl = $"https://api.telegram.org/file/bot{botToken}/{rFile.FilePath}";
+                            using var httpClient = new System.Net.Http.HttpClient();
+                            var rBytes = await httpClient.GetByteArrayAsync(rUrl);
+                            quotedText = await gemini.TranscribeVoiceAudioAsync(rBytes, "audio/ogg");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Transcribe replied voice error: {ex.Message}");
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(quotedText))
+                {
+                    repliedContext = $"📌 Iqtibos qilingan xabar ({quotedSender}): \"{quotedText}\"";
+                }
+            }
+
+            // Foydalanuvchi bevosita AI/bot ga murojaat qilyaptimi?
+            bool isReplyingToBot = message.ReplyToMessage != null && 
+                                   message.ReplyToMessage.From != null && 
+                                   message.ReplyToMessage.From.Id == me.Id;
+
+            bool mentionsBot = !string.IsNullOrEmpty(botUsername) && 
+                               rawContent.Contains($"@{botUsername}", StringComparison.OrdinalIgnoreCase);
+
+            bool hasAiVocative = Regex.IsMatch(rawContent, @"\b(ai|аи)\b", RegexOptions.IgnoreCase);
+
+            bool hasLanswitchVocative = Regex.IsMatch(
+                rawContent,
+                @"(?:\b(?:hey|ey|salom|hi|hello|aytchi|aytvor|qara)\s+(?:lanswitch|лансвитч)\b)|(?:^\s*(?:lanswitch|лансвитч)\b(?!da\b|dan\b|ning\b|ga\b|ni\b|\s+platformasi|\s+boti|\s+haqida))|(?:[\s,!?:.](?:lanswitch|лансвитч)[\s,!?:.]*$)|(?:,\s*(?:lanswitch|лансвитч)\b)",
+                RegexOptions.IgnoreCase);
+
+            bool isDirectlyAddressingAi = isReplyingToBot || mentionsBot || hasAiVocative || hasLanswitchVocative;
+
             // 4. Intent (maqsad)ni tahlil qilish
             var lowerContent = rawContent.ToLowerInvariant().Trim();
 
@@ -2308,6 +2359,10 @@ public class TelegramBotAppService : ITelegramBotAppService
                 // AI orqali aniqlash
                 var classification = await gemini.ClassifyGroupMessageIntentAsync(rawContent, isTeacher);
                 intent = classification.Intent ?? "CasualChat";
+                if (classification.IsDirectlyAddressingAi)
+                {
+                    isDirectlyAddressingAi = true;
+                }
             }
 
             // 5. Rate limit tekshiruvi: Soatiga maksimal 5 ta savol (Har bir premium foydalanuvchi uchun)
@@ -2491,8 +2546,21 @@ public class TelegramBotAppService : ITelegramBotAppService
             // C) Premium o'quvchilar uchun AI Tyutor & Yordamchi (Savollar, esseylar tahlili, suhbat va yordam):
             if (isSubscribed && (intent == "AskEnglishQuestion" || intent == "CasualChat"))
             {
-                // Guruh bo'yicha kontekst to'plash (darslar, topshiriqlar, o'qituvchi konteksti)
+                // QAT'IY TALAB: Guruhda har qanday oddiy matnga yoki a'zolar o'rtasidagi erkin suhbatga javob berilmasin!
+                // Faqat 100% aniq AI ga yoki Lanswitch ga murojaat qilingandagina (jumladan 'Ai', 'Lanswitch', botga reply) javob beriladi!
+                if (!isDirectlyAddressingAi)
+                {
+                    return; // Guruh a'zolarining o'zaro suhbatiga aralashmaymiz
+                }
+
+                // Guruh bo'yicha kontekst to'plash (darslar, topshiriqlar, o'qituvchi konteksti, reply konteksti)
                 var contextSb = new StringBuilder();
+
+                if (!string.IsNullOrWhiteSpace(repliedContext))
+                {
+                    contextSb.AppendLine($"Foydalanuvchi reply qilgan (iqtibos keltirgan) xabar:\n{repliedContext}\n");
+                }
+
                 var recentAssignments = await db.Assignments
                     .Include(a => a.Items)
                     .Where(a => a.GroupId == group.Id && a.Status == "Published")
@@ -2518,10 +2586,14 @@ public class TelegramBotAppService : ITelegramBotAppService
                 }
 
                 // Vektor qidiruv orqali eng yaqin guruh suhbatlari va subtitrlar/materiallarni topish
+                var embeddingInput = !string.IsNullOrWhiteSpace(repliedContext)
+                    ? $"{repliedContext}\n{rawContent}"
+                    : rawContent;
+
                 float[]? msgEmbedding = null;
                 try
                 {
-                    msgEmbedding = await gemini.GenerateEmbeddingAsync(rawContent);
+                    msgEmbedding = await gemini.GenerateEmbeddingAsync(embeddingInput);
                     if (msgEmbedding != null && msgEmbedding.Length > 0)
                     {
                         // 1. Guruhdagi avvalgi javob berilgan xabarlar (Vektor xotira)
@@ -2579,8 +2651,12 @@ public class TelegramBotAppService : ITelegramBotAppService
                     Console.WriteLine($"Vector search error in HandleGroupMessageAsync: {ex.Message}");
                 }
 
+                var studentPrompt = !string.IsNullOrWhiteSpace(repliedContext)
+                    ? $"{repliedContext}\n\nFoydalanuvchi savoli/murojaati:\n\"{rawContent}\""
+                    : rawContent;
+
                 var aiResponse = await gemini.AnswerStudentWithGroupContextAsync(
-                    rawContent,
+                    studentPrompt,
                     group.Title,
                     contextSb.ToString(),
                     senderUser.FullName);
@@ -2607,14 +2683,14 @@ public class TelegramBotAppService : ITelegramBotAppService
                 // Guruhdagi javob berilgan xabarni vektor database da kontekst sifatida saqlash
                 try
                 {
-                    msgEmbedding ??= await gemini.GenerateEmbeddingAsync(rawContent);
+                    msgEmbedding ??= await gemini.GenerateEmbeddingAsync(embeddingInput);
                     var groupMsgContext = new GroupMessageContext
                     {
                         GroupId = group.Id,
                         TelegramChatId = chatId,
                         SenderUserId = senderUser.Id,
                         SenderName = senderUser.FullName,
-                        UserMessage = rawContent,
+                        UserMessage = !string.IsNullOrWhiteSpace(repliedContext) ? $"{repliedContext}\n{rawContent}" : rawContent,
                         BotReply = aiResponse,
                         Embedding = msgEmbedding,
                         CreatedAt = DateTime.UtcNow

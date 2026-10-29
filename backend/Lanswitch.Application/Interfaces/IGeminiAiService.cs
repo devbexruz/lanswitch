@@ -23,6 +23,7 @@ public class SentenceAnalysisResult
 public class GroupMessageIntentResult
 {
     public string Intent { get; set; } = "CasualChat"; // "AssignHomework", "AskHomework", "AskEnglishQuestion", "CasualChat"
+    public bool IsDirectlyAddressingAi { get; set; } = false;
     public string? Reason { get; set; }
 }
 

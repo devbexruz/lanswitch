@@ -1061,15 +1061,20 @@ QAT'IY VAZIFALAR VA TALABLAR:
         var systemInstruction = $@"Siz ta'lim guruhidagi Telegram xabarlarini tahlil qiluvchi AI intellektsiz.
 Xabar yuboruvchi shaxs o'qituvchimi: {(isTeacher ? "HA (Ustoz/Admin)" : "YO'Q (O'quvchi)")}.
 
+QAT'IY QOIDA: Guruhda har qanday oddiy xabarga yoki a'zolarning o'zaro suhbatiga bot javob bermasligi kerak!
+Faqat va faqat foydalanuvchi 100% aniq AI ga yoki Lanswitch ga murojaat qilayotgan bo'lsa (masalan: 'AI, bu nima degani?', 'bu to'g'rimi AI', 'Lanswitch bu gapni tekshirib ber', 'bunga qara bu nima degani AI') -> 'isDirectlyAddressingAi' true bo'ladi.
+Agar shunchaki guruhdagi boshqa odamlar bilan gaplashayotgan bo'lsa yoki Lanswitch haqida uchinchi shaxsda gapirsa -> 'isDirectlyAddressingAi' false bo'ladi!
+
 Xabarni quyidagi 4 ta toifadan faqat bittasiga ajrating:
 1. 'AssignHomework': FAQAT o'qituvchi o'quvchilarga yangi uyga vazifa yoki yangi topshiriq topshirayotgan bo'lsa (masalan: 'Bolalar uyga vazifa: 5-mashq', 'Yangi so'zlarni yodlang va audio yuboring'). O'quvchi hech qachon vazifa bera olmaydi!
-2. 'AskHomework': Foydalanuvchi (o'quvchi yoki boshqa a'zo) mavjud uyga vazifani so'rayotgan bo'lsa, vazifa nimaligini, muddati qachonligini yoki topshiriq haqida ma'lumot so'rayotgan bo'lsa (masalan: 'Uyga vazifa nima?', 'Bugun vazifa bormi?', 'Topshiriqni tashlang', 'What is the homework?').
+2. 'AskHomework': Foydalanuvchi mavjud uyga vazifani so'rayotgan bo'lsa (masalan: 'Uyga vazifa nima?', 'Bugun vazifa bormi?', 'Topshiriqni tashlang').
 3. 'AskEnglishQuestion': Foydalanuvchi ingliz tili qoidalari, grammatika, so'z tarjimasi yoki dars yuzasidan bevosita savol so'rayotgan bo'lsa.
-4. 'CasualChat': Shunchaki salomlashish, minnatdorchilik, darsga oid bo'lmagan oddiy gaplar yoki guruh a'zolari o'rtasidagi erkin suhbat (masalan: 'Salom hammaga', 'Rahmat ustoz', 'Ha tushundim', 'OK').
+4. 'CasualChat': Shunchaki salomlashish, minnatdorchilik, darsga oid bo'lmagan oddiy gaplar yoki guruh a'zolari o'rtasidagi erkin suhbat.
 
 Javobni FAQAT toza JSON formatida bering, markdown (` ```json `) siz:
 {{
-  ""intent"": ""AssignHomework"" | ""AskHomework"" | ""AskEnglishQuestion"" | ""CasualChat""
+  ""intent"": ""AssignHomework"" | ""AskHomework"" | ""AskEnglishQuestion"" | ""CasualChat"",
+  ""isDirectlyAddressingAi"": true | false
 }}";
 
         var requestBody = new
@@ -1083,7 +1088,7 @@ Javobni FAQAT toza JSON formatida bering, markdown (` ```json `) siz:
             {
                 thinkingConfig = new { thinkingBudget = 0 },
                 temperature = 0.0,
-                maxOutputTokens = 35
+                maxOutputTokens = 80
             }
         };
 
