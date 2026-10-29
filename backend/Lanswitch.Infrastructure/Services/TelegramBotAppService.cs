@@ -382,6 +382,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                     .FirstOrDefaultAsync(c => c.TeacherId == user.Id && (c.GroupId == teacherGroup.Id || c.GroupId == null));
 
                 var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(rawContent, teacherContext?.LearnedContext);
+                await HomeworkUnitResolver.ResolveAndValidateUnitsAsync(db, analysis.Items);
                 var deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
                 var draftCode = Guid.NewGuid().ToString("N")[..8];
                 var draft = new AiHomeworkDraft
@@ -2403,6 +2404,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                     .FirstOrDefaultAsync(c => c.TeacherId == senderUser.Id && (c.GroupId == group.Id || c.GroupId == null));
 
                 var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(rawContent, teacherContext?.LearnedContext);
+                await HomeworkUnitResolver.ResolveAndValidateUnitsAsync(db, analysis.Items);
                 var deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
                 var draftCode = Guid.NewGuid().ToString("N")[..8];
                 var draft = new AiHomeworkDraft
@@ -2607,6 +2609,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                     .FirstOrDefaultAsync(c => c.TeacherId == user.Id && (c.GroupId == draft.GroupId || c.GroupId == null));
 
                 var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(draft.RawInputText, teacherContext?.LearnedContext);
+                await HomeworkUnitResolver.ResolveAndValidateUnitsAsync(db, analysis.Items);
 
                 draft.Title = analysis.Title;
                 draft.Deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
@@ -2630,7 +2633,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                     {
                         "Vocabulary" => "📖 Lug'at",
                         "MediaSubmission" => "🎙️ Audio/Video",
-                        _ => "📝 Matnli eslatma"
+                        _ => "📌 Eslatma"
                     };
 
                     var cleanTitle = System.Net.WebUtility.HtmlEncode(item.Title);
@@ -2796,6 +2799,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                 .FirstOrDefaultAsync(c => c.TeacherId == user.Id && (c.GroupId == draft.GroupId || c.GroupId == null));
 
             var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(draft.RawInputText, teacherContext?.LearnedContext);
+            await HomeworkUnitResolver.ResolveAndValidateUnitsAsync(db, analysis.Items);
             draft.Title = analysis.Title;
             draft.Deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
             draft.ItemsJson = JsonSerializer.Serialize(analysis.Items);
@@ -2830,7 +2834,7 @@ public class TelegramBotAppService : ITelegramBotAppService
             {
                 "Vocabulary" => "📖 Lug'at",
                 "MediaSubmission" => "🎙️ Audio/Video topshirish",
-                _ => "📝 Matnli eslatma"
+                _ => "📌 Eslatma"
             };
 
             var cleanTitle = System.Net.WebUtility.HtmlEncode(item.Title);

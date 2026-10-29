@@ -86,16 +86,26 @@ public class AssignmentService : IAssignmentService
             Status = "Published"
         };
 
+        var aiItems = dto.Items.Select(i => new AiHomeworkAnalysisItem
+        {
+            ItemType = i.ItemType,
+            Title = i.Title,
+            Instructions = i.Instructions,
+            TargetUnitId = i.TargetUnitId
+        }).ToList();
+
+        await HomeworkUnitResolver.ResolveAndValidateUnitsAsync(_db, aiItems);
+
         int order = 1;
-        foreach (var item in dto.Items)
+        foreach (var resItem in aiItems)
         {
             assignment.Items.Add(new AssignmentItem
             {
                 OrderIndex = order++,
-                ItemType = item.ItemType,
-                Title = item.Title,
-                Instructions = item.Instructions,
-                TargetUnitId = item.TargetUnitId
+                ItemType = resItem.ItemType,
+                Title = resItem.Title,
+                Instructions = resItem.Instructions,
+                TargetUnitId = resItem.TargetUnitId
             });
         }
 
@@ -142,7 +152,7 @@ public class AssignmentService : IAssignmentService
             {
                 "Vocabulary" => "📖 Lug'at",
                 "MediaSubmission" => "🎙️ Audio/Video",
-                _ => "📝 Vazifa"
+                _ => "📌 Eslatma"
             };
             var cleanTitle = System.Net.WebUtility.HtmlEncode(it.Title);
             var cleanInstructions = System.Net.WebUtility.HtmlEncode(it.Instructions ?? "");

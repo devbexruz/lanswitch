@@ -9,6 +9,9 @@ public class AiHomeworkAnalysisItem
     public string Title { get; set; } = "";
     public string Instructions { get; set; } = "";
     public long? TargetUnitId { get; set; }
+    public string? BookHint { get; set; }
+    public int? PartNumber { get; set; }
+    public int? UnitNumber { get; set; }
 }
 
 public class AiHomeworkAnalysisResult

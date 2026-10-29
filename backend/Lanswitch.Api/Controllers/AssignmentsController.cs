@@ -520,6 +520,7 @@ public class AssignmentsController : ControllerBase
             .FirstOrDefaultAsync();
 
         var refined = await _gemini.RefineHomeworkDraftAsync(currentAnalysis, request.Prompt, teacherContext);
+        await Lanswitch.Infrastructure.Services.HomeworkUnitResolver.ResolveAndValidateUnitsAsync(_db, refined.Items);
 
         draft.Title = refined.Title;
         draft.Deadline = System.DateTime.UtcNow.Date.AddDays(refined.DeadlineDays).Add(refined.GetDeadlineTimeSpan());
@@ -562,7 +563,17 @@ public class AssignmentsController : ControllerBase
             draft.Deadline = request.Deadline;
 
         if (request.Items != null)
-            draft.ItemsJson = JsonSerializer.Serialize(request.Items);
+        {
+            var analysisItems = request.Items.Select(it => new AiHomeworkAnalysisItem
+            {
+                ItemType = it.ItemType,
+                Title = it.Title,
+                Instructions = it.Instructions,
+                TargetUnitId = it.TargetUnitId
+            }).ToList();
+            await Lanswitch.Infrastructure.Services.HomeworkUnitResolver.ResolveAndValidateUnitsAsync(_db, analysisItems);
+            draft.ItemsJson = JsonSerializer.Serialize(analysisItems);
+        }
 
         draft.Status = "DraftReady";
         await _db.SaveChangesAsync();
@@ -585,6 +596,7 @@ public class AssignmentsController : ControllerBase
 
         var tId = teacherId ?? draft.TeacherId;
         var items = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+        await Lanswitch.Infrastructure.Services.HomeworkUnitResolver.ResolveAndValidateUnitsAsync(_db, items);
 
         var dto = new CreateAssignmentDto
         {

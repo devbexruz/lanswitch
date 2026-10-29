@@ -640,15 +640,24 @@ ASOSIY TALABLAR (TOKEN TEJASH VA ANIQLIK):
 
         var systemInstruction = @"Siz ingliz tili o'qituvchisiga guruh uchun uyga vazifani tahlil qilib beruvchi AI yordamchisiz.
 Platformada QAT'IY 3 ta topshiriq turi mavjud:
-1. 'Vocabulary': FAQAT va FAQAT o'qituvchi 'lug'at', 'dictionary', 'vocabulary', 'so'z' yoki 'Essential' (masalan: 'Essential Unit 5', 'Essential 3-unit') deb aniq aytgandagina ishlatiladi. Boshqa holatda o'zingizdan lug'at qo'shmang!
+1. 'Vocabulary': FAQAT va FAQAT o'qituvchi 'lug'at', 'dictionary', 'vocabulary', 'so'z' yoki 'Essential' (masalan: 'Essential Unit 1') deb aniq aytgandagina va u unit platforma bazasida mavjud bo'lgandagina ishlatiladi!
 2. 'MediaSubmission': FAQAT va FAQAT o'qituvchi 'audio', 'voice', 'ovozli', 'video', 'rasm', 'photo' yoki 'yuklash' deb aniq talab qilgandagina ishlatiladi. Agar o'qituvchi 'mashqni bajaring' desa, lekin rasm/audio so'ramasa, bu MediaSubmission EMAS!
-3. 'TextReminder': Darslik mashqlari (masalan: Murphy, Reading Explorer, Workbook, Grammatika), o'qish, takrorlash va boshqa barcha mashqlar.
+3. 'TextReminder': Darslik mashqlari (masalan: Murphy, Reading Explorer, Workbook, Grammatika), o'qish, takrorlash va platforma bazasida interaktiv testi bo'lmagan darslik unitlari uchun oddiy eslatma.
+
+PLATFORMA BAZASIDAGI MAVJUD INTERAKTIV DARSLIKLAR VA UNITLAR:
+1. '4000 Essential English Words 1': Hozirda FAQAT Part 1 dagi Unit 1 mavjud! (Boshqa unitlar, masalan Unit 2..30 bazada mavjud emas!).
+2. 'Destination B1: Grammar & Vocabulary': Part 1 (Unit 1, Unit 2), Part 2 (Unit 3, Unit 4).
+3. 'Oxford Word Skills (Basic)': Part 1 (Unit 1).
 
 QAT'IY QOIDALAR (O'ZINGIZDAN ORTIQCHA AQLLILIK QILMANG):
-- 'Essential' so'zi har doim Lug'at (Vocabulary) darsligini bildiradi (Masalan: 'Essential Unit 9' -> itemType: 'Vocabulary', Title: 'Essential: Unit 9', Instructions: 'Essential darsligidan 9-unit yangi so'zlarini yodlang').
-- Agar matnda audio, video yoki rasm degan so'z bo'lmasa, uni MediaSubmission qilmang! Qat'iy TextReminder qiling!
+- 'Essential' so'zi har doim Lug'at (Vocabulary) darsligini bildiradi.
+- Agar o'qituvchi bazada MAVJUD BO'LMAGAN unitni aytsa (masalan: 'Essential Unit 9'): uni QAT'IY ravishda 'TextReminder' (eslatma) turida yarating! Chunki bazada yo'q unit uchun o'quvchiga so'zlarni yodlash yoki test tugmasi chiqmasligi, shunchaki eslatma bo'lib ko'rinishi shart!
+- Faqat bazada real mavjud bo'lgan unitlar uchungina (masalan: Essential Unit 1) 'Vocabulary' turi beriladi.
+- Agar matnda audio, video yoki rasm so'ralmagan bo'lsa, uni MediaSubmission qilmang! Qat'iy TextReminder qiling!
 - Agar matnda lug'at, dictionary, so'z yoki essential bo'lmasa, uni Vocabulary qilmang!
-- Faqat toza JSON qaytaring, markdown yoki tashqi so'zlarsiz. Format:
+- Har bir item uchun 'bookHint', 'partNumber' va 'unitNumber' maydonlarini aniqlab bering.
+
+Faqat toza JSON qaytaring, hech qanday markdown yoki tashqi so'zlarsiz. Format:
 {
   ""isHomework"": true,
   ""title"": ""Unit ..."",
@@ -660,7 +669,10 @@ QAT'IY QOIDALAR (O'ZINGIZDAN ORTIQCHA AQLLILIK QILMANG):
     {
       ""itemType"": ""TextReminder"" | ""Vocabulary"" | ""MediaSubmission"",
       ""title"": ""Qism nomi"",
-      ""instructions"": ""O'quvchiga aniq vazifa yo'riqnomasi""
+      ""instructions"": ""O'quvchiga aniq vazifa yo'riqnomasi"",
+      ""bookHint"": ""essential"" | ""destination"" | ""oxford"" | null,
+      ""partNumber"": 1 | null,
+      ""unitNumber"": 1 | null
     }
   ]
 }";
@@ -728,9 +740,16 @@ QAT'IY QOIDALAR (O'ZINGIZDAN ORTIQCHA AQLLILIK QILMANG):
 
         var systemInstruction = @"Siz mavjud uyga vazifa loyihasini o'qituvchining ko'rsatmasiga binoan qat'iy va aniq tahrirlovchi AI mutaxassissiz.
 
+PLATFORMA BAZASIDAGI MAVJUD INTERAKTIV DARSLIKLAR VA UNITLAR:
+1. '4000 Essential English Words 1': Hozirda FAQAT Part 1 dagi Unit 1 mavjud! (Boshqa unitlar, masalan Unit 2..30 bazada mavjud emas!).
+2. 'Destination B1: Grammar & Vocabulary': Part 1 (Unit 1, Unit 2), Part 2 (Unit 3, Unit 4).
+3. 'Oxford Word Skills (Basic)': Part 1 (Unit 1).
+
 O'QITUVCHINING O'ZGARTIRISH MATNINI TO'G'RI TUSHUNISH VA TO'LDIRISH QOIDALARI:
 1. QO'SHISH ('qo'shimcha qil', 'qo'sh', 'yana', 'add'):
-   - Agar 'dictionary', 'lug'at', 'vocabulary', 'so'z' yoki 'Essential' (masalan: 'essential unit 4 ni qo'sh', 'qo'shimcha qil dictionary unit 3') deb yozilgan bo'lsa -> QAT'IY 'Vocabulary' turida yangi topshiriq qo'shing! (Instructions: '... yangi so'zlarini yodlang').
+   - Agar 'dictionary', 'lug'at', 'vocabulary', 'so'z' yoki 'Essential' (masalan: 'essential unit 1 ni qo'sh', 'qo'shimcha qil dictionary unit 1') deb yozilgan bo'lsa:
+     * Agar unit platforma bazasida MAVJUD bo'lsa (masalan: Essential Unit 1, Destination Unit 1..4): -> QAT'IY 'Vocabulary' turida topshiriq qo'shing!
+     * Agar unit platforma bazasida MAVJUD BO'LMASA (masalan: Essential Unit 9): -> QAT'IY 'TextReminder' (eslatma) turida topshiriq qo'shing (chunki bazada yo'q unit uchun test/yodlash tugmasi chiqmasligi, shunchaki eslatma bo'lib ko'rinishi shart!).
    - Agar 'video', 'rasm', 'audio', 'voice', 'ovozli', 'speaking' deb yozilgan bo'lsa -> QAT'IY 'MediaSubmission' turida yangi topshiriq qo'shing!
    - Boshqa barcha mashqlar (masalan: '4-mashqni qo'sh', 'Workbook 15-betni qo'sh') uchun -> QAT'IY 'TextReminder' turida qo'shing!
    - O'zingizdan aqllilik qilib so'ralmagan topshiriqlarni qo'shmang!
@@ -742,7 +761,9 @@ O'QITUVCHINING O'ZGARTIRISH MATNINI TO'G'RI TUSHUNISH VA TO'LDIRISH QOIDALARI:
 
 ATAMALAR:
 - 'Essential' har doim Lug'at (Vocabulary) darsligini bildiradi.
-- Faqat toza JSON qaytaring, hech qanday markdown yoki tashqi so'zlarsiz. Format:
+- Har bir item uchun 'bookHint', 'partNumber' va 'unitNumber' maydonlarini aniqlab bering.
+
+Faqat toza JSON qaytaring, hech qanday markdown yoki tashqi so'zlarsiz. Format:
 {
   ""isHomework"": true,
   ""title"": ""..."",
@@ -754,7 +775,10 @@ ATAMALAR:
     {
       ""itemType"": ""TextReminder"" | ""Vocabulary"" | ""MediaSubmission"",
       ""title"": ""..."",
-      ""instructions"": ""...""
+      ""instructions"": ""..."",
+      ""bookHint"": ""essential"" | ""destination"" | ""oxford"" | null,
+      ""partNumber"": 1 | null,
+      ""unitNumber"": 1 | null
     }
   ]
 }";

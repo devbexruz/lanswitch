@@ -573,11 +573,18 @@ export default function StudentMiniAppPage() {
     setIsLoadingVocab(false);
   };
 
+  // Helper to determine if an assignment item requires student submission / quiz
+  const isItemActionable = (it: AssignmentItemDetail) => {
+    if (it.itemType === 'MediaSubmission') return true;
+    if (it.itemType === 'Vocabulary' && Boolean(it.targetUnitId && it.targetUnitId > 0)) return true;
+    return false;
+  };
+
   // 1. Pending / To Do assignments:
   const todoAssignments = useMemo(() => {
     return assignments.filter(a => {
       return a.items.some(it => 
-        it.itemType !== 'TextReminder' &&
+        isItemActionable(it) &&
         (it.mySubmissionStatus !== 1 && it.mySubmissionStatus !== 2)
       );
     });
@@ -586,7 +593,7 @@ export default function StudentMiniAppPage() {
   const todoItemsCount = useMemo(() => {
     return todoAssignments.reduce((acc, a) => {
       return acc + a.items.filter(it => 
-        it.itemType !== 'TextReminder' &&
+        isItemActionable(it) &&
         (it.mySubmissionStatus !== 1 && it.mySubmissionStatus !== 2)
       ).length;
     }, 0);
@@ -676,7 +683,7 @@ export default function StudentMiniAppPage() {
             </span>
             <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy-secondary)' }}>
               {item.itemType === 'TextReminder' && '📌 Eslatma'}
-              {item.itemType === 'Vocabulary' && '📚 Lug\'at'}
+              {item.itemType === 'Vocabulary' && (item.targetUnitId && item.targetUnitId > 0 ? '📚 Lug\'at (Test)' : '📌 Eslatma')}
               {item.itemType === 'MediaSubmission' && '🎬 Media vazifa'}
             </span>
           </div>
@@ -787,7 +794,7 @@ export default function StudentMiniAppPage() {
         )}
 
         {/* Action Buttons */}
-        {item.itemType === 'Vocabulary' && (
+        {item.itemType === 'Vocabulary' && Boolean(item.targetUnitId && item.targetUnitId > 0) && (
           <button
             onClick={() => openVocabModal(item)}
             className="btn-big-blue"
@@ -1588,7 +1595,7 @@ export default function StudentMiniAppPage() {
                 ) : (
                   todoAssignments.map(assignment => {
                     const pendingItems = assignment.items.filter(it => 
-                      it.itemType !== 'TextReminder' &&
+                      isItemActionable(it) &&
                       (it.mySubmissionStatus !== 1 && it.mySubmissionStatus !== 2)
                     );
                     if (pendingItems.length === 0) return null;
