@@ -513,13 +513,12 @@ public class AssignmentsController : ControllerBase
             Items = currentItems
         };
 
-        var teacherContext = await _db.TeacherHomeworkContexts
+        var teacherContextEntity = await _db.TeacherHomeworkContexts
             .Where(c => c.TeacherId == draft.TeacherId && (c.GroupId == draft.GroupId || c.GroupId == null))
             .OrderByDescending(c => c.GroupId)
-            .Select(c => c.LearnedContext)
             .FirstOrDefaultAsync();
 
-        var refined = await _gemini.RefineHomeworkDraftAsync(currentAnalysis, request.Prompt, teacherContext);
+        var refined = await _gemini.RefineHomeworkDraftAsync(currentAnalysis, request.Prompt, teacherContextEntity?.LearnedContext);
         await Lanswitch.Infrastructure.Services.HomeworkUnitResolver.ResolveAndValidateUnitsAsync(_db, refined.Items);
 
         draft.Title = refined.Title;
@@ -527,6 +526,29 @@ public class AssignmentsController : ControllerBase
         draft.ItemsJson = JsonSerializer.Serialize(refined.Items);
         draft.Explanation = refined.Explanation;
         draft.Status = "DraftReady";
+
+        // AI dan context matn olish va uni saqlab borish (har safar generda foydalanish uchun)
+        try
+        {
+            if (teacherContextEntity == null)
+            {
+                teacherContextEntity = new TeacherHomeworkContext
+                {
+                    TeacherId = draft.TeacherId,
+                    GroupId = draft.GroupId,
+                    LearnedContext = ""
+                };
+                _db.TeacherHomeworkContexts.Add(teacherContextEntity);
+            }
+
+            var updatedContext = await _gemini.LearnContextFromModificationPromptAsync(teacherContextEntity.LearnedContext, request.Prompt);
+            teacherContextEntity.LearnedContext = updatedContext;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error learning context in RefineHomeworkDraft: {ex.Message}");
+        }
+
         await _db.SaveChangesAsync();
 
         return Ok(new

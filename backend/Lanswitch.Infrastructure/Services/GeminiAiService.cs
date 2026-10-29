@@ -879,6 +879,62 @@ Talab: O'qituvchining odatiy topshiriq turlari, muddatlari va uslubi haqida 2-3 
         return currentContext;
     }
 
+    public async Task<string> LearnContextFromModificationPromptAsync(string currentContext, string modificationPrompt)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE" || string.IsNullOrWhiteSpace(modificationPrompt))
+            return currentContext;
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var prompt = $@"Siz ingliz tili o'qituvchisining odatlarini va shaxsiy uslubini o'rganuvchi AI mutaxassissiz.
+O'qituvchi uyga vazifani tahrirlashda quyidagi ko'rsatmani berdi:
+""{modificationPrompt}""
+
+Mavjud o'rganilgan kontekst qoidalari:
+""{currentContext}""
+
+VAZIFANGIZ:
+Ushbu yangi ko'rsatmadan o'qituvchining doimiy qoidalari, darslik va lug'at atamalari (masalan: 'Essential' har doim Lug'at darsligini bildiradi, muddatlar qaysi vaqtda qo'yilishi, qaysi kitob mashqlari berilishi, video/audio talablari) bo'yicha qisqa va aniq yangilangan kontekst qoidalarini shakllantiring.
+Avvalgi foydali qoidalarni saqlab qoling va yangi ko'rsatmani umumiy qoidaga aylantirib qo'shing.
+
+QAT'IY TALABLAR:
+- Faqat toza matn qaytaring (hech qanday markdown, yulduzchalar va sarlavhalarsiz).
+- Maksimal 80-120 so'z, O'zbek tilida.
+- O'qituvchining keyingi vazifalarini generatsiya qilishda qat'iy qo'llanadigan aniq qoidalar bo'lsin.";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+                new { parts = new[] { new { text = prompt } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.1,
+                maxOutputTokens = 250
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+
+            return textResult?.Trim() ?? currentContext;
+        }
+
+        return currentContext;
+    }
+
     public async Task<string> AnswerStudentProQuestionAsync(string question, string groupTitle)
     {
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")

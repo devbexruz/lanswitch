@@ -39,6 +39,7 @@ public interface IGeminiAiService
     Task<AiHomeworkAnalysisResult> AnalyzeAndGenerateHomeworkAsync(string text, string? teacherContext);
     Task<AiHomeworkAnalysisResult> RefineHomeworkDraftAsync(AiHomeworkAnalysisResult currentDraft, string modificationPrompt, string? teacherContext = null);
     Task<string> LearnAndUpdateTeacherContextAsync(string currentContext, string publishedHomeworkSummary);
+    Task<string> LearnContextFromModificationPromptAsync(string currentContext, string modificationPrompt);
     Task<string> AnswerStudentProQuestionAsync(string question, string groupTitle);
     Task<string> AnswerStudentWithGroupContextAsync(string studentMessage, string groupTitle, string groupContext, string studentName);
     Task<GroupMessageIntentResult> ClassifyGroupMessageIntentAsync(string text, bool isTeacher);

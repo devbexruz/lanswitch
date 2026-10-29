@@ -2384,6 +2384,30 @@ public class TelegramBotAppService : ITelegramBotAppService
                             replyParameters: new ReplyParameters { MessageId = message.MessageId },
                             replyMarkup: replyKb);
                     }
+
+                    // Guruhdagi javob berilgan xabarni vektor database da kontekst sifatida saqlash
+                    try
+                    {
+                        var hwEmbedding = await gemini.GenerateEmbeddingAsync(rawContent);
+                        var groupMsgContext = new GroupMessageContext
+                        {
+                            GroupId = group.Id,
+                            TelegramChatId = chatId,
+                            SenderUserId = senderUser.Id,
+                            SenderName = senderUser.FullName,
+                            UserMessage = rawContent,
+                            BotReply = replyText,
+                            Embedding = hwEmbedding,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        db.GroupMessageContexts.Add(groupMsgContext);
+                        await db.SaveChangesAsync();
+                    }
+                    catch (Exception ctxEx)
+                    {
+                        Console.WriteLine($"Error saving AskHomework context to vector db: {ctxEx.Message}");
+                    }
+
                     return;
                 }
                 else
@@ -2493,12 +2517,40 @@ public class TelegramBotAppService : ITelegramBotAppService
                     contextSb.AppendLine($"Ustozning ta'lim metodikasi va o'tilgan qoidalari:\n{teacherCtx.LearnedContext}");
                 }
 
-                // Vektor qidiruv orqali eng yaqin subtitrlar/materiallarni topish
+                // Vektor qidiruv orqali eng yaqin guruh suhbatlari va subtitrlar/materiallarni topish
+                float[]? msgEmbedding = null;
                 try
                 {
-                    var msgEmbedding = await gemini.GenerateEmbeddingAsync(rawContent);
+                    msgEmbedding = await gemini.GenerateEmbeddingAsync(rawContent);
                     if (msgEmbedding != null && msgEmbedding.Length > 0)
                     {
+                        // 1. Guruhdagi avvalgi javob berilgan xabarlar (Vektor xotira)
+                        var pastGroupContexts = await db.GroupMessageContexts
+                            .Where(g => g.GroupId == group.Id && g.Embedding != null)
+                            .OrderByDescending(g => g.Id)
+                            .Take(100)
+                            .ToListAsync();
+
+                        if (pastGroupContexts.Count > 0)
+                        {
+                            var bestGroupPast = pastGroupContexts
+                                .Select(c => new { Context = c, Sim = CosineSimilarity(msgEmbedding, c.Embedding!) })
+                                .Where(x => x.Sim > 0.55f)
+                                .OrderByDescending(x => x.Sim)
+                                .Take(3)
+                                .ToList();
+
+                            if (bestGroupPast.Count > 0)
+                            {
+                                contextSb.AppendLine("\nGuruhdagi avvalgi bog'liq suhbatlar va berilgan javoblar konteksti (Vektor xotira):");
+                                foreach (var bgp in bestGroupPast)
+                                {
+                                    contextSb.AppendLine($"- {bgp.Context.SenderName}: \"{bgp.Context.UserMessage}\" => AI javobi: \"{bgp.Context.BotReply}\"");
+                                }
+                            }
+                        }
+
+                        // 2. Dars materiallaridan subtitrlar
                         var topSubs = await db.Subtitles
                             .Where(s => s.Embedding != null)
                             .OrderByDescending(s => s.Id)
@@ -2517,7 +2569,7 @@ public class TelegramBotAppService : ITelegramBotAppService
 
                             if (bestSubs.Count > 0)
                             {
-                                contextSb.AppendLine("Dars materiallaridan bog'liq namunalar:\n" + string.Join("\n", bestSubs));
+                                contextSb.AppendLine("\nDars materiallaridan bog'liq namunalar:\n" + string.Join("\n", bestSubs));
                             }
                         }
                     }
@@ -2551,6 +2603,30 @@ public class TelegramBotAppService : ITelegramBotAppService
                         plainText,
                         replyParameters: new ReplyParameters { MessageId = message.MessageId });
                 }
+
+                // Guruhdagi javob berilgan xabarni vektor database da kontekst sifatida saqlash
+                try
+                {
+                    msgEmbedding ??= await gemini.GenerateEmbeddingAsync(rawContent);
+                    var groupMsgContext = new GroupMessageContext
+                    {
+                        GroupId = group.Id,
+                        TelegramChatId = chatId,
+                        SenderUserId = senderUser.Id,
+                        SenderName = senderUser.FullName,
+                        UserMessage = rawContent,
+                        BotReply = aiResponse,
+                        Embedding = msgEmbedding,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    db.GroupMessageContexts.Add(groupMsgContext);
+                    await db.SaveChangesAsync();
+                }
+                catch (Exception ctxEx)
+                {
+                    Console.WriteLine($"Error saving group message context to vector db: {ctxEx.Message}");
+                }
+
                 return;
             }
 
@@ -2931,12 +3007,39 @@ public class TelegramBotAppService : ITelegramBotAppService
             Items = currentItems
         };
 
-        var refined = await gemini.RefineHomeworkDraftAsync(currentAnalysis, inputPrompt);
+        var teacherContextEntity = await db.TeacherHomeworkContexts
+            .FirstOrDefaultAsync(c => c.TeacherId == draft.TeacherId && (c.GroupId == draft.GroupId || c.GroupId == null));
+
+        var refined = await gemini.RefineHomeworkDraftAsync(currentAnalysis, inputPrompt, teacherContextEntity?.LearnedContext);
+        await HomeworkUnitResolver.ResolveAndValidateUnitsAsync(db, refined.Items);
 
         draft.Title = refined.Title;
         draft.Deadline = DateTime.UtcNow.Date.AddDays(refined.DeadlineDays).Add(refined.GetDeadlineTimeSpan());
         draft.ItemsJson = JsonSerializer.Serialize(refined.Items);
         draft.Explanation = refined.Explanation;
+
+        // AI dan context matn olish va saqlab borish (har safar generda foydalanish uchun)
+        try
+        {
+            if (teacherContextEntity == null)
+            {
+                teacherContextEntity = new TeacherHomeworkContext
+                {
+                    TeacherId = draft.TeacherId,
+                    GroupId = draft.GroupId,
+                    LearnedContext = ""
+                };
+                db.TeacherHomeworkContexts.Add(teacherContextEntity);
+            }
+
+            var updatedContext = await gemini.LearnContextFromModificationPromptAsync(teacherContextEntity.LearnedContext, inputPrompt);
+            teacherContextEntity.LearnedContext = updatedContext;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error learning context in HandleDraftVoiceModificationAsync: {ex.Message}");
+        }
+
         await db.SaveChangesAsync();
 
         await SendDraftInteractiveMenuAsync(chatId, draft, refined.UnsupportedRequests);

@@ -40,6 +40,7 @@ public class AppDbContext : DbContext
     public DbSet<ItemSubmissionAttachment> ItemSubmissionAttachments { get; set; }
     public DbSet<TeacherHomeworkContext> TeacherHomeworkContexts { get; set; }
     public DbSet<AiHomeworkDraft> AiHomeworkDrafts { get; set; }
+    public DbSet<GroupMessageContext> GroupMessageContexts { get; set; }
 
     // Darslik kitoblar va Lug'at (Books & Vocabulary Engine)
     public DbSet<Book> Books { get; set; }
@@ -204,6 +205,14 @@ public class AppDbContext : DbContext
             entity.HasOne(w => w.Unit)
                 .WithMany(u => u.Words)
                 .HasForeignKey(w => w.UnitId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GroupMessageContext>(entity =>
+        {
+            entity.HasOne(g => g.Group)
+                .WithMany()
+                .HasForeignKey(g => g.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

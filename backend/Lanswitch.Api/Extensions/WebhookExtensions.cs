@@ -63,6 +63,20 @@ namespace Lanswitch.Api.Extensions
                             ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             ""UpdatedAt"" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
                         );
+
+                        CREATE TABLE IF NOT EXISTS ""GroupMessageContexts"" (
+                            ""Id"" bigserial PRIMARY KEY,
+                            ""GroupId"" bigint NOT NULL,
+                            ""TelegramChatId"" bigint NOT NULL,
+                            ""SenderUserId"" bigint,
+                            ""SenderName"" text NOT NULL DEFAULT '',
+                            ""UserMessage"" text NOT NULL,
+                            ""BotReply"" text NOT NULL,
+                            ""Embedding"" real[],
+                            ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS ""IX_GroupMessageContexts_GroupId"" ON ""GroupMessageContexts"" (""GroupId"");
                     ");
                 }
                 catch (Exception rawEx)
