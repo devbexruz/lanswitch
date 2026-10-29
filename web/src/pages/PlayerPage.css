@@ -1288,6 +1288,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    scroll-padding-top: 14px;
 }
 
 .ai-chat-feed-empty {
@@ -1330,6 +1331,7 @@
 
 .ai-chat-bubble-row.is-user-msg {
     align-self: flex-end;
+    scroll-margin-top: 14px;
 }
 
 .ai-chat-bubble-row.is-ai-msg {

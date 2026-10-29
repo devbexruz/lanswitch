@@ -94,7 +94,16 @@ const PlayerPage: React.FC = () => {
 
   const typewriterIntervalRef = useRef<any>(null);
   const latestAiMsgRef = useRef<HTMLDivElement | null>(null);
+  const latestUserMsgRef = useRef<HTMLDivElement | null>(null);
   const modalChatFeedRef = useRef<HTMLDivElement | null>(null);
+
+  // Index of the most recent user message
+  const lastUserMsgIndex = useMemo(() => {
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      if (chatMessages[i].role === 'User') return i;
+    }
+    return -1;
+  }, [chatMessages]);
 
   // Mobile detection (screen width <= 768px)
   const [isMobile, setIsMobile] = useState<boolean>(() => 
@@ -502,7 +511,7 @@ const PlayerPage: React.FC = () => {
     };
   }, []);
 
-  // Send message to AI Tutor with Typewriter streaming and top-aligned smooth scroll
+  // Send message to AI Tutor with Typewriter streaming and smooth scroll to user sent message
   const handleSendChatMessage = async (msgToSend?: string) => {
     const text = (msgToSend || chatInput).trim();
     if (!text || isChatSending || isStreaming || !media) return;
@@ -511,10 +520,10 @@ const PlayerPage: React.FC = () => {
     setChatMessages(prev => [...prev, { role: 'User', content: text }]);
     setIsChatSending(true);
 
-    // Initial scroll down so user sees their own question & thinking indicator
+    // CRITICAL REQUIREMENT: Smooth scroll user's sent message so it aligns with the VERY TOP of the scroll container
     setTimeout(() => {
-      modalChatFeedRef.current?.scrollTo({ top: modalChatFeedRef.current.scrollHeight, behavior: 'smooth' });
-    }, 40);
+      latestUserMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
 
     try {
       const endpoint = currentEpisodeId ? '/api/EpisodeChat' : '/api/MediaChat';
@@ -542,10 +551,7 @@ const PlayerPage: React.FC = () => {
       setIsStreaming(true);
       setStreamingAiText('');
 
-      // CRITICAL REQUIREMENT: Smooth scroll to the TOP of the newest message, NOT to the bottom!
-      setTimeout(() => {
-        latestAiMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
+      // CRITICAL: Do NOT scroll to the reply! The user's sent message remains anchored at the top of the container!
 
       let charIndex = 0;
       const totalChars = reply.length;
@@ -570,9 +576,6 @@ const PlayerPage: React.FC = () => {
       console.error('Chat error:', e);
       setIsChatSending(false);
       setChatMessages(prev => [...prev, { role: 'AI', content: "Server bilan bog'lanishda xatolik yuz berdi." }]);
-      setTimeout(() => {
-        latestAiMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
     }
   };
 
@@ -1382,11 +1385,11 @@ const PlayerPage: React.FC = () => {
                     </div>
                   ) : (
                     chatMessages.map((msg, mIdx) => {
-                      const isLatest = mIdx === chatMessages.length - 1 && !isStreaming && !isChatSending;
+                      const isLatestUser = mIdx === lastUserMsgIndex;
                       return (
                         <div
                           key={mIdx}
-                          ref={isLatest ? latestAiMsgRef : null}
+                          ref={isLatestUser ? latestUserMsgRef : null}
                           className={`ai-chat-bubble-row ${msg.role === 'User' ? 'is-user-msg' : 'is-ai-msg'}`}
                         >
                           <div className="ai-chat-bubble-box">
@@ -1438,20 +1441,33 @@ const PlayerPage: React.FC = () => {
                 <div className="ai-modal-input-container">
                   <input
                     type="text"
-                    placeholder="Ushbu gap yuzasidan savol bering..."
+                    placeholder={
+                      isChatSending || isStreaming 
+                        ? "AI javob yozmoqda (savolingizni yozib turavering)..." 
+                        : "Ushbu gap yuzasidan savol bering..."
+                    }
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSendChatMessage();
+                      if (e.key === 'Enter') {
+                        if (!isChatSending && !isStreaming && chatInput.trim()) {
+                          handleSendChatMessage();
+                        }
+                      }
                     }}
                     className="ai-modal-input-field"
-                    disabled={isChatSending || isStreaming}
                   />
                   <button
                     className="ai-modal-send-button"
                     onClick={() => handleSendChatMessage()}
                     disabled={isChatSending || isStreaming || !chatInput.trim()}
-                    title="Yuborish"
+                    title={
+                      isChatSending || isStreaming 
+                        ? "AI javob berishini kuting..." 
+                        : !chatInput.trim() 
+                          ? "Savol matnini kiriting" 
+                          : "Yuborish"
+                    }
                   >
                     <span>Jo'natish</span>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="send-arrow-svg">
