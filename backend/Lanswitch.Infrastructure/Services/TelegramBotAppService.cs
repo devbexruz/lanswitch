@@ -326,6 +326,103 @@ public class TelegramBotAppService : ITelegramBotAppService
             await HandleAdminStateInputAsync(chatId, message, state);
             return;
         }
+
+        // Ustoz shaxsiy chatda botga matn yoki ovozli xabar yuborganda -> Yangi uyga vazifa qoralamasini yaratish
+        if (message.Chat.Type == ChatType.Private && (message.Text != null || message.Voice != null || message.Audio != null))
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var gemini = scope.ServiceProvider.GetRequiredService<IGeminiAiService>();
+
+            var teacherGroup = await db.TelegramGroups
+                .Include(g => g.Admins)
+                .Where(g => g.OwnerId == user.Id || g.Admins.Any(a => a.UserId == user.Id))
+                .OrderByDescending(g => g.Id)
+                .FirstOrDefaultAsync();
+
+            bool isTeacherUser = user.IsAdmin || teacherGroup != null || await db.UserSubscriptions
+                .AnyAsync(s => s.UserId == user.Id && (s.Status == "Active" || s.IsActive) && s.TargetRole == "Teacher");
+
+            if (isTeacherUser)
+            {
+                if (teacherGroup == null)
+                {
+                    await _botClient.SendMessage(chatId, "⚠️ <b>Ustoz, sizda hali biriktirilgan dars guruhi yo'q.</b>\n\nIltimos, avval Telegram guruhingizga botni admin qilib qo'shing va /start bering.", parseMode: ParseMode.Html);
+                    return;
+                }
+
+                string rawContent = message.Text ?? message.Caption ?? "";
+                string? audioFileId = null;
+
+                if (message.Voice != null || message.Audio != null)
+                {
+                    audioFileId = message.Voice?.FileId ?? message.Audio?.FileId;
+                    try
+                    {
+                        var tgFile = await _botClient.GetFile(audioFileId!);
+                        var botToken = _configuration["BotConfiguration:BotToken"];
+                        using var httpClient = new HttpClient();
+                        var audioBytes = await httpClient.GetByteArrayAsync($"https://api.telegram.org/file/bot{botToken}/{tgFile.FilePath}");
+                        var mime = message.Voice != null ? "audio/ogg" : "audio/mpeg";
+                        rawContent = await gemini.TranscribeVoiceAudioAsync(audioBytes, mime);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Voice transcription error in PM: {ex.Message}");
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(rawContent))
+                {
+                    await _botClient.SendMessage(chatId, "❌ Ovozli xabarni matnga aylantirib bo'lmadi yoki xabar bo'sh.");
+                    return;
+                }
+
+                var teacherContext = await db.TeacherHomeworkContexts
+                    .FirstOrDefaultAsync(c => c.TeacherId == user.Id && (c.GroupId == teacherGroup.Id || c.GroupId == null));
+
+                var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(rawContent, teacherContext?.LearnedContext);
+                var deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
+                var draftCode = Guid.NewGuid().ToString("N")[..8];
+                var draft = new AiHomeworkDraft
+                {
+                    DraftCode = draftCode,
+                    TeacherId = user.Id,
+                    GroupId = teacherGroup.Id,
+                    RawInputText = rawContent,
+                    AudioFileId = audioFileId,
+                    Title = string.IsNullOrWhiteSpace(analysis.Title) ? "Yangi Uyga Vazifa" : analysis.Title,
+                    Deadline = deadline,
+                    ItemsJson = JsonSerializer.Serialize(analysis.Items),
+                    Explanation = analysis.Explanation,
+                    Status = "DraftReady"
+                };
+                db.AiHomeworkDrafts.Add(draft);
+                await db.SaveChangesAsync();
+
+                string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+                var tmaUrl = $"https://{frontendHost}/teacher?role=teacher&user_id={user.Id}&telegram_id={user.TelegramId}&tab=create_assignment&draft_code={draftCode}&group_id={teacherGroup.Id}";
+
+                var kb = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithWebApp("✍️ Qo'shimchalar va Tasdiqlash", new WebAppInfo { Url = tmaUrl }),
+                        InlineKeyboardButton.WithCallbackData("❌ Bekor qilish", $"ahw_no:{draftCode}")
+                    }
+                });
+
+                var replyText = $"✨ <b>Yangi uyga vazifa qoralamasi shakllantirildi!</b> 🎉\n\n" +
+                                $"👥 <b>Guruh:</b> {teacherGroup.Title}\n" +
+                                $"📌 <b>Mavzu:</b> {draft.Title}\n" +
+                                $"⏰ <b>Topshirish muddati:</b> {draft.Deadline:dd.MM.yyyy HH:mm}\n" +
+                                $"🔢 <b>Topshiriqlar:</b> {analysis.Items.Count} ta qism\n\n" +
+                                $"<i>Vazifaga qo'shimchalar kiritish, tahrirlash va guruhga e'lon qilish uchun quyidagi tugmani bosing:</i>";
+
+                await _botClient.SendMessage(chatId, replyText, parseMode: ParseMode.Html, replyMarkup: kb);
+                return;
+            }
+        }
     }
 
     private async Task HandleStartAsync(long chatId, Lanswitch.Domain.Entities.User user, string messageText, Telegram.Bot.Types.User? fromUser)
@@ -2302,7 +2399,11 @@ public class TelegramBotAppService : ITelegramBotAppService
             // B) Ustoz yangi uyga vazifa berayotgan bo'lsa:
             if (intent == "AssignHomework" && isTeacher)
             {
-                // Guruhda emas, ustozning shaxsiy lichkasiga yuboriladi (guruh toza qoladi)
+                var teacherContext = await db.TeacherHomeworkContexts
+                    .FirstOrDefaultAsync(c => c.TeacherId == senderUser.Id && (c.GroupId == group.Id || c.GroupId == null));
+
+                var analysis = await gemini.AnalyzeAndGenerateHomeworkAsync(rawContent, teacherContext?.LearnedContext);
+                var deadline = DateTime.UtcNow.Date.AddDays(analysis.DeadlineDays).Add(analysis.GetDeadlineTimeSpan());
                 var draftCode = Guid.NewGuid().ToString("N")[..8];
                 var draft = new AiHomeworkDraft
                 {
@@ -2311,30 +2412,35 @@ public class TelegramBotAppService : ITelegramBotAppService
                     GroupId = group.Id,
                     RawInputText = rawContent,
                     AudioFileId = audioFileId,
-                    Title = "Yangi Uyga Vazifa",
-                    Deadline = DateTime.UtcNow.AddDays(2),
-                    ItemsJson = "[]",
-                    Status = "PendingConfirm"
+                    Title = string.IsNullOrWhiteSpace(analysis.Title) ? "Yangi Uyga Vazifa" : analysis.Title,
+                    Deadline = deadline,
+                    ItemsJson = JsonSerializer.Serialize(analysis.Items),
+                    Explanation = analysis.Explanation,
+                    Status = "DraftReady"
                 };
                 db.AiHomeworkDrafts.Add(draft);
                 await db.SaveChangesAsync();
 
-                var deepLinkPm = $"https://t.me/{botUsername}?start=ahw_{draftCode}";
+                string frontendHost = _configuration.GetValue<string>("Frontend:Host", "lanswitch.developerlogic.uz");
+                var tmaUrl = $"https://{frontendHost}/teacher?role=teacher&user_id={senderUser.Id}&telegram_id={senderUser.TelegramId}&tab=create_assignment&draft_code={draftCode}&group_id={group.Id}";
+
                 var confirmKb = new InlineKeyboardMarkup(new[]
                 {
                     new[]
                     {
-                        InlineKeyboardButton.WithCallbackData("✅ Ha, shakllantirilsin", $"ahw_yes:{draftCode}"),
+                        InlineKeyboardButton.WithWebApp("✍️ Qo'shimchalar va Tasdiqlash", new WebAppInfo { Url = tmaUrl }),
                         InlineKeyboardButton.WithCallbackData("❌ Bekor qilish", $"ahw_no:{draftCode}")
-                    },
-                    new[]
-                    {
-                        InlineKeyboardButton.WithUrl("➕ O'zgartirish kiritish (Botda)", deepLinkPm)
                     }
                 });
 
-                var preview = rawContent.Length > 220 ? rawContent[..220] + "..." : rawContent;
-                var promptText = $"📚 <b>Guruhda yangi topshiriq aniqlandi!</b>\n\n👥 <b>Guruh:</b> {group.Title}\n💬 <i>\"{preview}\"</i>\n\nUstoz, ushbu topshiriqni tizimda rasmiy uyga vazifa sifatida shakllantiraymi?";
+                var preview = rawContent.Length > 200 ? rawContent[..200] + "..." : rawContent;
+                var promptText = $"📚 <b>Guruhda yangi topshiriq aniqlandi!</b>\n\n" +
+                                 $"👥 <b>Guruh:</b> {group.Title}\n" +
+                                 $"📌 <b>Tavsiya mavzu:</b> {draft.Title}\n" +
+                                 $"⏰ <b>Topshirish muddati:</b> {draft.Deadline:dd.MM.yyyy HH:mm}\n" +
+                                 $"🔢 <b>Topshiriqlar:</b> {analysis.Items.Count} ta qism\n" +
+                                 $"💬 <i>\"{preview}\"</i>\n\n" +
+                                 $"<i>Ustoz, ushbu topshiriqni tahrirlash, qo'shimchalar kiritish va guruhga e'lon qilish uchun quyidagi tugmani bosing:</i>";
 
                 try
                 {
@@ -2356,11 +2462,76 @@ public class TelegramBotAppService : ITelegramBotAppService
                 return;
             }
 
-            // C) Foydalanuvchi ingliz tili yoki grammatika bo'yicha savol bersa:
-            if (intent == "AskEnglishQuestion")
+            // C) Premium o'quvchilar uchun AI Tyutor & Yordamchi (Savollar, esseylar tahlili, suhbat va yordam):
+            if (isSubscribed && (intent == "AskEnglishQuestion" || intent == "CasualChat"))
             {
-                var aiAnswer = await gemini.AnswerStudentProQuestionAsync(rawContent, group.Title);
-                var fullText = $"🤖 <b>Lanswitch AI:</b>\n\n{aiAnswer}";
+                // Guruh bo'yicha kontekst to'plash (darslar, topshiriqlar, o'qituvchi konteksti)
+                var contextSb = new StringBuilder();
+                var recentAssignments = await db.Assignments
+                    .Include(a => a.Items)
+                    .Where(a => a.GroupId == group.Id && a.Status == "Published")
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Take(3)
+                    .ToListAsync();
+
+                if (recentAssignments.Count > 0)
+                {
+                    contextSb.AppendLine("Guruhdagi so'nggi darslar va topshiriqlar:");
+                    foreach (var ass in recentAssignments)
+                    {
+                        var itemsDesc = string.Join(", ", ass.Items.Select(i => i.Title));
+                        contextSb.AppendLine($"- {ass.Title} (Muddati: {ass.Deadline:dd.MM.yyyy HH:mm}). Qismlar: {itemsDesc}");
+                    }
+                }
+
+                var teacherCtx = await db.TeacherHomeworkContexts
+                    .FirstOrDefaultAsync(c => c.GroupId == group.Id || c.TeacherId == group.OwnerId);
+                if (teacherCtx != null && !string.IsNullOrWhiteSpace(teacherCtx.LearnedContext))
+                {
+                    contextSb.AppendLine($"Ustozning ta'lim metodikasi va o'tilgan qoidalari:\n{teacherCtx.LearnedContext}");
+                }
+
+                // Vektor qidiruv orqali eng yaqin subtitrlar/materiallarni topish
+                try
+                {
+                    var msgEmbedding = await gemini.GenerateEmbeddingAsync(rawContent);
+                    if (msgEmbedding != null && msgEmbedding.Length > 0)
+                    {
+                        var topSubs = await db.Subtitles
+                            .Where(s => s.Embedding != null)
+                            .OrderByDescending(s => s.Id)
+                            .Take(250)
+                            .ToListAsync();
+
+                        if (topSubs.Count > 0)
+                        {
+                            var bestSubs = topSubs
+                                .Select(s => new { Subtitle = s, Sim = CosineSimilarity(msgEmbedding, s.Embedding!) })
+                                .Where(x => x.Sim > 0.60f)
+                                .OrderByDescending(x => x.Sim)
+                                .Take(2)
+                                .Select(x => x.Subtitle.Text)
+                                .ToList();
+
+                            if (bestSubs.Count > 0)
+                            {
+                                contextSb.AppendLine("Dars materiallaridan bog'liq namunalar:\n" + string.Join("\n", bestSubs));
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Vector search error in HandleGroupMessageAsync: {ex.Message}");
+                }
+
+                var aiResponse = await gemini.AnswerStudentWithGroupContextAsync(
+                    rawContent,
+                    group.Title,
+                    contextSb.ToString(),
+                    senderUser.FullName);
+
+                var fullText = $"🤖 <b>Lanswitch AI:</b>\n\n{aiResponse}";
                 try
                 {
                     await _botClient.SendMessage(
@@ -2371,7 +2542,7 @@ public class TelegramBotAppService : ITelegramBotAppService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"SendMessage HTML parsing error in AskEnglishQuestion: {ex.Message}. Retrying as plain text...");
+                    Console.WriteLine($"SendMessage HTML parsing error in student AI reply: {ex.Message}. Retrying as plain text...");
                     var plainText = System.Text.RegularExpressions.Regex.Replace(fullText, "<.*?>", string.Empty);
                     await _botClient.SendMessage(
                         chatId,
@@ -2381,7 +2552,6 @@ public class TelegramBotAppService : ITelegramBotAppService
                 return;
             }
 
-            // D) CasualChat yoki boshqa holatlar: guruhda bot jim turadi
             return;
         }
         catch (Exception ex)
@@ -2812,5 +2982,19 @@ public class TelegramBotAppService : ITelegramBotAppService
     {
         try { await _botClient.SendMessage(chatId, text); }
         catch (Exception ex) { Console.WriteLine($"SafeSendMessageAsync failed: {ex.Message}"); }
+    }
+
+    private static float CosineSimilarity(float[] vectorA, float[] vectorB)
+    {
+        if (vectorA.Length != vectorB.Length) return 0;
+        float dotProduct = 0, magnitudeA = 0, magnitudeB = 0;
+        for (int i = 0; i < vectorA.Length; i++)
+        {
+            dotProduct += vectorA[i] * vectorB[i];
+            magnitudeA += vectorA[i] * vectorA[i];
+            magnitudeB += vectorB[i] * vectorB[i];
+        }
+        var denominator = MathF.Sqrt(magnitudeA) * MathF.Sqrt(magnitudeB);
+        return denominator == 0 ? 0 : dotProduct / denominator;
     }
 }

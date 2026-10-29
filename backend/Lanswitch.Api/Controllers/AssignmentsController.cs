@@ -1,9 +1,14 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Lanswitch.Application.Interfaces;
 using Lanswitch.Application.Models;
+using Lanswitch.Domain.Entities;
+using Lanswitch.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 
 namespace Lanswitch.Api.Controllers;
@@ -13,10 +18,14 @@ namespace Lanswitch.Api.Controllers;
 public class AssignmentsController : ControllerBase
 {
     private readonly IAssignmentService _assignmentService;
+    private readonly AppDbContext _db;
+    private readonly IGeminiAiService _gemini;
 
-    public AssignmentsController(IAssignmentService assignmentService)
+    public AssignmentsController(IAssignmentService assignmentService, AppDbContext db, IGeminiAiService gemini)
     {
         _assignmentService = assignmentService;
+        _db = db;
+        _gemini = gemini;
     }
 
     private long GetUserId()
@@ -417,4 +426,227 @@ public class AssignmentsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Yangi bo'sh AI qoralama yaratish
+    /// </summary>
+    [HttpPost("draft/init")]
+    public async Task<IActionResult> InitHomeworkDraft([FromQuery] long groupId, [FromQuery] long? teacherId = null)
+    {
+        var tId = teacherId ?? GetUserId();
+        var draftCode = System.Guid.NewGuid().ToString("N")[..8];
+        var group = await _db.TelegramGroups.FindAsync(groupId);
+        var draft = new AiHomeworkDraft
+        {
+            DraftCode = draftCode,
+            TeacherId = tId,
+            GroupId = groupId,
+            RawInputText = "",
+            Title = $"{System.DateTime.UtcNow:dd.MM.yyyy} Darsi",
+            Deadline = System.DateTime.UtcNow.AddDays(2),
+            ItemsJson = "[]",
+            Status = "PendingConfirm"
+        };
+        _db.AiHomeworkDrafts.Add(draft);
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            draftCode = draft.DraftCode,
+            groupId = draft.GroupId,
+            groupTitle = group?.Title ?? "Dars guruhi",
+            title = draft.Title,
+            deadline = draft.Deadline,
+            items = new List<AiHomeworkAnalysisItem>(),
+            status = draft.Status
+        });
+    }
+
+    /// <summary>
+    /// AI Uyga vazifa qoralamasini olish (DraftCode orqali)
+    /// </summary>
+    [HttpGet("draft/{draftCode}")]
+    public async Task<IActionResult> GetHomeworkDraft([FromRoute] string draftCode)
+    {
+        var draft = await _db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null)
+            return NotFound(new { message = "Qoralama topilmadi" });
+
+        var items = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+
+        return Ok(new
+        {
+            draftCode = draft.DraftCode,
+            groupId = draft.GroupId,
+            groupTitle = draft.Group?.Title ?? "Dars guruhi",
+            title = draft.Title,
+            deadline = draft.Deadline,
+            items = items,
+            status = draft.Status,
+            explanation = draft.Explanation
+        });
+    }
+
+    /// <summary>
+    /// AI orqali qoralamani matnli ko'rsatma bilan o'zgartirish (Refine)
+    /// </summary>
+    [HttpPost("draft/{draftCode}/refine")]
+    public async Task<IActionResult> RefineHomeworkDraft([FromRoute] string draftCode, [FromBody] RefineDraftDto request)
+    {
+        var draft = await _db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null)
+            return NotFound(new { message = "Qoralama topilmadi" });
+
+        var currentItems = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+        var currentAnalysis = new AiHomeworkAnalysisResult
+        {
+            Title = draft.Title,
+            DeadlineDays = Math.Max(1, (int)Math.Ceiling((draft.Deadline - System.DateTime.UtcNow.Date).TotalDays)),
+            DeadlineTime = draft.Deadline.ToString("HH:mm"),
+            Explanation = draft.Explanation,
+            Items = currentItems
+        };
+
+        var teacherContext = await _db.TeacherHomeworkContexts
+            .Where(c => c.TeacherId == draft.TeacherId && (c.GroupId == draft.GroupId || c.GroupId == null))
+            .OrderByDescending(c => c.GroupId)
+            .Select(c => c.LearnedContext)
+            .FirstOrDefaultAsync();
+
+        var refined = await _gemini.RefineHomeworkDraftAsync(currentAnalysis, request.Prompt, teacherContext);
+
+        draft.Title = refined.Title;
+        draft.Deadline = System.DateTime.UtcNow.Date.AddDays(refined.DeadlineDays).Add(refined.GetDeadlineTimeSpan());
+        draft.ItemsJson = JsonSerializer.Serialize(refined.Items);
+        draft.Explanation = refined.Explanation;
+        draft.Status = "DraftReady";
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            draftCode = draft.DraftCode,
+            groupId = draft.GroupId,
+            groupTitle = draft.Group?.Title ?? "Dars guruhi",
+            title = draft.Title,
+            deadline = draft.Deadline,
+            items = refined.Items,
+            status = draft.Status,
+            explanation = draft.Explanation,
+            unsupportedRequests = refined.UnsupportedRequests
+        });
+    }
+
+    /// <summary>
+    /// O'qituvchi tomonidan qoralamani qo'lda tahrirlash (Title, Deadline, Items)
+    /// </summary>
+    [HttpPost("draft/{draftCode}/update")]
+    public async Task<IActionResult> UpdateHomeworkDraft([FromRoute] string draftCode, [FromBody] UpdateDraftDto request)
+    {
+        var draft = await _db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null)
+            return NotFound(new { message = "Qoralama topilmadi" });
+
+        if (!string.IsNullOrWhiteSpace(request.Title))
+            draft.Title = request.Title;
+
+        if (request.Deadline != default)
+            draft.Deadline = request.Deadline;
+
+        if (request.Items != null)
+            draft.ItemsJson = JsonSerializer.Serialize(request.Items);
+
+        draft.Status = "DraftReady";
+        await _db.SaveChangesAsync();
+
+        return Ok(new { success = true });
+    }
+
+    /// <summary>
+    /// Qoralamani rasmiy e'lon qilish (Guruhga chiqarish)
+    /// </summary>
+    [HttpPost("draft/{draftCode}/publish")]
+    public async Task<IActionResult> PublishHomeworkDraft([FromRoute] string draftCode, [FromQuery] long? teacherId = null)
+    {
+        var draft = await _db.AiHomeworkDrafts
+            .Include(d => d.Group)
+            .FirstOrDefaultAsync(d => d.DraftCode == draftCode);
+
+        if (draft == null)
+            return NotFound(new { message = "Qoralama topilmadi" });
+
+        var tId = teacherId ?? draft.TeacherId;
+        var items = JsonSerializer.Deserialize<List<AiHomeworkAnalysisItem>>(draft.ItemsJson) ?? new();
+
+        var dto = new CreateAssignmentDto
+        {
+            GroupId = draft.GroupId,
+            Title = draft.Title,
+            Deadline = draft.Deadline,
+            Items = items.Select((it, i) => new CreateAssignmentItemDto
+            {
+                OrderIndex = i + 1,
+                ItemType = it.ItemType,
+                Title = it.Title,
+                Instructions = it.Instructions,
+                TargetUnitId = it.TargetUnitId
+            }).ToList()
+        };
+
+        var created = await _assignmentService.CreateAssignmentAsync(tId, dto);
+        draft.Status = "Published";
+        await _db.SaveChangesAsync();
+
+        try
+        {
+            var context = await _db.TeacherHomeworkContexts
+                .FirstOrDefaultAsync(c => c.TeacherId == tId && (c.GroupId == draft.GroupId || c.GroupId == null));
+
+            if (context == null)
+            {
+                context = new TeacherHomeworkContext
+                {
+                    TeacherId = tId,
+                    GroupId = draft.GroupId,
+                    LearnedContext = "",
+                    TotalAssignmentsCreated = 0
+                };
+                _db.TeacherHomeworkContexts.Add(context);
+            }
+
+            var itemsDesc = string.Join("; ", created.Items.Select(i => $"{i.Title} ({i.ItemType}: {i.Instructions})"));
+            var summary = $"Mavzu: {created.Title}, Muddat: {created.Deadline:dd.MM.yyyy HH:mm}, Topshiriqlar: {itemsDesc}";
+            var newLearned = await _gemini.LearnAndUpdateTeacherContextAsync(context.LearnedContext, summary);
+            context.LearnedContext = newLearned;
+            context.TotalAssignmentsCreated++;
+            context.LastTemplateJson = draft.ItemsJson;
+            await _db.SaveChangesAsync();
+        }
+        catch (System.Exception ex)
+        {
+            System.Console.WriteLine($"Error updating learned teacher context: {ex.Message}");
+        }
+
+        return Ok(created);
+    }
+}
+
+public class RefineDraftDto
+{
+    public string Prompt { get; set; } = null!;
+}
+
+public class UpdateDraftDto
+{
+    public string? Title { get; set; }
+    public System.DateTime Deadline { get; set; }
+    public List<AiHomeworkAnalysisItem>? Items { get; set; }
 }

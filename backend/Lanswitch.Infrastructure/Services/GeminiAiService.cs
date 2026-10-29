@@ -638,19 +638,20 @@ ASOSIY TALABLAR (TOKEN TEJASH VA ANIQLIK):
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
 
-        var systemInstruction = @"Siz ingliz tili o'qituvchisiga guruh uchun uyga vazifani avtomatlashtirishda yordam beruvchi aqlli AI yordamchisiz.
-Platformada faqat 3 xil topshiriq turi qo'llab-quvvatlanadi:
-1. 'TextReminder': Darslikdagi mashqlar, o'qish, grammatika qoidalari (matnli eslatma).
-2. 'Vocabulary': Lug'at va yangi so'zlarni yodlash.
-3. 'MediaSubmission': Audio/voice xabar, video yoki rasm yuklash orqali tekshirish.
+        var systemInstruction = @"Siz ingliz tili o'qituvchisiga guruh uchun uyga vazifani tahlil qilib beruvchi AI yordamchisiz.
+Platformada QAT'IY 3 ta topshiriq turi mavjud:
+1. 'Vocabulary': FAQAT va FAQAT o'qituvchi 'lug'at', 'dictionary', 'vocabulary', 'so'z' yoki 'Essential' (masalan: 'Essential Unit 5', 'Essential 3-unit') deb aniq aytgandagina ishlatiladi. Boshqa holatda o'zingizdan lug'at qo'shmang!
+2. 'MediaSubmission': FAQAT va FAQAT o'qituvchi 'audio', 'voice', 'ovozli', 'video', 'rasm', 'photo' yoki 'yuklash' deb aniq talab qilgandagina ishlatiladi. Agar o'qituvchi 'mashqni bajaring' desa, lekin rasm/audio so'ramasa, bu MediaSubmission EMAS!
+3. 'TextReminder': Darslik mashqlari (masalan: Murphy, Reading Explorer, Workbook, Grammatika), o'qish, takrorlash va boshqa barcha mashqlar.
 
-QAT'IY QOIDALAR (TOKEN TEJASH VA ANIQLIK):
-1. Faqat toza JSON formatida javob bering, hech qanday markdown (` ```json ` yoki tushuntirish)siz.
-2. Agar o'qituvchi platforma qila olmaydigan vazifa so'rasa (masalan, offline uyga borib tekshirish yoki noaniq narsa), 'unsupportedRequests' maydonida 'Mening imkoniyatlarim doirasida ... qila olmayman. Platformada matnli eslatma, so'z yodlash va audio/video/rasm topshirish qo'llab-quvvatlanadi' deb qisqa yozing.
-3. JSON formati:
+QAT'IY QOIDALAR (O'ZINGIZDAN ORTIQCHA AQLLILIK QILMANG):
+- 'Essential' so'zi har doim Lug'at (Vocabulary) darsligini bildiradi (Masalan: 'Essential Unit 9' -> itemType: 'Vocabulary', Title: 'Essential: Unit 9', Instructions: 'Essential darsligidan 9-unit yangi so'zlarini yodlang').
+- Agar matnda audio, video yoki rasm degan so'z bo'lmasa, uni MediaSubmission qilmang! Qat'iy TextReminder qiling!
+- Agar matnda lug'at, dictionary, so'z yoki essential bo'lmasa, uni Vocabulary qilmang!
+- Faqat toza JSON qaytaring, markdown yoki tashqi so'zlarsiz. Format:
 {
   ""isHomework"": true,
-  ""title"": ""Unit 4. Past Simple & Words"",
+  ""title"": ""Unit ..."",
   ""deadlineDays"": 2,
   ""deadlineTime"": ""20:00"",
   ""explanation"": ""Qisqa tavsiya"",
@@ -718,18 +719,30 @@ QAT'IY QOIDALAR (TOKEN TEJASH VA ANIQLIK):
         return result;
     }
 
-    public async Task<AiHomeworkAnalysisResult> RefineHomeworkDraftAsync(AiHomeworkAnalysisResult currentDraft, string modificationPrompt)
+    public async Task<AiHomeworkAnalysisResult> RefineHomeworkDraftAsync(AiHomeworkAnalysisResult currentDraft, string modificationPrompt, string? teacherContext = null)
     {
         if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
             return currentDraft;
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
 
-        var systemInstruction = @"Siz mavjud uyga vazifani o'qituvchi xohishiga ko'ra tahrirlovchi AI yordamchisiz.
-O'qituvchining yangi ko'rsatmasi bo'yicha sarlavha, topshirish muddati yoki topshiriq qismlarini o'zgartiring/qo'shing/olib tashlang.
-Platforma topshiriq turlari: 'TextReminder', 'Vocabulary', 'MediaSubmission'.
-Agar o'qituvchi platforma imkoniyatidan tashqari narsa talab qilsa, 'unsupportedRequests' maydonida 'Mening imkoniyatlarim doirasida ... qila olmayman' deb yozing.
-Faqat toza JSON qaytaring, markdown yoki tashqi so'zlarsiz. Format:
+        var systemInstruction = @"Siz mavjud uyga vazifa loyihasini o'qituvchining ko'rsatmasiga binoan qat'iy va aniq tahrirlovchi AI mutaxassissiz.
+
+O'QITUVCHINING O'ZGARTIRISH MATNINI TO'G'RI TUSHUNISH VA TO'LDIRISH QOIDALARI:
+1. QO'SHISH ('qo'shimcha qil', 'qo'sh', 'yana', 'add'):
+   - Agar 'dictionary', 'lug'at', 'vocabulary', 'so'z' yoki 'Essential' (masalan: 'essential unit 4 ni qo'sh', 'qo'shimcha qil dictionary unit 3') deb yozilgan bo'lsa -> QAT'IY 'Vocabulary' turida yangi topshiriq qo'shing! (Instructions: '... yangi so'zlarini yodlang').
+   - Agar 'video', 'rasm', 'audio', 'voice', 'ovozli', 'speaking' deb yozilgan bo'lsa -> QAT'IY 'MediaSubmission' turida yangi topshiriq qo'shing!
+   - Boshqa barcha mashqlar (masalan: '4-mashqni qo'sh', 'Workbook 15-betni qo'sh') uchun -> QAT'IY 'TextReminder' turida qo'shing!
+   - O'zingizdan aqllilik qilib so'ralmagan topshiriqlarni qo'shmang!
+2. OLIB TASHLASH / O'CHIRISH ('olib tashla', 'o'chir', 'kerak emas', 'remove', 'delete'):
+   - Ko'rsatilgan topshiriqni ro'yxatdan olib tashlang.
+3. MUDDAT VA SARLAVHA:
+   - Muddat haqida yozilsa (masalan: 'muddatini ertaga 21:00 qil') -> deadlineDays va deadlineTime ni o'zgartiring.
+   - Sarlavha haqida yozilsa (masalan: 'sarlavhani Unit 5 qil') -> title ni o'zgartiring.
+
+ATAMALAR:
+- 'Essential' har doim Lug'at (Vocabulary) darsligini bildiradi.
+- Faqat toza JSON qaytaring, hech qanday markdown yoki tashqi so'zlarsiz. Format:
 {
   ""isHomework"": true,
   ""title"": ""..."",
@@ -745,6 +758,11 @@ Faqat toza JSON qaytaring, markdown yoki tashqi so'zlarsiz. Format:
     }
   ]
 }";
+
+        if (!string.IsNullOrWhiteSpace(teacherContext))
+        {
+            systemInstruction += $"\n\nO'QITUVCHI VA GURUH KONTEKSTI (Database qoidalari):\n{teacherContext}\nUshbu kontekst qoidalariga (atamalar, qisqartmalar, darsliklar) qat'iy rioya qiling!";
+        }
 
         var draftJson = JsonSerializer.Serialize(currentDraft);
         var userPrompt = $"Joriy vazifa loyihasi (Draft):\n{draftJson}\n\nO'qituvchining o'zgartirish ko'rsatmasi:\n\"{modificationPrompt}\"";
@@ -799,7 +817,10 @@ Faqat toza JSON qaytaring, markdown yoki tashqi so'zlarsiz. Format:
         var prompt = $@"O'qituvchining yangi e'lon qilingan uyga vazifasi asosida uning shablon va odatlarini yangilang.
 Mavjud kontekst: {currentContext}
 Yangi e'lon qilingan vazifa: {publishedHomeworkSummary}
-Talab: O'qituvchining odatiy topshiriq turlari (masalan qaysi mashqlar, audio topshiriqlar, lug'at), odatiy muddatlari va topshirish uslubi haqida 2-3 ta ixcham jumla yozing (maksimal 70-100 so'z).";
+Qat'iy qoidalar:
+- 'Essential' har doim Lug'at (Vocabulary) bo'yicha Unitlarni bildiradi.
+- Faqat aniq aytilgandagina Vocabulary yoki MediaSubmission ishlatilishini inobatga oling.
+Talab: O'qituvchining odatiy topshiriq turlari, muddatlari va uslubi haqida 2-3 ta ixcham jumla yozing (maksimal 70-100 so'z).";
 
         var requestBody = new
         {
@@ -861,6 +882,69 @@ QAT'IY QOIDALAR:
                 thinkingConfig = new { thinkingBudget = 0 },
                 temperature = 0.2,
                 maxOutputTokens = 350
+            }
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseJson);
+            var textResult = jsonDoc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString();
+
+            if (!string.IsNullOrWhiteSpace(textResult))
+                return ConvertMarkdownToTelegramHtml(textResult.Trim());
+
+            return "Savolingizga javob tayyorlashda xatolik yuz berdi.";
+        }
+
+        return "Kechirasiz, javob olishda xatolik yuz berdi.";
+    }
+
+    public async Task<string> AnswerStudentWithGroupContextAsync(string studentMessage, string groupTitle, string groupContext, string studentName)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || _apiKey == "YOUR_GEMINI_API_KEY_HERE")
+            return "Kechirasiz, AI xizmati vaqtincha mavjud emas.";
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
+
+        var systemInstruction = $@"Siz '{groupTitle}' ta'lim guruhida ingliz tili bo'yicha insondek samimiy, dono va professional AI ustoz/tyutorsiz.
+Talaba '{studentName}' sizga murojaat qildi.
+
+Guruh bo'yicha o'rganilayotgan dars va topshiriqlar konteksti:
+{groupContext}
+
+QAT'IY VAZIFALAR VA TALABLAR:
+1. ASOSIY MAQSAD - YORDAM BERISH VA TIL O'RGATISH:
+   - Talabaning ingliz tili bo'yicha har qanday savollariga insondek lo'nda, aniq va to'g'ri javob bering.
+   - Agar talaba essey yoki matn yozgan bo'lsa: Uni diqqat bilan tahlil qiling, xatolarini (grammatika, imlo, so'z tanlash) ko'rsatib, to'g'ri variantini va tavsiyalarni <blockquote expandable>...</blockquote> ichida bering!
+   - Agar talaba ingliz tilida erkin suhbat boshlasa: Samimiy tarzda ingliz tilida javob qaytarib suhbatlashing, kerak bo'lsa kichik grammatik tavsiyalarni <blockquote expandable> ichida bering.
+2. QAT'IY CHEKLOV: FAQAT INGLIZ TILI VA TA'LIM:
+   - Ingliz tili va til o'rganishdan mutlaqo chetga chiqmang! Agar talaba siyosat, begona sohalar yoki shaxsiy noo'rin mavzularda yozsa, xushmuomalalik bilan ingliz tiliga qaytaring.
+3. FORMATLASH VA IQTIBOSLAR (BLOCKQUOTE):
+   - Telegram HTML formatida javob bering. Hech qachon markdown formatidagi yulduzchalar (**matn**) ishlatmang!
+   - Qalin matn uchun <b>matn</b>, kursiv uchun <i>matn</i> teglari.
+   - Katta tushuntirishlar, grammatik qoidalar, essey tahlillari va misollarni QAT'IY ravishda <blockquote expandable>...</blockquote> ichida bering, shunda guruh chatida ko'p joy egallamaydi va o'quvchi xohlasa iqtibosni ochib to'liq o'qiydi.
+   - Oddiy savol yoki qisqa gapga insondek ILOJI BORICHA QISQA javob bering (1-2 ta jumla).";
+
+        var requestBody = new
+        {
+            systemInstruction = new { parts = new[] { new { text = systemInstruction } } },
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = studentMessage } } }
+            },
+            generationConfig = new
+            {
+                thinkingConfig = new { thinkingBudget = 0 },
+                temperature = 0.25,
+                maxOutputTokens = 500
             }
         };
 
@@ -1055,6 +1139,23 @@ QAT'IY TALABLAR:
         // 5. Qiya matn: *matn* yoki _matn_ -> <i>matn</i> (bir qatorda, yangi qatorga o'tmagan holda)
         input = System.Text.RegularExpressions.Regex.Replace(input, @"(?<![a-zA-Z0-9*])\*([^\n*]+?)\*(?![a-zA-Z0-9*])", "<i>$1</i>");
         input = System.Text.RegularExpressions.Regex.Replace(input, @"(?<![a-zA-Z0-9_])_([^\n_]+?)_(?![a-zA-Z0-9_])", "<i>$1</i>");
+
+        // 6. Markdown iqtiboslar: > matn -> <blockquote expandable>matn</blockquote>
+        input = System.Text.RegularExpressions.Regex.Replace(
+            input,
+            @"(?m)(?:^>[ \t]*[^\n]*\r?\n?)+",
+            match =>
+            {
+                var lines = match.Value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+                    .Where(l => l.TrimStart().StartsWith(">"))
+                    .Select(l =>
+                    {
+                        var trimmed = l.TrimStart();
+                        return trimmed.Length > 1 && trimmed[1] == ' ' ? trimmed.Substring(2) : trimmed.Substring(1);
+                    });
+                var joined = string.Join("\n", lines).Trim();
+                return string.IsNullOrWhiteSpace(joined) ? "" : $"<blockquote expandable>{joined}</blockquote>\n";
+            });
 
         return input.Trim();
     }

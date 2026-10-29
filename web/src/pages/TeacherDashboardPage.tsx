@@ -77,7 +77,11 @@ export default function TeacherDashboardPage() {
   const [groups, setGroups] = useState<TeacherGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<TeacherGroup | null>(null);
   const [showGroupDrawer, setShowGroupDrawer] = useState(false);
-  const [viewMode, setViewMode] = useState<'assignments' | 'students'>(() => {
+  const [viewMode, setViewMode] = useState<'assignments' | 'students' | 'create_assignment'>(() => {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    if (urlParams?.get('tab') === 'create_assignment' || urlParams?.get('draft_code')) {
+      return 'create_assignment';
+    }
     const saved = localStorage.getItem('lanswitch_teacher_view_mode');
     return (saved === 'assignments' || saved === 'students') ? saved : 'assignments';
   });
@@ -124,10 +128,22 @@ export default function TeacherDashboardPage() {
   const [resolvePenaltyStudent, setResolvePenaltyStudent] = useState<any | null>(null);
   const [isResolvingPenalties, setIsResolvingPenalties] = useState(false);
 
-  // Create Assignment Modal State (Starts empty, customizable default template)
+  // Create Assignment Page State (Starts empty, customizable default template & AI command bar)
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreatingAssignment, setIsCreatingAssignment] = useState(false);
+  const [activeDraftCode, setActiveDraftCode] = useState<string | null>(() => {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    return urlParams?.get('draft_code') || null;
+  });
   const [customTitle, setCustomTitle] = useState(`${new Date().toLocaleDateString('uz-UZ')} Darsi`);
+  const [customDeadline, setCustomDeadline] = useState<string>(() => {
+    const d = new Date(Date.now() + 24 * 3600 * 1000);
+    d.setHours(21, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
+  const [aiPromptInput, setAiPromptInput] = useState('');
+  const [isRefiningDraft, setIsRefiningDraft] = useState(false);
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [items, setItems] = useState<Array<{
     orderIndex: number;
     itemType: 'TextReminder' | 'Vocabulary' | 'MediaSubmission';
@@ -263,6 +279,8 @@ export default function TeacherDashboardPage() {
       showTelegramBackButton(() => setDetailReviewStudent(null));
     } else if (showReportModal) {
       showTelegramBackButton(() => setShowReportModal(false));
+    } else if (viewMode === 'create_assignment') {
+      showTelegramBackButton(() => setViewMode('assignments'));
     } else if (showCreateModal) {
       showTelegramBackButton(() => setShowCreateModal(false));
     } else if (showTimelineModal) {
@@ -282,7 +300,7 @@ export default function TeacherDashboardPage() {
     };
   }, [
     penaltyModal, resolvePenaltyStudent, detailReviewStudent, 
-    showReportModal, showCreateModal, showTimelineModal, 
+    showReportModal, viewMode, showCreateModal, showTimelineModal, 
     showGroupDrawer, selectedGroup, mainTab
   ]);
 
@@ -314,15 +332,58 @@ export default function TeacherDashboardPage() {
     setGroups(res);
     setIsLoadingGroups(false);
 
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const queryDraftCode = urlParams?.get('draft_code');
+    const queryGroupId = urlParams?.get('group_id');
+    const queryTab = urlParams?.get('tab');
+
     if (res.length > 0) {
-      const savedGroupId = localStorage.getItem('lanswitch_teacher_selected_group_id');
-      const found = res.find(g => g.id.toString() === savedGroupId) || res.find(g => g.id === selectedGroup?.id);
-      const target = found || res[0];
+      let target: TeacherGroup | undefined;
+      if (queryGroupId) {
+        target = res.find(g => g.id.toString() === queryGroupId);
+      }
+      if (!target) {
+        const savedGroupId = localStorage.getItem('lanswitch_teacher_selected_group_id');
+        target = res.find(g => g.id.toString() === savedGroupId) || res.find(g => g.id === selectedGroup?.id) || res[0];
+      }
       setSelectedGroup(target);
       loadGroupAssignments(target.id, currentTeacherId);
       loadMembers(target.id);
     } else {
       setSelectedGroup(null);
+    }
+
+    if (queryDraftCode) {
+      setActiveDraftCode(queryDraftCode);
+      setViewMode('create_assignment');
+      api.getHomeworkDraft(queryDraftCode).then(draft => {
+        if (draft) {
+          if (draft.title) setCustomTitle(draft.title);
+          if (draft.deadline) {
+            try {
+              setCustomDeadline(new Date(draft.deadline).toISOString().slice(0, 16));
+            } catch {}
+          }
+          if (Array.isArray(draft.items)) {
+            setItems(draft.items.map((it, idx) => ({
+              orderIndex: idx + 1,
+              itemType: it.itemType,
+              title: it.title,
+              instructions: it.instructions || '',
+              targetUnitId: it.targetUnitId,
+              vocabMode: 'book'
+            })));
+          }
+          if (draft.groupId) {
+            const foundGroup = res.find(g => g.id === draft.groupId);
+            if (foundGroup) {
+              setSelectedGroup(foundGroup);
+            }
+          }
+        }
+      });
+    } else if (queryTab === 'create_assignment') {
+      setViewMode('create_assignment');
     }
   };
 
@@ -695,47 +756,6 @@ export default function TeacherDashboardPage() {
     setIsLoadingTimeline(false);
   };
 
-  // Create Assignment
-  const handleCreateAssignment = async () => {
-    if (!selectedGroup) return;
-    if (!isTeacherSubActive) {
-      if (subscription?.targetRole === 'Student') {
-        alert("Guruhda yangi vazifa yaratish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Talaba rejimida guruhlarni boshqarish mumkin emas! Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
-      } else {
-        alert("Guruhda vazifa yaratish uchun hisobingizda faol 'Ustoz' tarifi bo'lishi lozim.");
-      }
-      setShowSubscriptionModal(true);
-      return;
-    }
-    if (items.length === 0) {
-      alert("Topshiriq e'lon qilish uchun kamida 1 ta vazifa bo'limi qo'shilishi shart!");
-      return;
-    }
-    if (!customTitle.trim()) {
-      alert("Iltimos, topshiriq sarlavhasini kiriting!");
-      return;
-    }
-
-    setIsCreatingAssignment(true);
-    try {
-      const payload: CreateAssignmentPayload = {
-        groupId: selectedGroup.id,
-        title: customTitle.trim(),
-        deadline: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
-        items: items.map((it, idx) => ({ ...it, orderIndex: idx + 1 }))
-      };
-
-      await api.createAssignment(payload, user?.id);
-      setShowCreateModal(false);
-      alert('Vazifa muvaffaqiyatli yaratildi va Telegram guruhga e\'lon qilindi!');
-      loadGroupAssignments(selectedGroup.id);
-    } catch (e: any) {
-      alert('Vazifani yaratishda xatolik yuz berdi: ' + (e?.message || 'Server xatosi'));
-    } finally {
-      setIsCreatingAssignment(false);
-    }
-  };
-
   const handleDeleteAssignment = async (assignmentId: number, title: string) => {
     const ok = window.confirm(`"${title}" nomli vazifani haqiqatan ham butunlay o'chirmoqchimisiz?\n\nUndagi barcha topshiriqlar, talabalarning yuborgan javoblari va baholari o'chib ketadi.`);
     if (!ok) return;
@@ -806,7 +826,7 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = async () => {
     if (!isTeacherSubActive) {
       if (subscription?.targetRole === 'Student') {
         alert("Guruhda yangi vazifa yaratish va guruhni boshqarish faqat 'Ustoz' tarifida mavjud! Sizning joriy tarifingiz 'Student Premium'. Talaba rejimida guruhlarni boshqarish cheklangan. Iltimos, tarifingizni 'Ustoz Standart' tarifiga o'tkazing!");
@@ -825,10 +845,162 @@ export default function TeacherDashboardPage() {
       setShowSubscriptionModal(true);
       return;
     }
-    // Starts empty by default as requested: "boshlanishiga shunchaki bo'sh bo'lsin keraklisin qo'lda qo'shib yozadigan bo'ladi"
+    // Starts empty by default as requested
     setItems([]);
     setCustomTitle(`${new Date().toLocaleDateString('uz-UZ')} Darsi`);
-    setShowCreateModal(true);
+    const defaultDl = new Date(Date.now() + 24 * 3600 * 1000);
+    defaultDl.setHours(21, 0, 0, 0);
+    setCustomDeadline(defaultDl.toISOString().slice(0, 16));
+
+    if (selectedGroup) {
+      try {
+        const draft = await api.initHomeworkDraft(selectedGroup.id, user?.id);
+        if (draft) {
+          setActiveDraftCode(draft.draftCode);
+        } else {
+          setActiveDraftCode(null);
+        }
+      } catch {
+        setActiveDraftCode(null);
+      }
+    }
+    setViewMode('create_assignment');
+  };
+
+  const handleRefineDraft = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const prompt = aiPromptInput.trim();
+    if (!prompt) return;
+
+    if (!selectedGroup) {
+      alert("Iltimos, avval guruhni tanlang");
+      return;
+    }
+
+    setIsRefiningDraft(true);
+    try {
+      let draftCode = activeDraftCode;
+      if (!draftCode) {
+        const initRes = await api.initHomeworkDraft(selectedGroup.id, user?.id);
+        if (initRes) {
+          draftCode = initRes.draftCode;
+          setActiveDraftCode(draftCode);
+        }
+      }
+
+      if (!draftCode) {
+        alert("Qoralama bilan bog'lanishda xatolik yuz berdi");
+        return;
+      }
+
+      // Sync current manual changes first
+      await api.updateHomeworkDraft(draftCode, {
+        title: customTitle.trim(),
+        deadline: customDeadline ? new Date(customDeadline).toISOString() : new Date().toISOString(),
+        items: items.map(it => ({
+          itemType: it.itemType,
+          title: it.title,
+          instructions: it.instructions || '',
+          targetUnitId: it.targetUnitId
+        }))
+      });
+
+      const refined = await api.refineHomeworkDraft(draftCode, prompt);
+      if (refined) {
+        if (refined.title) setCustomTitle(refined.title);
+        if (refined.deadline) {
+          try {
+            setCustomDeadline(new Date(refined.deadline).toISOString().slice(0, 16));
+          } catch {}
+        }
+        if (Array.isArray(refined.items)) {
+          setItems(refined.items.map((it, idx) => ({
+            orderIndex: idx + 1,
+            itemType: it.itemType,
+            title: it.title,
+            instructions: it.instructions || '',
+            targetUnitId: it.targetUnitId,
+            vocabMode: 'book'
+          })));
+        }
+        setAiPromptInput('');
+      } else {
+        alert("AI topshiriqni yangilashda javob bera olmadi. Iltimos qayta urinib ko'ring.");
+      }
+    } catch (err: any) {
+      alert("Xatolik: " + (err?.message || "AI bilan aloqada xatolik"));
+    } finally {
+      setIsRefiningDraft(false);
+    }
+  };
+
+  const handlePublishDraft = async () => {
+    if (!selectedGroup) return;
+    if (!isTeacherSubActive) {
+      alert("Vazifa e'lon qilish uchun faol 'Ustoz' tarifi talab qilinadi!");
+      setShowSubscriptionModal(true);
+      return;
+    }
+    if (items.length === 0) {
+      alert("Topshiriq e'lon qilish uchun kamida 1 ta vazifa bo'limi qo'shilishi shart!");
+      return;
+    }
+    if (!customTitle.trim()) {
+      alert("Iltimos, topshiriq sarlavhasini kiriting!");
+      return;
+    }
+
+    setIsCreatingAssignment(true);
+    try {
+      if (activeDraftCode) {
+        await api.updateHomeworkDraft(activeDraftCode, {
+          title: customTitle.trim(),
+          deadline: customDeadline ? new Date(customDeadline).toISOString() : new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+          items: items.map(it => ({
+            itemType: it.itemType,
+            title: it.title,
+            instructions: it.instructions || '',
+            targetUnitId: it.targetUnitId
+          }))
+        });
+
+        const ok = await api.publishHomeworkDraft(activeDraftCode, user?.id);
+        if (ok) {
+          alert("✅ Vazifa muvaffaqiyatli Telegram guruhga e'lon qilindi!");
+          setActiveDraftCode(null);
+          setViewMode('assignments');
+          await loadGroupAssignments(selectedGroup.id);
+          return;
+        }
+      }
+
+      // Fallback
+      const payload: CreateAssignmentPayload = {
+        groupId: selectedGroup.id,
+        title: customTitle.trim(),
+        deadline: customDeadline ? new Date(customDeadline).toISOString() : new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        items: items.map((it, idx) => ({ ...it, orderIndex: idx + 1 }))
+      };
+      await api.createAssignment(payload, user?.id);
+      alert("✅ Vazifa muvaffaqiyatli Telegram guruhga e'lon qilindi!");
+      setViewMode('assignments');
+      await loadGroupAssignments(selectedGroup.id);
+    } catch (e: any) {
+      alert("Vazifani yaratishda xatolik yuz berdi: " + (e?.message || "Server xatosi"));
+    } finally {
+      setIsCreatingAssignment(false);
+    }
+  };
+
+  const handleMoveItem = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === items.length - 1) return;
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    const copy = [...items];
+    const temp = copy[index];
+    copy[index] = copy[targetIdx];
+    copy[targetIdx] = temp;
+    setItems(copy);
   };
 
   const handleSaveCurrentAsTemplate = () => {
@@ -893,27 +1065,29 @@ export default function TeacherDashboardPage() {
     setItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  // Load Books Hierarchy for Create Assignment Modal
+  // Load Books Hierarchy for Create Assignment Modal / Page
   useEffect(() => {
-    if (showCreateModal) {
-      api.getBooks().then(res => {
-        setBooksList(res);
-        if (res.length > 0) {
-          const firstBook = res[0];
-          setSelectedBookId(firstBook.id);
-          api.getBookParts(firstBook.id).then(parts => {
-            setBookPartsList(parts);
-            if (parts.length > 0) {
-              setSelectedPartId(parts[0].id);
-              api.getBookUnits(parts[0].id).then(units => {
-                setPartUnitsList(units);
-              });
-            }
-          });
-        }
-      });
+    if (viewMode === 'create_assignment' || showCreateModal) {
+      if (booksList.length === 0) {
+        api.getBooks().then(res => {
+          setBooksList(res);
+          if (res.length > 0) {
+            const firstBook = res[0];
+            setSelectedBookId(firstBook.id);
+            api.getBookParts(firstBook.id).then(parts => {
+              setBookPartsList(parts);
+              if (parts.length > 0) {
+                setSelectedPartId(parts[0].id);
+                api.getBookUnits(parts[0].id).then(units => {
+                  setPartUnitsList(units);
+                });
+              }
+            });
+          }
+        });
+      }
     }
-  }, [showCreateModal]);
+  }, [viewMode, showCreateModal]);
 
   const handleBookSelect = async (bookId: number) => {
     setSelectedBookId(bookId);
@@ -1363,6 +1537,783 @@ export default function TeacherDashboardPage() {
                         </button>
                       </div>
                     )}
+
+                {/* 2.1 VIEW MODE: CREATE & REFINE ASSIGNMENT (FULL PAGE) */}
+                {viewMode === 'create_assignment' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingBottom: '100px' }}>
+                    {/* Full Page Header & Minimal Top Toolbar */}
+                    <div style={{
+                      background: 'var(--pure-white)',
+                      borderRadius: '20px',
+                      padding: '16px 20px',
+                      border: '1.5px solid var(--sky-border)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                      position: 'sticky',
+                      top: '72px',
+                      zIndex: 35
+                    }}>
+                      {/* Left: Back button & Title */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (items.length > 0 && !window.confirm("Kiritilgan o'zgarishlar saqlanmasligi mumkin. Chiqishni xohlaysizmi?")) return;
+                            setViewMode('assignments');
+                          }}
+                          style={{
+                            background: '#F1F5F9',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '12px',
+                            padding: '8px 14px',
+                            fontSize: '13px',
+                            fontWeight: 800,
+                            color: 'var(--text-navy)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <ArrowLeft size={16} />
+                          <span>Orqaga</span>
+                        </button>
+
+                        <div>
+                          <div style={{ fontSize: '17px', fontWeight: 900, color: 'var(--text-navy)', lineHeight: 1.2 }}>
+                            Vazifa Tuzish & Tahrirlash
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--primary-blue)', fontWeight: 700, marginTop: '2px' }}>
+                            Guruh: <strong>{selectedGroup?.title || 'Tanlanmagan'}</strong>
+                            {activeDraftCode && <span style={{ marginLeft: '8px', color: '#64748B', fontSize: '11px' }}>(Loyiha #{activeDraftCode})</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Minimal Top Actions Toolbar */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleAddItem('Vocabulary')}
+                          className="btn-big-white"
+                          style={{
+                            minHeight: '36px',
+                            padding: '0 12px',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            border: '1.5px solid #93C5FD',
+                            color: '#1D4ED8',
+                            background: '#EFF6FF'
+                          }}
+                        >
+                          <BookOpen size={14} />
+                          <span>+ Lug'at</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddItem('MediaSubmission')}
+                          className="btn-big-white"
+                          style={{
+                            minHeight: '36px',
+                            padding: '0 12px',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            border: '1.5px solid #C084FC',
+                            color: '#7E22CE',
+                            background: '#FAF5FF'
+                          }}
+                        >
+                          <Video size={14} />
+                          <span>+ Media</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddItem('TextReminder')}
+                          className="btn-big-white"
+                          style={{
+                            minHeight: '36px',
+                            padding: '0 12px',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            border: '1.5px solid #FCD34D',
+                            color: '#B45309',
+                            background: '#FEF9C3'
+                          }}
+                        >
+                          <FileText size={14} />
+                          <span>+ Matn</span>
+                        </button>
+
+                        {/* Shablon Menu Dropdown */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowTemplateDropdown(prev => !prev)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              background: '#F0FDF4',
+                              border: '1.5px solid #86EFAC',
+                              color: '#166534',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '5px'
+                            }}
+                          >
+                            <Sparkles size={14} />
+                            <span>Shablon</span>
+                            <ChevronDown size={12} />
+                          </button>
+
+                          {showTemplateDropdown && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%',
+                              right: 0,
+                              marginTop: '6px',
+                              background: '#fff',
+                              border: '1.5px solid var(--sky-border)',
+                              borderRadius: '12px',
+                              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                              zIndex: 50,
+                              minWidth: '220px',
+                              padding: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px'
+                            }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowTemplateDropdown(false);
+                                  handleSaveCurrentAsTemplate();
+                                }}
+                                disabled={items.length === 0}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: '8px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  textAlign: 'left',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  color: items.length > 0 ? 'var(--text-navy)' : '#94A3B8',
+                                  cursor: items.length > 0 ? 'pointer' : 'not-allowed',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                              >
+                                <Save size={14} color="#16A34A" />
+                                <span>Hozirgisini saqlash</span>
+                              </button>
+
+                              {hasDefaultTemplate && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowTemplateDropdown(false);
+                                    handleLoadSavedTemplate();
+                                  }}
+                                  style={{
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    textAlign: 'left',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: 'var(--text-navy)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                  }}
+                                >
+                                  <Download size={14} color="#2563EB" />
+                                  <span>Standart shablonni yuklash</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Publish Button */}
+                        <button
+                          type="button"
+                          onClick={handlePublishDraft}
+                          disabled={items.length === 0 || isCreatingAssignment}
+                          className="btn-big-blue"
+                          style={{
+                            minHeight: '38px',
+                            padding: '0 18px',
+                            fontSize: '13px',
+                            opacity: (items.length === 0 || isCreatingAssignment) ? 0.6 : 1,
+                            cursor: (items.length === 0 || isCreatingAssignment) ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
+                          }}
+                        >
+                          {isCreatingAssignment ? (
+                            <>
+                              <RefreshCw className="animate-spin" size={14} />
+                              <span>Yuklanmoqda...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>🚀 Guruhga e'lon qilish ({items.length})</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Assignment Title & Deadline Row */}
+                    <div style={{
+                      background: 'var(--pure-white)',
+                      borderRadius: '20px',
+                      padding: '20px',
+                      border: '1.5px solid var(--sky-border)',
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                      gap: '16px'
+                    }}>
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', display: 'block', marginBottom: '6px' }}>
+                          📝 Vazifa umumiy nomi / Mavzusi:
+                        </label>
+                        <input
+                          type="text"
+                          value={customTitle}
+                          onChange={e => setCustomTitle(e.target.value)}
+                          placeholder="Masalan: Unit 5: Past Simple darsi va yangi so'zlar"
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            border: '1.5px solid var(--sky-border)',
+                            fontSize: '15px',
+                            fontWeight: 700,
+                            background: 'var(--ice-blue-bg)',
+                            color: 'var(--text-navy)',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', display: 'block', marginBottom: '6px' }}>
+                          ⏰ Topshirish muddati (Deadline):
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={customDeadline}
+                          onChange={e => setCustomDeadline(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            border: '1.5px solid var(--sky-border)',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            background: 'var(--ice-blue-bg)',
+                            color: 'var(--text-navy)',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Assignment Items List */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--text-navy)' }}>
+                          📋 Vazifa qismlari ({items.length} ta):
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          O'quvchilar ushbu har bir qismni alohida topshirishadi
+                        </div>
+                      </div>
+
+                      {items.length === 0 ? (
+                        <div style={{
+                          background: 'var(--pure-white)',
+                          border: '2px dashed var(--sky-border)',
+                          borderRadius: '20px',
+                          padding: '40px 24px',
+                          textAlign: 'center',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '16px'
+                        }}>
+                          <div style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            background: '#DBEAFE',
+                            color: '#2563EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '28px'
+                          }}>
+                            📋
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '17px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px' }}>
+                              Hozircha hech qanday topshiriq qo'shilmagan
+                            </div>
+                            <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '520px', margin: '0 auto', lineHeight: 1.5 }}>
+                              Yuqoridagi tugmalar orqali qo'lda qo'shing yoki <strong>pastdagi AI qatoriga</strong> ovozli/yozma buyruq yozing (masalan: <em>"Essential Unit 4 ni qo'sh", "2-mashqni o'chir", "so'zlarni 15 ta qil va video topshirishni qo'sh"</em>).
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleAddItem('Vocabulary')}
+                              className="btn-big-white"
+                              style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #93C5FD', color: '#1D4ED8' }}
+                            >
+                              <BookOpen size={16} />
+                              <span>+ Lug'at qo'shish</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddItem('MediaSubmission')}
+                              className="btn-big-white"
+                              style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #C084FC', color: '#7E22CE' }}
+                            >
+                              <Video size={16} />
+                              <span>+ Video/Audio qo'shish</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddItem('TextReminder')}
+                              className="btn-big-white"
+                              style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #FCD34D', color: '#B45309' }}
+                            >
+                              <FileText size={16} />
+                              <span>+ Matn qo'shish</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        items.map((it, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              background: 'var(--pure-white)',
+                              borderRadius: '18px',
+                              padding: '20px',
+                              border: '1.5px solid var(--sky-border)',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '14px'
+                            }}
+                          >
+                            {/* Item Card Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                  background: it.itemType === 'Vocabulary' ? '#EFF6FF' : it.itemType === 'MediaSubmission' ? '#FAF5FF' : '#FEF3C7',
+                                  color: it.itemType === 'Vocabulary' ? '#1D4ED8' : it.itemType === 'MediaSubmission' ? '#7E22CE' : '#B45309',
+                                  padding: '6px 14px',
+                                  borderRadius: '10px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 800,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}>
+                                  {it.itemType === 'Vocabulary' && <><BookOpen size={14} /> {idx + 1}-topshiriq: Lug'at (Test)</>}
+                                  {it.itemType === 'MediaSubmission' && <><Video size={14} /> {idx + 1}-topshiriq: Video / Audio vazifa (Bot)</>}
+                                  {it.itemType === 'TextReminder' && <><FileText size={14} /> {idx + 1}-topshiriq: Matn / Qoida / Eslatma</>}
+                                </span>
+                              </div>
+
+                              {/* Controls: Up/Down and Delete */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveItem(idx, 'up')}
+                                  disabled={idx === 0}
+                                  style={{
+                                    background: '#F1F5F9',
+                                    border: '1px solid #CBD5E1',
+                                    borderRadius: '8px',
+                                    width: '32px',
+                                    height: '32px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                                    opacity: idx === 0 ? 0.4 : 1,
+                                    fontSize: '12px',
+                                    fontWeight: 900
+                                  }}
+                                  title="Yuqoriga ko'chirish"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveItem(idx, 'down')}
+                                  disabled={idx === items.length - 1}
+                                  style={{
+                                    background: '#F1F5F9',
+                                    border: '1px solid #CBD5E1',
+                                    borderRadius: '8px',
+                                    width: '32px',
+                                    height: '32px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: idx === items.length - 1 ? 'not-allowed' : 'pointer',
+                                    opacity: idx === items.length - 1 ? 0.4 : 1,
+                                    fontSize: '12px',
+                                    fontWeight: 900
+                                  }}
+                                  title="Pastga ko'chirish"
+                                >
+                                  ▼
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(idx)}
+                                  style={{
+                                    background: '#FEE2E2',
+                                    border: '1px solid #FECACA',
+                                    color: '#DC2626',
+                                    borderRadius: '8px',
+                                    padding: '6px 12px',
+                                    fontSize: '12px',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title="O'chirish"
+                                >
+                                  <Trash2 size={13} />
+                                  <span>O'chirish</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Sarlavha input */}
+                            <div>
+                              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                                Bo'lim sarlavhasi:
+                              </label>
+                              <input
+                                type="text"
+                                value={it.title}
+                                onChange={e => {
+                                  const copy = [...items];
+                                  copy[idx].title = e.target.value;
+                                  setItems(copy);
+                                }}
+                                placeholder="Sarlavha"
+                                style={{
+                                  width: '100%',
+                                  padding: '10px 14px',
+                                  borderRadius: '10px',
+                                  border: '1.5px solid var(--sky-border)',
+                                  fontSize: '14px',
+                                  fontWeight: 700,
+                                  color: 'var(--text-navy)',
+                                  background: 'var(--ice-blue-bg)'
+                                }}
+                              />
+                            </div>
+
+                            {/* Vocabulary specific controls */}
+                            {it.itemType === 'Vocabulary' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC', padding: '14px', borderRadius: '14px', border: '1px solid var(--sky-border)' }}>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const copy = [...items];
+                                      copy[idx].vocabMode = 'book';
+                                      setItems(copy);
+                                    }}
+                                    style={{
+                                      padding: '6px 14px',
+                                      borderRadius: '8px',
+                                      border: it.vocabMode === 'book' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
+                                      background: it.vocabMode === 'book' ? 'var(--primary-blue)' : '#fff',
+                                      color: it.vocabMode === 'book' ? '#fff' : 'var(--text-navy)',
+                                      fontSize: '12px',
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px'
+                                    }}
+                                  >
+                                    <BookOpen size={14} />
+                                    <span>📖 Kitob Unitidan tanlash</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const copy = [...items];
+                                      copy[idx].vocabMode = 'custom';
+                                      setItems(copy);
+                                    }}
+                                    style={{
+                                      padding: '6px 14px',
+                                      borderRadius: '8px',
+                                      border: it.vocabMode === 'custom' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
+                                      background: it.vocabMode === 'custom' ? 'var(--primary-blue)' : '#fff',
+                                      color: it.vocabMode === 'custom' ? '#fff' : 'var(--text-navy)',
+                                      fontSize: '12px',
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px'
+                                    }}
+                                  >
+                                    <span>✍️ O'z so'zlar ro'yxatimni kiritish</span>
+                                  </button>
+                                </div>
+
+                                {it.vocabMode === 'book' ? (
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+                                    <div>
+                                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>1. Darslik (Kitob):</label>
+                                      <select
+                                        value={selectedBookId || ''}
+                                        onChange={e => handleBookSelect(Number(e.target.value))}
+                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                      >
+                                        {booksList.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>2. Qism (Part):</label>
+                                      <select
+                                        value={selectedPartId || ''}
+                                        onChange={e => handlePartSelect(Number(e.target.value))}
+                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                      >
+                                        {bookPartsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>3. Mavzu / Unit:</label>
+                                      <select
+                                        value={it.targetUnitId || ''}
+                                        onChange={e => {
+                                          const copy = [...items];
+                                          copy[idx].targetUnitId = Number(e.target.value);
+                                          setItems(copy);
+                                        }}
+                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                      >
+                                        {partUnitsList.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
+                                      </select>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-navy)', display: 'block', marginBottom: '4px' }}>
+                                      So'zlar ro'yxati (Format: so'z - tarjimasi):
+                                    </label>
+                                    <textarea
+                                      rows={3}
+                                      value={it.instructions}
+                                      onChange={e => {
+                                        const copy = [...items];
+                                        copy[idx].instructions = e.target.value;
+                                        setItems(copy);
+                                      }}
+                                      placeholder="apple - olma&#10;book - kitob&#10;pencil - qalam"
+                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Media Submission info banner */}
+                            {it.itemType === 'MediaSubmission' && (
+                              <div style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#6B21A8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Video size={16} />
+                                <span>Talabalar ushbu topshiriq uchun Telegram bot (@lanswitch_bot) orqali video yoki audio yozib yuborishadi.</span>
+                              </div>
+                            )}
+
+                            {/* Instructions textarea */}
+                            {!(it.itemType === 'Vocabulary' && it.vocabMode === 'custom') && (
+                              <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                                  Yo'riqnoma va talablar (O'quvchiga ko'rinadi):
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  value={it.instructions}
+                                  onChange={e => {
+                                    const copy = [...items];
+                                    copy[idx].instructions = e.target.value;
+                                    setItems(copy);
+                                  }}
+                                  placeholder={
+                                    it.itemType === 'MediaSubmission'
+                                      ? "Masalan: Mavzu yuzasidan 1 daqiqalik video yozib botga yuboring"
+                                      : it.itemType === 'TextReminder'
+                                      ? "Masalan: 32-betdagi 4-mashqni yozma bajarish va yangi qoidalarni daftarga yozish"
+                                      : "Topshiriq yo'riqnomasi"
+                                  }
+                                  style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* FIXED BOTTOM AI COMMAND BAR */}
+                    <div style={{
+                      position: 'fixed',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      background: 'rgba(255, 255, 255, 0.96)',
+                      backdropFilter: 'blur(12px)',
+                      borderTop: '1.5px solid var(--sky-border)',
+                      boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.08)',
+                      padding: '12px 16px calc(12px + var(--safe-area-bottom, env(safe-area-inset-bottom, 0px)))',
+                      zIndex: 60
+                    }}>
+                      <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {/* Suggestion Pills */}
+                        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                          {[
+                            "Essential Unit 4 ni qo'sh",
+                            "1 daqiqalik video vazifasini qo'sh",
+                            "Muddatni ertaga 21:00 qil",
+                            "Workbook 12-bet mashqlarini qo'sh",
+                            "Oxirgi vazifani o'chirib tashla"
+                          ].map((pill, pIdx) => (
+                            <button
+                              key={pIdx}
+                              type="button"
+                              onClick={() => {
+                                setAiPromptInput(pill);
+                              }}
+                              style={{
+                                background: '#F1F5F9',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '999px',
+                                padding: '4px 12px',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                color: 'var(--text-navy)',
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                                flexShrink: 0
+                              }}
+                            >
+                              + {pill}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* AI Command Input Form */}
+                        <form
+                          onSubmit={handleRefineDraft}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            background: 'var(--ice-blue-bg)',
+                            borderRadius: '16px',
+                            border: '1.5px solid var(--sky-border)',
+                            padding: '4px 6px 4px 14px'
+                          }}
+                        >
+                          <Sparkles size={18} color="var(--primary-blue)" style={{ flexShrink: 0 }} />
+                          <input
+                            type="text"
+                            value={aiPromptInput}
+                            onChange={e => setAiPromptInput(e.target.value)}
+                            disabled={isRefiningDraft}
+                            placeholder="AI buyruq: masalan: '2-mashqni o'chir', 'muddatni ertaga 21:00 qil'..."
+                            style={{
+                              flex: 1,
+                              border: 'none',
+                              background: 'transparent',
+                              padding: '10px 0',
+                              fontSize: '14px',
+                              fontWeight: 700,
+                              color: 'var(--text-navy)',
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="submit"
+                            disabled={!aiPromptInput.trim() || isRefiningDraft}
+                            style={{
+                              background: 'var(--primary-blue)',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '12px',
+                              padding: '10px 16px',
+                              fontSize: '13px',
+                              fontWeight: 800,
+                              cursor: (!aiPromptInput.trim() || isRefiningDraft) ? 'not-allowed' : 'pointer',
+                              opacity: (!aiPromptInput.trim() || isRefiningDraft) ? 0.5 : 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              flexShrink: 0
+                            }}
+                          >
+                            {isRefiningDraft ? (
+                              <>
+                                <RefreshCw className="animate-spin" size={14} />
+                                <span>O'zgartirilmoqda...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send size={14} />
+                                <span>O'zgartirish</span>
+                              </>
+                            )}
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* 2.2 VIEW MODE: DARSLAR (ASSIGNMENTS LIST) */}
                 {viewMode === 'assignments' && (
@@ -2125,719 +3076,6 @@ export default function TeacherDashboardPage() {
                 )}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 7. CREATE ASSIGNMENT MODAL (REDESIGNED & SPACIOUS)       */}
-      {/* ======================================================== */}
-      {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(8px)',
-          zIndex: 100,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '16px'
-        }}>
-          <div style={{
-            background: 'var(--pure-white)',
-            borderRadius: '24px',
-            maxWidth: '860px',
-            width: '100%',
-            maxHeight: '92vh',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '2px solid var(--sky-border)'
-          }}>
-            {/* Modal Top Header */}
-            <div style={{
-              padding: '18px 24px',
-              borderBottom: '1.5px solid var(--sky-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%)',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, var(--primary-blue), #2563EB)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '20px',
-                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
-                }}>
-                  ✨
-                </div>
-                <div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)', lineHeight: 1.2 }}>
-                    Yangi Uyga Vazifa Tuzish
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--primary-blue)', fontWeight: 700, marginTop: '2px' }}>
-                    Guruh: {selectedGroup?.title || 'Tanlanmagan'}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {hasDefaultTemplate && (
-                  <button
-                    type="button"
-                    onClick={handleLoadSavedTemplate}
-                    title="Avval saqlab qo'yilgan standart shablonni yuklash"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      background: '#EFF6FF',
-                      border: '1.5px solid #93C5FD',
-                      color: '#1D4ED8',
-                      borderRadius: '12px',
-                      padding: '8px 14px',
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Sparkles size={14} />
-                    <span>Standart shablonni yuklash</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  style={{
-                    background: '#F1F5F9',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '36px',
-                    height: '36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '18px',
-                    fontWeight: 800,
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* 1. Assignment Title Input */}
-              <div style={{ background: '#F8FAFC', padding: '16px 20px', borderRadius: '16px', border: '1.5px solid var(--sky-border)' }}>
-                <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', display: 'block', marginBottom: '6px' }}>
-                  📝 Vazifa umumiy nomi / Mavzusi:
-                </label>
-                <input
-                  type="text"
-                  value={customTitle}
-                  onChange={e => setCustomTitle(e.target.value)}
-                  placeholder="Masalan: Unit 5: Past Simple darsi va yangi so'zlar"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    border: '1.5px solid var(--sky-border)',
-                    fontSize: '15px',
-                    fontWeight: 700,
-                    background: '#fff',
-                    color: 'var(--text-navy)',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              {/* 2. Default Template Configuration Panel */}
-              <div style={{
-                background: '#F0FDF4',
-                border: '1.5px solid #BBF7D0',
-                borderRadius: '16px',
-                padding: '14px 18px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '20px' }}>⚙️</span>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 900, color: '#166534' }}>
-                        Standart Shablon Sozlamasi (Default Template)
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#15803D', marginTop: '1px' }}>
-                        Har gal bir xil topshiriqlarni qayta tuzmaslik uchun, hozirgi tuzilmani standart shablon qilib saqlang.
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={handleSaveCurrentAsTemplate}
-                      disabled={items.length === 0}
-                      title={items.length === 0 ? "Avval kamida bitta topshiriq bo'limi qo'shing" : "Hozirgi topshiriqlarni saqlash"}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '10px',
-                        background: items.length > 0 ? '#16A34A' : '#CBD5E1',
-                        color: '#fff',
-                        border: 'none',
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        cursor: items.length > 0 ? 'pointer' : 'not-allowed',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <Save size={14} />
-                      <span>Shablon qilib saqlash</span>
-                    </button>
-                    {hasDefaultTemplate && (
-                      <button
-                        type="button"
-                        onClick={handleLoadSavedTemplate}
-                        style={{
-                          padding: '8px 14px',
-                          borderRadius: '10px',
-                          background: '#fff',
-                          color: '#166534',
-                          border: '1.5px solid #86EFAC',
-                          fontSize: '12px',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <Download size={14} />
-                        <span>Shablonni yuklash</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. Items Constructor Section */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                  <div>
-                    <span style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-navy)' }}>
-                      Topshiriq Bo'limlari ({items.length} ta):
-                    </span>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                      O'quvchilar bajarishi lozim bo'lgan qismlar
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleAddItem('Vocabulary')}
-                      className="btn-big-white"
-                      style={{ minHeight: '36px', padding: '0 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #93C5FD', color: '#1D4ED8' }}
-                    >
-                      <BookOpen size={14} />
-                      <span>+ Lug'at (Test)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddItem('MediaSubmission')}
-                      className="btn-big-white"
-                      style={{ minHeight: '36px', padding: '0 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #C084FC', color: '#7E22CE' }}
-                    >
-                      <Video size={14} />
-                      <span>+ Video/Audio (Bot)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddItem('TextReminder')}
-                      className="btn-big-white"
-                      style={{ minHeight: '36px', padding: '0 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #FCD34D', color: '#B45309' }}
-                    >
-                      <FileText size={14} />
-                      <span>+ Matn / Qoida</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Empty State: Shown when items list is empty */}
-                {items.length === 0 ? (
-                  <div style={{
-                    background: 'var(--ice-blue-bg)',
-                    border: '2px dashed var(--sky-border)',
-                    borderRadius: '20px',
-                    padding: '36px 20px',
-                    textAlign: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '16px'
-                  }}>
-                    <div style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: '50%',
-                      background: '#DBEAFE',
-                      color: '#2563EB',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '30px'
-                    }}>
-                      📋
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '17px', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px' }}>
-                        Hozircha hech qanday topshiriq bo'limi qo'shilmagan
-                      </div>
-                      <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '520px', margin: '0 auto', lineHeight: 1.5 }}>
-                        Quyidagi kerakli bo'limlardan birini tanlab yangi vazifa qo'shing yoki o'zingiz avval saqlab qo'ygan standart shablonni yuklang:
-                      </p>
-                    </div>
-
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                      gap: '14px',
-                      width: '100%',
-                      marginTop: '8px'
-                    }}>
-                      {/* Card 1: Lug'at */}
-                      <div
-                        onClick={() => handleAddItem('Vocabulary')}
-                        style={{
-                          background: '#fff',
-                          border: '2px solid #BFDBFE',
-                          borderRadius: '16px',
-                          padding: '18px 16px',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1D4ED8', fontWeight: 800, fontSize: '14px' }}>
-                          <BookOpen size={18} />
-                          <span>Lug'at va Test</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                          Kitob unitidan yoki o'z so'zlar ro'yxatingizdan so'z yodlash va 4 variantli test topshirish.
-                        </div>
-                        <div style={{ marginTop: 'auto', paddingTop: '8px', color: '#2563EB', fontSize: '12px', fontWeight: 800 }}>
-                          + Qo'shish →
-                        </div>
-                      </div>
-
-                      {/* Card 2: Media Bot */}
-                      <div
-                        onClick={() => handleAddItem('MediaSubmission')}
-                        style={{
-                          background: '#fff',
-                          border: '2px solid #E9D5FF',
-                          borderRadius: '16px',
-                          padding: '18px 16px',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#7E22CE', fontWeight: 800, fontSize: '14px' }}>
-                          <Video size={18} />
-                          <span>Video / Audio (Bot)</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                          O'quvchilar Telegram bot (@lanswitch_bot) ga video yoki audio xabar yuborishadi.
-                        </div>
-                        <div style={{ marginTop: 'auto', paddingTop: '8px', color: '#9333EA', fontSize: '12px', fontWeight: 800 }}>
-                          + Qo'shish →
-                        </div>
-                      </div>
-
-                      {/* Card 3: Matn / Qoida */}
-                      <div
-                        onClick={() => handleAddItem('TextReminder')}
-                        style={{
-                          background: '#fff',
-                          border: '2px solid #FDE68A',
-                          borderRadius: '16px',
-                          padding: '18px 16px',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B45309', fontWeight: 800, fontSize: '14px' }}>
-                          <FileText size={18} />
-                          <span>Matn / Qoida / Eslatma</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                          Kitobdan o'qish, mashqlar yoki uyga berilgan qoidalarni yozib olish eslatmasi.
-                        </div>
-                        <div style={{ marginTop: 'auto', paddingTop: '8px', color: '#D97706', fontSize: '12px', fontWeight: 800 }}>
-                          + Qo'shish →
-                        </div>
-                      </div>
-                    </div>
-
-                    {hasDefaultTemplate && (
-                      <button
-                        type="button"
-                        onClick={handleLoadSavedTemplate}
-                        style={{
-                          marginTop: '8px',
-                          background: '#fff',
-                          border: '1.5px solid var(--sky-border)',
-                          borderRadius: '12px',
-                          padding: '10px 20px',
-                          fontSize: '13px',
-                          fontWeight: 800,
-                          color: 'var(--primary-blue)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}
-                      >
-                        <Sparkles size={16} />
-                        <span>Saqlangan Standart Shablonni yuklash</span>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  items.map((it, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        background: '#fff',
-                        borderRadius: '18px',
-                        padding: '18px 20px',
-                        border: '1.5px solid var(--sky-border)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '14px'
-                      }}
-                    >
-                      {/* Item Top Bar */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{
-                            background: it.itemType === 'Vocabulary' ? '#EFF6FF' : it.itemType === 'MediaSubmission' ? '#FAF5FF' : '#FEF3C7',
-                            color: it.itemType === 'Vocabulary' ? '#1D4ED8' : it.itemType === 'MediaSubmission' ? '#7E22CE' : '#B45309',
-                            padding: '5px 12px',
-                            borderRadius: '10px',
-                            fontSize: '12px',
-                            fontWeight: 800,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}>
-                            {it.itemType === 'Vocabulary' && <><BookOpen size={14} /> {idx + 1}-bo'lim: Lug'at (Test topshirish)</>}
-                            {it.itemType === 'MediaSubmission' && <><Video size={14} /> {idx + 1}-bo'lim: Video/Audio vazifa (Bot)</>}
-                            {it.itemType === 'TextReminder' && <><FileText size={14} /> {idx + 1}-bo'lim: Matn / Qoida / Eslatma</>}
-                          </span>
-                        </div>
-
-                        {/* Delete Mission Button - ALWAYS available for every mission */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(idx)}
-                          style={{
-                            background: '#FEE2E2',
-                            border: '1px solid #FECACA',
-                            color: '#DC2626',
-                            borderRadius: '10px',
-                            padding: '6px 14px',
-                            fontSize: '12px',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px'
-                          }}
-                          title="Ushbu bo'limni o'chirish"
-                        >
-                          <Trash2 size={14} />
-                          <span>O'chirish</span>
-                        </button>
-                      </div>
-
-                      {/* Title input */}
-                      <div>
-                        <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                          Bo'lim sarlavhasi:
-                        </label>
-                        <input
-                          type="text"
-                          value={it.title}
-                          onChange={e => {
-                            const copy = [...items];
-                            copy[idx].title = e.target.value;
-                            setItems(copy);
-                          }}
-                          placeholder="Sarlavha"
-                          style={{
-                            width: '100%',
-                            padding: '10px 14px',
-                            borderRadius: '10px',
-                            border: '1.5px solid var(--sky-border)',
-                            fontSize: '14px',
-                            fontWeight: 700,
-                            color: 'var(--text-navy)',
-                            background: 'var(--ice-blue-bg)'
-                          }}
-                        />
-                      </div>
-
-                      {/* Vocabulary specific controls */}
-                      {it.itemType === 'Vocabulary' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC', padding: '14px', borderRadius: '14px', border: '1px solid var(--sky-border)' }}>
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const copy = [...items];
-                                copy[idx].vocabMode = 'book';
-                                setItems(copy);
-                              }}
-                              style={{
-                                padding: '6px 14px',
-                                borderRadius: '8px',
-                                border: it.vocabMode === 'book' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                                background: it.vocabMode === 'book' ? 'var(--primary-blue)' : '#fff',
-                                color: it.vocabMode === 'book' ? '#fff' : 'var(--text-navy)',
-                                fontSize: '12px',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                              }}
-                            >
-                              <BookOpen size={14} />
-                              <span>📖 Kitob Unitidan tanlash</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const copy = [...items];
-                                copy[idx].vocabMode = 'custom';
-                                setItems(copy);
-                              }}
-                              style={{
-                                padding: '6px 14px',
-                                borderRadius: '8px',
-                                border: it.vocabMode === 'custom' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                                background: it.vocabMode === 'custom' ? 'var(--primary-blue)' : '#fff',
-                                color: it.vocabMode === 'custom' ? '#fff' : 'var(--text-navy)',
-                                fontSize: '12px',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                              }}
-                            >
-                              <span>✍️ O'z so'zlar ro'yxatimni kiritish</span>
-                            </button>
-                          </div>
-
-                          {it.vocabMode === 'book' ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
-                              <div>
-                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>1. Darslik (Kitob):</label>
-                                <select
-                                  value={selectedBookId || ''}
-                                  onChange={e => handleBookSelect(Number(e.target.value))}
-                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
-                                >
-                                  {booksList.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-                                </select>
-                              </div>
-
-                              <div>
-                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>2. Qism (Part):</label>
-                                <select
-                                  value={selectedPartId || ''}
-                                  onChange={e => handlePartSelect(Number(e.target.value))}
-                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
-                                >
-                                  {bookPartsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                                </select>
-                              </div>
-
-                              <div>
-                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>3. Mavzu / Unit:</label>
-                                <select
-                                  value={it.targetUnitId || ''}
-                                  onChange={e => {
-                                    const copy = [...items];
-                                    copy[idx].targetUnitId = Number(e.target.value);
-                                    setItems(copy);
-                                  }}
-                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
-                                >
-                                  {partUnitsList.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-navy)', display: 'block', marginBottom: '4px' }}>
-                                So'zlar ro'yxati (Format: so'z - tarjimasi):
-                              </label>
-                              <textarea
-                                rows={3}
-                                value={it.instructions}
-                                onChange={e => {
-                                  const copy = [...items];
-                                  copy[idx].instructions = e.target.value;
-                                  setItems(copy);
-                                }}
-                                placeholder="apple - olma&#10;book - kitob&#10;pencil - qalam"
-                                style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Media info */}
-                      {it.itemType === 'MediaSubmission' && (
-                        <div style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#6B21A8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Video size={16} />
-                          <span>Talabalar ushbu topshiriq uchun Telegram bot (@lanswitch_bot) orqali video yoki audio yozib yuborishadi.</span>
-                        </div>
-                      )}
-
-                      {/* Instructions input (if not custom vocab) */}
-                      {!(it.itemType === 'Vocabulary' && it.vocabMode === 'custom') && (
-                        <div>
-                          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                            Yo'riqnoma va talablar (O'quvchiga ko'rinadi):
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={it.instructions}
-                            onChange={e => {
-                              const copy = [...items];
-                              copy[idx].instructions = e.target.value;
-                              setItems(copy);
-                            }}
-                            placeholder={
-                              it.itemType === 'MediaSubmission'
-                                ? "Masalan: Mavzu yuzasidan 1 daqiqalik video yozib botga yuboring"
-                                : it.itemType === 'TextReminder'
-                                ? "Masalan: 32-betdagi 4-mashqni yozma bajarish va yangi qoidalarni daftarga yozish"
-                                : "Topshiriq yo'riqnomasi"
-                            }
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Modal Bottom Action Bar */}
-            <div style={{
-              padding: '16px 24px',
-              background: 'var(--ice-blue-bg)',
-              borderTop: '1.5px solid var(--sky-border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => handleAddItem('Vocabulary')}
-                  className="btn-big-white"
-                  style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px' }}
-                >
-                  + 📚 Lug'at
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddItem('MediaSubmission')}
-                  className="btn-big-white"
-                  style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px' }}
-                >
-                  + 🎬 Media
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddItem('TextReminder')}
-                  className="btn-big-white"
-                  style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px' }}
-                >
-                  + 📝 Matn
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="btn-big-white"
-                  style={{ minHeight: '44px', padding: '0 18px', fontSize: '14px' }}
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateAssignment}
-                  disabled={items.length === 0 || isCreatingAssignment}
-                  className="btn-big-blue"
-                  style={{
-                    minHeight: '44px',
-                    padding: '0 24px',
-                    fontSize: '14px',
-                    opacity: (items.length === 0 || isCreatingAssignment) ? 0.6 : 1,
-                    cursor: (items.length === 0 || isCreatingAssignment) ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {isCreatingAssignment ? (
-                    <span>Yuklanmoqda...</span>
-                  ) : (
-                    <span>🚀 Guruhga e'lon qilish ({items.length} ta)</span>
-                  )}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -4673,29 +4911,33 @@ export default function TeacherDashboardPage() {
       {/* ======================================================== */}
       {/* FIXED BOTTOM NAVIGATION BAR                              */}
       {/* ======================================================== */}
-      <BottomNav
-        role="teacher"
-        activeTab={
-          mainTab === 'movies'
-            ? 'movies'
-            : mainTab === 'vocabulary'
-            ? 'vocabulary'
-            : viewMode
-        }
-        onChangeTab={(tabId) => {
-          if (tabId === 'movies') {
-            setMainTab('movies');
-            loadMovies();
-          } else if (tabId === 'vocabulary') {
-            setMainTab('vocabulary');
-            loadVocabBooks();
-          } else {
-            setMainTab('classroom');
-            setViewMode(tabId as 'assignments' | 'students');
+      {viewMode !== 'create_assignment' && (
+        <BottomNav
+          role="teacher"
+          activeTab={
+            mainTab === 'movies'
+              ? 'movies'
+              : mainTab === 'vocabulary'
+              ? 'vocabulary'
+              : viewMode === 'students'
+              ? 'students'
+              : 'assignments'
           }
-        }}
-        badgeCount={0}
-      />
+          onChangeTab={(tabId) => {
+            if (tabId === 'movies') {
+              setMainTab('movies');
+              loadMovies();
+            } else if (tabId === 'vocabulary') {
+              setMainTab('vocabulary');
+              loadVocabBooks();
+            } else {
+              setMainTab('classroom');
+              setViewMode(tabId as 'assignments' | 'students');
+            }
+          }}
+          badgeCount={0}
+        />
+      )}
 
       <SubscriptionPlansModal
         isOpen={showSubscriptionModal}

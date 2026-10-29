@@ -140,11 +140,21 @@ public class AssignmentService : IAssignmentService
         {
             string icon = it.ItemType switch
             {
-                "Vocabulary" => "📖",
-                "MediaSubmission" => "🎙️",
-                _ => "📝"
+                "Vocabulary" => "📖 Lug'at",
+                "MediaSubmission" => "🎙️ Audio/Video",
+                _ => "📝 Vazifa"
             };
-            sb.AppendLine($"{orderIdx++}. {icon} <b>{System.Net.WebUtility.HtmlEncode(it.Title)}</b>");
+            var cleanTitle = System.Net.WebUtility.HtmlEncode(it.Title);
+            var cleanInstructions = System.Net.WebUtility.HtmlEncode(it.Instructions ?? "");
+
+            if (!string.IsNullOrWhiteSpace(cleanInstructions))
+            {
+                sb.AppendLine($"<blockquote expandable><b>{orderIdx++}. {icon} — {cleanTitle}</b>\n<i>{cleanInstructions}</i></blockquote>");
+            }
+            else
+            {
+                sb.AppendLine($"<blockquote expandable><b>{orderIdx++}. {icon} — {cleanTitle}</b></blockquote>");
+            }
         }
 
         sb.AppendLine();
@@ -492,7 +502,7 @@ public class AssignmentService : IAssignmentService
 
             if (!string.IsNullOrWhiteSpace(dto.Comment))
             {
-                notifyText += $"💬 <b>O'qituvchi izohi:</b> {dto.Comment}\n";
+                notifyText += $"💬 <b>O'qituvchi izohi:</b>\n<blockquote expandable>{System.Net.WebUtility.HtmlEncode(dto.Comment)}</blockquote>\n";
             }
 
             try

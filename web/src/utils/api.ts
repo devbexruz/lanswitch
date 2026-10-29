@@ -72,6 +72,31 @@ export interface AssignmentDetail {
   items: AssignmentItemDetail[];
 }
 
+export interface HomeworkDraftItem {
+  itemType: 'Vocabulary' | 'MediaSubmission' | 'TextReminder';
+  title: string;
+  instructions: string;
+  targetUnitId?: number;
+}
+
+export interface HomeworkDraftDto {
+  draftCode: string;
+  groupId: number;
+  groupTitle: string;
+  title: string;
+  deadline: string;
+  items: HomeworkDraftItem[];
+  status: string;
+  explanation?: string;
+  unsupportedRequests?: string;
+}
+
+export interface UpdateDraftPayload {
+  title?: string;
+  deadline: string;
+  items: HomeworkDraftItem[];
+}
+
 export interface SubmissionReview {
   submissionId: number;
   assignmentId: number;
@@ -379,6 +404,61 @@ export const api = {
       return res.ok;
     } catch {}
     return true;
+  },
+
+  // AI Homework Draft APIs
+  async initHomeworkDraft(groupId: number, teacherId?: number): Promise<HomeworkDraftDto | null> {
+    try {
+      const url = teacherId 
+        ? `${API_BASE}/assignments/draft/init?groupId=${groupId}&teacherId=${teacherId}`
+        : `${API_BASE}/assignments/draft/init?groupId=${groupId}`;
+      const res = await fetch(url, { method: 'POST' });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  },
+
+  async getHomeworkDraft(draftCode: string): Promise<HomeworkDraftDto | null> {
+    try {
+      const res = await fetch(`${API_BASE}/assignments/draft/${draftCode}`);
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  },
+
+  async refineHomeworkDraft(draftCode: string, prompt: string): Promise<HomeworkDraftDto | null> {
+    try {
+      const res = await fetch(`${API_BASE}/assignments/draft/${draftCode}/refine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  },
+
+  async updateHomeworkDraft(draftCode: string, payload: UpdateDraftPayload): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/assignments/draft/${draftCode}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.ok;
+    } catch {}
+    return false;
+  },
+
+  async publishHomeworkDraft(draftCode: string, teacherId?: number): Promise<boolean> {
+    try {
+      const url = teacherId 
+        ? `${API_BASE}/assignments/draft/${draftCode}/publish?teacherId=${teacherId}` 
+        : `${API_BASE}/assignments/draft/${draftCode}/publish`;
+      const res = await fetch(url, { method: 'POST' });
+      return res.ok;
+    } catch {}
+    return false;
   },
 
   // Teacher Delete Assignment
