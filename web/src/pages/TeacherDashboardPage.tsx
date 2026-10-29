@@ -10,7 +10,7 @@ import {
   PlusCircle, CheckCircle2, XCircle, AlertTriangle, Lock,
   Send, BookOpen, ChevronRight, RefreshCw, Clock, Shield,
   Trash2, Eye, Volume2, Play, Search, ArrowLeft, Trophy, Sparkles, Check,
-  Film, Library, X, ChevronDown, Users, Maximize2, Minimize2, FileText, Video, Save, Download, ExternalLink
+  Film, Library, X, ChevronDown, Users, Maximize2, Minimize2, FileText, Video, Save, Download, ExternalLink, Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -86,6 +86,16 @@ export default function TeacherDashboardPage() {
     return (saved === 'assignments' || saved === 'students') ? saved : 'assignments';
   });
   const [assignments, setAssignments] = useState<AssignmentSummary[]>([]);
+  const [assignmentTab, setAssignmentTab] = useState<'active' | 'history'>('active');
+
+  // Edit Assignment Modal State
+  const [editingAssignment, setEditingAssignment] = useState<AssignmentReport | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDeadline, setEditDeadline] = useState('');
+  const [editItems, setEditItems] = useState<{ id: number; title: string; itemType: string; instructions: string }[]>([]);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
@@ -527,6 +537,71 @@ export default function TeacherDashboardPage() {
     } catch (err: any) {
       alert(err.message || "Hisobotlar bo'limidan foydalanish uchun balansingizni to'ldiring!");
       setShowSubscriptionModal(true);
+    }
+  };
+
+  const handleOpenEditModal = async (assignmentId: number) => {
+    setIsLoadingEdit(true);
+    try {
+      const rep = await api.getAssignmentReport(assignmentId, user?.id);
+      if (rep) {
+        setEditingAssignment(rep);
+        setEditTitle(rep.title || '');
+        if (rep.deadline) {
+          const d = new Date(rep.deadline);
+          const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+          setEditDeadline(localIso);
+        } else {
+          setEditDeadline('');
+        }
+        setEditItems((rep.items || []).map((it: any) => ({
+          id: it.id,
+          title: it.title,
+          itemType: it.itemType,
+          instructions: it.instructions || ''
+        })));
+      }
+    } catch (err: any) {
+      alert(`Xatolik: ${err.message || 'Vazifani yuklab bo\'lmadi'}`);
+    } finally {
+      setIsLoadingEdit(false);
+    }
+  };
+
+  const handleSaveEditAssignment = async () => {
+    if (!editingAssignment) return;
+    if (!editTitle.trim()) {
+      alert("Iltimos, dars nomini kiriting!");
+      return;
+    }
+    if (!editDeadline) {
+      alert("Iltimos, topshirish muddatini belgilang!");
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const res = await api.updateAssignment(
+        editingAssignment.assignmentId,
+        {
+          title: editTitle.trim(),
+          deadline: new Date(editDeadline).toISOString(),
+          items: editItems.map(it => ({ id: it.id, instructions: it.instructions }))
+        },
+        user?.id
+      );
+      if (res.success) {
+        alert("✅ Vazifa muvaffaqiyatli yangilandi!");
+        setEditingAssignment(null);
+        if (selectedGroup) {
+          await loadGroupAssignments(selectedGroup.id);
+        }
+      } else {
+        alert(`❌ Xatolik: ${res.message || 'Yangilab bo\'lmadi'}`);
+      }
+    } catch (err: any) {
+      alert(`❌ Xatolik: ${err.message || 'Saqlashda xatolik yuz berdi'}`);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -1918,216 +1993,223 @@ export default function TeacherDashboardPage() {
                           </div>
                         </div>
                       ) : (
-                        items.map((it, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              background: 'var(--pure-white)',
-                              borderRadius: '18px',
-                              padding: '20px',
-                              border: '1.5px solid var(--sky-border)',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '14px'
-                            }}
-                          >
-                            {/* Item Card Header */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          background: 'var(--pure-white)',
+                          borderRadius: '18px',
+                          border: '1.5px solid var(--sky-border)',
+                          overflow: 'hidden',
+                          boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
+                        }}>
+                          {items.map((it, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: '12px 16px',
+                                borderBottom: idx === items.length - 1 ? 'none' : '1px solid #E2E8F0',
+                                background: idx % 2 === 1 ? '#FAFCFF' : '#fff',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                transition: 'background 0.2s'
+                              }}
+                            >
+                              {/* 1-qator: Raqam, Turi, Sarlavha input, va Tugmalar */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                {/* Raqam badge */}
+                                <div style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  borderRadius: '50%',
+                                  background: '#EFF6FF',
+                                  color: '#1D4ED8',
+                                  fontSize: '12px',
+                                  fontWeight: 900,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  {idx + 1}
+                                </div>
+
+                                {/* Turi badge */}
                                 <span style={{
                                   background: it.itemType === 'Vocabulary' ? '#EFF6FF' : it.itemType === 'MediaSubmission' ? '#FAF5FF' : '#FEF3C7',
                                   color: it.itemType === 'Vocabulary' ? '#1D4ED8' : it.itemType === 'MediaSubmission' ? '#7E22CE' : '#B45309',
-                                  padding: '6px 14px',
-                                  borderRadius: '10px',
-                                  fontSize: '12.5px',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11.5px',
                                   fontWeight: 800,
-                                  display: 'flex',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '6px'
+                                  gap: '4px',
+                                  flexShrink: 0
                                 }}>
-                                  {it.itemType === 'Vocabulary' && <><BookOpen size={14} /> {idx + 1}-topshiriq: Lug'at (Test)</>}
-                                  {it.itemType === 'MediaSubmission' && <><Video size={14} /> {idx + 1}-topshiriq: Video / Audio vazifa (Bot)</>}
-                                  {it.itemType === 'TextReminder' && <><FileText size={14} /> {idx + 1}-topshiriq: Matn / Qoida / Eslatma</>}
+                                  {it.itemType === 'Vocabulary' && <><BookOpen size={13} /> Lug'at</>}
+                                  {it.itemType === 'MediaSubmission' && <><Video size={13} /> Media</>}
+                                  {it.itemType === 'TextReminder' && <><FileText size={13} /> Matn</>}
                                 </span>
-                              </div>
 
-                              {/* Controls: Up/Down and Delete */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoveItem(idx, 'up')}
-                                  disabled={idx === 0}
-                                  style={{
-                                    background: '#F1F5F9',
-                                    border: '1px solid #CBD5E1',
-                                    borderRadius: '8px',
-                                    width: '32px',
-                                    height: '32px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                                    opacity: idx === 0 ? 0.4 : 1,
-                                    fontSize: '12px',
-                                    fontWeight: 900
+                                {/* Sarlavha input */}
+                                <input
+                                  type="text"
+                                  value={it.title}
+                                  onChange={e => {
+                                    const copy = [...items];
+                                    copy[idx].title = e.target.value;
+                                    setItems(copy);
                                   }}
-                                  title="Yuqoriga ko'chirish"
-                                >
-                                  ▲
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoveItem(idx, 'down')}
-                                  disabled={idx === items.length - 1}
+                                  placeholder="Topshiriq nomi / Sarlavha"
                                   style={{
-                                    background: '#F1F5F9',
-                                    border: '1px solid #CBD5E1',
-                                    borderRadius: '8px',
-                                    width: '32px',
-                                    height: '32px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: idx === items.length - 1 ? 'not-allowed' : 'pointer',
-                                    opacity: idx === items.length - 1 ? 0.4 : 1,
-                                    fontSize: '12px',
-                                    fontWeight: 900
-                                  }}
-                                  title="Pastga ko'chirish"
-                                >
-                                  ▼
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveItem(idx)}
-                                  style={{
-                                    background: '#FEE2E2',
-                                    border: '1px solid #FECACA',
-                                    color: '#DC2626',
-                                    borderRadius: '8px',
+                                    flex: '1 1 200px',
+                                    minWidth: '160px',
                                     padding: '6px 12px',
-                                    fontSize: '12px',
-                                    fontWeight: 800,
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
+                                    borderRadius: '8px',
+                                    border: '1.5px solid var(--sky-border)',
+                                    fontSize: '13px',
+                                    fontWeight: 700,
+                                    color: 'var(--text-navy)',
+                                    background: 'var(--ice-blue-bg)'
                                   }}
-                                  title="O'chirish"
-                                >
-                                  <Trash2 size={13} />
-                                  <span>O'chirish</span>
-                                </button>
-                              </div>
-                            </div>
+                                />
 
-                            {/* Sarlavha input */}
-                            <div>
-                              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                                Bo'lim sarlavhasi:
-                              </label>
-                              <input
-                                type="text"
-                                value={it.title}
-                                onChange={e => {
-                                  const copy = [...items];
-                                  copy[idx].title = e.target.value;
-                                  setItems(copy);
-                                }}
-                                placeholder="Sarlavha"
-                                style={{
-                                  width: '100%',
-                                  padding: '10px 14px',
-                                  borderRadius: '10px',
-                                  border: '1.5px solid var(--sky-border)',
-                                  fontSize: '14px',
-                                  fontWeight: 700,
-                                  color: 'var(--text-navy)',
-                                  background: 'var(--ice-blue-bg)'
-                                }}
-                              />
-                            </div>
-
-                            {/* Vocabulary specific controls */}
-                            {it.itemType === 'Vocabulary' && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC', padding: '14px', borderRadius: '14px', border: '1px solid var(--sky-border)' }}>
-                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {/* Action buttons: Up/Down/Delete */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const copy = [...items];
-                                      copy[idx].vocabMode = 'book';
-                                      setItems(copy);
-                                    }}
+                                    onClick={() => handleMoveItem(idx, 'up')}
+                                    disabled={idx === 0}
                                     style={{
-                                      padding: '6px 14px',
-                                      borderRadius: '8px',
-                                      border: it.vocabMode === 'book' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                                      background: it.vocabMode === 'book' ? 'var(--primary-blue)' : '#fff',
-                                      color: it.vocabMode === 'book' ? '#fff' : 'var(--text-navy)',
-                                      fontSize: '12px',
-                                      fontWeight: 800,
-                                      cursor: 'pointer',
+                                      background: '#F1F5F9',
+                                      border: '1px solid #CBD5E1',
+                                      borderRadius: '6px',
+                                      width: '26px',
+                                      height: '26px',
                                       display: 'flex',
                                       alignItems: 'center',
-                                      gap: '6px'
+                                      justifyContent: 'center',
+                                      cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                                      opacity: idx === 0 ? 0.3 : 1,
+                                      fontSize: '10px',
+                                      fontWeight: 900
                                     }}
+                                    title="Yuqoriga"
                                   >
-                                    <BookOpen size={14} />
-                                    <span>📖 Kitob Unitidan tanlash</span>
+                                    ▲
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const copy = [...items];
-                                      copy[idx].vocabMode = 'custom';
-                                      setItems(copy);
-                                    }}
+                                    onClick={() => handleMoveItem(idx, 'down')}
+                                    disabled={idx === items.length - 1}
                                     style={{
-                                      padding: '6px 14px',
-                                      borderRadius: '8px',
-                                      border: it.vocabMode === 'custom' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
-                                      background: it.vocabMode === 'custom' ? 'var(--primary-blue)' : '#fff',
-                                      color: it.vocabMode === 'custom' ? '#fff' : 'var(--text-navy)',
-                                      fontSize: '12px',
-                                      fontWeight: 800,
+                                      background: '#F1F5F9',
+                                      border: '1px solid #CBD5E1',
+                                      borderRadius: '6px',
+                                      width: '26px',
+                                      height: '26px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: idx === items.length - 1 ? 'not-allowed' : 'pointer',
+                                      opacity: idx === items.length - 1 ? 0.3 : 1,
+                                      fontSize: '10px',
+                                      fontWeight: 900
+                                    }}
+                                    title="Pastga"
+                                  >
+                                    ▼
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItem(idx)}
+                                    style={{
+                                      background: '#FEE2E2',
+                                      border: '1px solid #FECACA',
+                                      color: '#DC2626',
+                                      borderRadius: '6px',
+                                      width: '26px',
+                                      height: '26px',
                                       cursor: 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
-                                      gap: '6px'
+                                      justifyContent: 'center'
                                     }}
+                                    title="O'chirish"
                                   >
-                                    <span>✍️ O'z so'zlar ro'yxatimni kiritish</span>
+                                    <Trash2 size={12} />
                                   </button>
                                 </div>
+                              </div>
 
-                                {it.vocabMode === 'book' ? (
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
-                                    <div>
-                                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>1. Darslik (Kitob):</label>
+                              {/* 2-qator: Vocabulary tanlash yoki Izoh */}
+                              {it.itemType === 'Vocabulary' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '2px' }}>
+                                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const copy = [...items];
+                                        copy[idx].vocabMode = 'book';
+                                        setItems(copy);
+                                      }}
+                                      style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        border: it.vocabMode === 'book' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
+                                        background: it.vocabMode === 'book' ? 'var(--primary-blue)' : '#fff',
+                                        color: it.vocabMode === 'book' ? '#fff' : 'var(--text-navy)',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}
+                                    >
+                                      <BookOpen size={12} />
+                                      <span>Kitob Unitidan tanlash</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const copy = [...items];
+                                        copy[idx].vocabMode = 'custom';
+                                        setItems(copy);
+                                      }}
+                                      style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        border: it.vocabMode === 'custom' ? '1.5px solid var(--primary-blue)' : '1px solid var(--sky-border)',
+                                        background: it.vocabMode === 'custom' ? 'var(--primary-blue)' : '#fff',
+                                        color: it.vocabMode === 'custom' ? '#fff' : 'var(--text-navy)',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}
+                                    >
+                                      <span>✍️ O'z so'zlarim</span>
+                                    </button>
+                                  </div>
+
+                                  {it.vocabMode === 'book' ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '6px' }}>
                                       <select
                                         value={selectedBookId || ''}
                                         onChange={e => handleBookSelect(Number(e.target.value))}
-                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                        style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--sky-border)', fontSize: '12px', background: '#fff' }}
                                       >
                                         {booksList.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                                       </select>
-                                    </div>
-
-                                    <div>
-                                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>2. Qism (Part):</label>
                                       <select
                                         value={selectedPartId || ''}
                                         onChange={e => handlePartSelect(Number(e.target.value))}
-                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                        style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--sky-border)', fontSize: '12px', background: '#fff' }}
                                       >
                                         {bookPartsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                                       </select>
-                                    </div>
-
-                                    <div>
-                                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>3. Mavzu / Unit:</label>
                                       <select
                                         value={it.targetUnitId || ''}
                                         onChange={e => {
@@ -2135,50 +2217,32 @@ export default function TeacherDashboardPage() {
                                           copy[idx].targetUnitId = Number(e.target.value);
                                           setItems(copy);
                                         }}
-                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                        style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--sky-border)', fontSize: '12px', background: '#fff' }}
                                       >
                                         {partUnitsList.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                                       </select>
                                     </div>
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-navy)', display: 'block', marginBottom: '4px' }}>
-                                      So'zlar ro'yxati (Format: so'z - tarjimasi):
-                                    </label>
+                                  ) : (
                                     <textarea
-                                      rows={3}
+                                      rows={2}
                                       value={it.instructions}
                                       onChange={e => {
                                         const copy = [...items];
                                         copy[idx].instructions = e.target.value;
                                         setItems(copy);
                                       }}
-                                      placeholder="apple - olma&#10;book - kitob&#10;pencil - qalam"
-                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                      placeholder="apple - olma&#10;book - kitob"
+                                      style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--sky-border)', fontSize: '12px', background: '#fff' }}
                                     />
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                                  )}
+                                </div>
+                              ) : null}
 
-                            {/* Media Submission info banner */}
-                            {it.itemType === 'MediaSubmission' && (
-                              <div style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#6B21A8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Video size={16} />
-                                <span>Talabalar ushbu topshiriq uchun Telegram bot (@lanswitch_bot) orqali video yoki audio yozib yuborishadi.</span>
-                              </div>
-                            )}
-
-                            {/* Instructions textarea */}
-                            {!(it.itemType === 'Vocabulary' && it.vocabMode === 'custom') && (
-                              <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                                  Yo'riqnoma va talablar (O'quvchiga ko'rinadi):
-                                </label>
-                                <textarea
-                                  rows={2}
-                                  value={it.instructions}
+                              {/* Yo'riqnoma inputi (ixcham) */}
+                              {!(it.itemType === 'Vocabulary' && it.vocabMode === 'custom') && (
+                                <input
+                                  type="text"
+                                  value={it.instructions || ''}
                                   onChange={e => {
                                     const copy = [...items];
                                     copy[idx].instructions = e.target.value;
@@ -2186,17 +2250,25 @@ export default function TeacherDashboardPage() {
                                   }}
                                   placeholder={
                                     it.itemType === 'MediaSubmission'
-                                      ? "Masalan: Mavzu yuzasidan 1 daqiqalik video yozib botga yuboring"
+                                      ? "Izoh: Masalan, 1 daqiqalik video yozib botga yuboring"
                                       : it.itemType === 'TextReminder'
-                                      ? "Masalan: 32-betdagi 4-mashqni yozma bajarish va yangi qoidalarni daftarga yozish"
-                                      : "Topshiriq yo'riqnomasi"
+                                      ? "Izoh: Masalan, 32-betdagi 4-mashqni yozma bajarish"
+                                      : "Izoh / Yo'riqnoma (ixtiyoriy)"
                                   }
-                                  style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--sky-border)', fontSize: '13px', background: '#fff' }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '6px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E2E8F0',
+                                    fontSize: '12px',
+                                    color: 'var(--text-navy)',
+                                    background: '#fff'
+                                  }}
                                 />
-                              </div>
-                            )}
-                          </div>
-                        ))
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
 
@@ -2372,110 +2444,268 @@ export default function TeacherDashboardPage() {
                         </button>
                       </div>
                     </div>
-                    {assignments.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)', background: 'var(--pure-white)', borderRadius: '20px', border: '1.5px dashed var(--sky-border)' }}>
-                        Ushbu guruhda hali topshiriqlar yaratilmagan.
-                      </div>
-                    ) : (
-                      assignments.map(ass => (
-                        <div
-                          key={ass.id}
-                          style={{
-                            background: 'var(--pure-white)',
-                            border: '1.5px solid var(--sky-border)',
-                            borderRadius: '20px',
-                            padding: '20px 24px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
-                            gap: '16px',
-                            boxShadow: 'var(--shadow-card)'
-                          }}
-                        >
-                          <div>
-                            {(!isTeacherSubActive || selectedGroup?.isSubscriptionExpired) && (
-                              <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                background: '#FEE2E2',
-                                border: '1px solid #FECACA',
-                                color: '#DC2626',
-                                borderRadius: '8px',
-                                padding: '3px 10px',
-                                fontSize: '11.5px',
-                                fontWeight: 800,
-                                marginBottom: '6px'
-                              }}>
-                                <span>⚠️ Ushbu topshiriq o'quvchi va talabalarga ko'rinmaydi!</span>
-                              </div>
-                            )}
-                            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px' }}>
-                              {ass.title}
-                            </div>
-                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <span>📅 Yaratildi: {new Date(ass.createdAt).toLocaleDateString('uz-UZ')}</span>
-                              <span>📌 Bo'limlar soni: {ass.itemsCount} ta</span>
-                            </div>
-                          </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <span style={{ background: '#DCFCE7', color: '#15803D', padding: '6px 12px', borderRadius: 'var(--radius-pill)', fontSize: '13px', fontWeight: 800 }}>
-                                ✅ {ass.submittedCount} ta topshirdi
-                              </span>
-                              <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '6px 12px', borderRadius: 'var(--radius-pill)', fontSize: '13px', fontWeight: 800 }}>
-                                ⚠️ {ass.missingCount} ta qilmadi
-                              </span>
-                            </div>
+                    {/* Active vs History (Arxiv) Tabs */}
+                    {(() => {
+                      const now = new Date();
+                      const activeAssignments = assignments.filter(a => !a.deadline || new Date(a.deadline) > now);
+                      const historyAssignments = assignments.filter(a => a.deadline && new Date(a.deadline) <= now);
+                      const displayedAssignments = assignmentTab === 'active' ? activeAssignments : historyAssignments;
 
+                      return (
+                        <>
+                          <div style={{ display: 'flex', gap: '8px', background: '#F1F5F9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
                             <button
-                              onClick={() => handleOpenReport(ass.id)}
-                              className="btn-big-blue"
+                              type="button"
+                              onClick={() => setAssignmentTab('active')}
                               style={{
-                                minHeight: '40px',
-                                padding: '0 18px',
-                                fontSize: '13px',
-                                ...( (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) ? {
-                                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
-                                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
-                                  border: 'none'
-                                } : {} )
-                              }}
-                            >
-                              <span>{(selectedGroup?.isSubscriptionExpired || !isTeacherSubActive)
-                                ? (subscription?.targetRole === 'Student' ? "🔒 Hisobot (Tarifni o'tkazing)" : "🔒 Hisobot (Balansni to'ldiring)")
-                                : "Hisobot & Tekshirish"}</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteAssignment(ass.id, ass.title)}
-                              disabled={deletingAssignmentId === ass.id}
-                              title="Vazifani o'chirish"
-                              style={{
-                                background: '#FEE2E2',
-                                color: '#DC2626',
-                                border: '1.5px solid #FECACA',
-                                borderRadius: 'var(--radius-pill)',
-                                padding: '0 14px',
-                                minHeight: '40px',
-                                fontSize: '13px',
+                                padding: '8px 16px',
+                                borderRadius: '10px',
+                                border: 'none',
+                                background: assignmentTab === 'active' ? '#fff' : 'transparent',
+                                color: assignmentTab === 'active' ? '#1D4ED8' : '#64748B',
                                 fontWeight: 800,
+                                fontSize: '13px',
                                 cursor: 'pointer',
-                                display: 'inline-flex',
+                                boxShadow: assignmentTab === 'active' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                                display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.15s ease'
+                                gap: '6px'
                               }}
                             >
-                              <Trash2 size={15} />
-                              <span>{deletingAssignmentId === ass.id ? "..." : "O'chirish"}</span>
+                              <span>🟢 Faol Vazifalar</span>
+                              <span style={{
+                                background: assignmentTab === 'active' ? '#DBEAFE' : '#E2E8F0',
+                                color: assignmentTab === 'active' ? '#1D4ED8' : '#64748B',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                fontWeight: 900
+                              }}>
+                                {activeAssignments.length}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setAssignmentTab('history')}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: '10px',
+                                border: 'none',
+                                background: assignmentTab === 'history' ? '#fff' : 'transparent',
+                                color: assignmentTab === 'history' ? '#1D4ED8' : '#64748B',
+                                fontWeight: 800,
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                boxShadow: assignmentTab === 'history' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <span>📜 Topshiriqlar Tarixi</span>
+                              <span style={{
+                                background: assignmentTab === 'history' ? '#DBEAFE' : '#E2E8F0',
+                                color: assignmentTab === 'history' ? '#1D4ED8' : '#64748B',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                fontWeight: 900
+                              }}>
+                                {historyAssignments.length}
+                              </span>
                             </button>
                           </div>
-                        </div>
-                      ))
-                    )}
+
+                          {displayedAssignments.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)', background: 'var(--pure-white)', borderRadius: '20px', border: '1.5px dashed var(--sky-border)' }}>
+                              {assignmentTab === 'active' 
+                                ? "Ushbu guruhda ayni paytda faol topshiriqlar mavjud emas." 
+                                : "Topshiriqlar tarixi bo'sh. Muddati o'tgan topshiriqlar mavjud emas."}
+                            </div>
+                          ) : (
+                            displayedAssignments.map(ass => {
+                              const isExpired = ass.deadline && new Date(ass.deadline) <= now;
+                              return (
+                                <div
+                                  key={ass.id}
+                                  style={{
+                                    background: 'var(--pure-white)',
+                                    border: isExpired ? '1.5px solid #E2E8F0' : '1.5px solid var(--sky-border)',
+                                    borderRadius: '20px',
+                                    padding: '20px 24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: '16px',
+                                    boxShadow: 'var(--shadow-card)',
+                                    opacity: isExpired ? 0.9 : 1
+                                  }}
+                                >
+                                  <div>
+                                    {(!isTeacherSubActive || selectedGroup?.isSubscriptionExpired) && (
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: '#FEE2E2',
+                                        border: '1px solid #FECACA',
+                                        color: '#DC2626',
+                                        borderRadius: '8px',
+                                        padding: '3px 10px',
+                                        fontSize: '11.5px',
+                                        fontWeight: 800,
+                                        marginBottom: '6px'
+                                      }}>
+                                        <span>⚠️ Ushbu topshiriq o'quvchi va talabalarga ko'rinmaydi!</span>
+                                      </div>
+                                    )}
+
+                                    {isExpired && (
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: '#F1F5F9',
+                                        border: '1px solid #CBD5E1',
+                                        color: '#475569',
+                                        borderRadius: '8px',
+                                        padding: '3px 10px',
+                                        fontSize: '11.5px',
+                                        fontWeight: 800,
+                                        marginBottom: '6px'
+                                      }}>
+                                        <span>⏰ Muddati o'tgan (Arxivda)</span>
+                                      </div>
+                                    )}
+
+                                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px' }}>
+                                      {ass.title}
+                                    </div>
+                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                      <span>📅 Yaratildi: {new Date(ass.createdAt).toLocaleDateString('uz-UZ')}</span>
+                                      {ass.deadline && (
+                                        <span style={{ color: isExpired ? '#DC2626' : '#2563EB', fontWeight: 700 }}>
+                                          ⏰ Deadline: {new Date(ass.deadline).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      )}
+                                      <span>📌 Bo'limlar soni: {ass.itemsCount} ta</span>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                      <span style={{ background: '#DCFCE7', color: '#15803D', padding: '6px 12px', borderRadius: 'var(--radius-pill)', fontSize: '13px', fontWeight: 800 }}>
+                                        ✅ {ass.submittedCount} ta topshirdi
+                                      </span>
+                                      <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '6px 12px', borderRadius: 'var(--radius-pill)', fontSize: '13px', fontWeight: 800 }}>
+                                        ⚠️ {ass.missingCount} ta qilmadi
+                                      </span>
+                                    </div>
+
+                                    {/* Sozlamalar yoki Muddatni uzaytirish tugmasi */}
+                                    {isExpired ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditModal(ass.id)}
+                                        disabled={isLoadingEdit}
+                                        title="Muddatni uzaytirish va tahrirlash"
+                                        style={{
+                                          background: '#EFF6FF',
+                                          color: '#1D4ED8',
+                                          border: '1.5px solid #93C5FD',
+                                          borderRadius: 'var(--radius-pill)',
+                                          padding: '0 16px',
+                                          minHeight: '40px',
+                                          fontSize: '13px',
+                                          fontWeight: 800,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        <Clock size={15} />
+                                        <span>⏰ Muddatni uzaytirish</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditModal(ass.id)}
+                                        disabled={isLoadingEdit}
+                                        title="Topshiriq sozlamalari"
+                                        style={{
+                                          background: '#F1F5F9',
+                                          color: 'var(--text-navy)',
+                                          border: '1.5px solid #CBD5E1',
+                                          borderRadius: 'var(--radius-pill)',
+                                          padding: '0 14px',
+                                          minHeight: '40px',
+                                          fontSize: '13px',
+                                          fontWeight: 800,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        <Settings size={15} />
+                                        <span>Sozlamalar</span>
+                                      </button>
+                                    )}
+
+                                    <button
+                                      onClick={() => handleOpenReport(ass.id)}
+                                      className="btn-big-blue"
+                                      style={{
+                                        minHeight: '40px',
+                                        padding: '0 18px',
+                                        fontSize: '13px',
+                                        ...( (selectedGroup?.isSubscriptionExpired || !isTeacherSubActive) ? {
+                                          background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                                          boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+                                          border: 'none'
+                                        } : {} )
+                                      }}
+                                    >
+                                      <span>{(selectedGroup?.isSubscriptionExpired || !isTeacherSubActive)
+                                        ? (subscription?.targetRole === 'Student' ? "🔒 Hisobot (Tarifni o'tkazing)" : "🔒 Hisobot (Balansni to'ldiring)")
+                                        : "Hisobot & Tekshirish"}</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteAssignment(ass.id, ass.title)}
+                                      disabled={deletingAssignmentId === ass.id}
+                                      title="Vazifani o'chirish"
+                                      style={{
+                                        background: '#FEE2E2',
+                                        color: '#DC2626',
+                                        border: '1.5px solid #FECACA',
+                                        borderRadius: 'var(--radius-pill)',
+                                        padding: '0 14px',
+                                        minHeight: '40px',
+                                        fontSize: '13px',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                    >
+                                      <Trash2 size={15} />
+                                      <span>{deletingAssignmentId === ass.id ? "..." : "O'chirish"}</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -3076,6 +3306,278 @@ export default function TeacherDashboardPage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 7.9. EDIT ASSIGNMENT & EXTEND DEADLINE MODAL             */}
+      {/* ======================================================== */}
+      {editingAssignment && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '24px',
+            maxWidth: '650px',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
+            border: '1.5px solid var(--sky-border)',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1.5px solid var(--sky-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#F8FAFC'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: '#EFF6FF',
+                  color: '#2563EB',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Settings size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>
+                    Topshiriq Sozlamalari & Muddat
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                    Mavzu, topshirish muddati va qismlar izohini tahrirlash
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingAssignment(null)}
+                style={{
+                  background: '#F1F5F9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748B'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Title */}
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)', display: 'block', marginBottom: '6px' }}>
+                  📌 Dars mavzusi / Sarlavhasi:
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '1.5px solid var(--sky-border)',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    background: 'var(--ice-blue-bg)',
+                    color: 'var(--text-navy)',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {/* Deadline */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)' }}>
+                    ⏰ Topshirish muddati (Deadline):
+                  </label>
+                  {editingAssignment.deadline && new Date(editingAssignment.deadline) <= new Date() && (
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#DC2626', background: '#FEE2E2', padding: '2px 8px', borderRadius: '6px' }}>
+                      Muddati o'tgan (Arxivda)
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="datetime-local"
+                  value={editDeadline}
+                  onChange={e => setEditDeadline(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '1.5px solid var(--sky-border)',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    background: 'var(--ice-blue-bg)',
+                    color: 'var(--text-navy)',
+                    outline: 'none'
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', margin: '4px 0 0' }}>
+                  💡 Muddatni kelajakdagi vaqtga uzaytirsangiz, ushbu vazifa avtomatik tarzda "Faol Vazifalar" ro'yxatiga qaytadi va talabalarga ko'rinadi.
+                </p>
+              </div>
+
+              {/* Items Instructions Edit */}
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>📋 Vazifa qismlari ({editItems.length} ta):</span>
+                  <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Qismlarni o'chirish/qo'shish taqiqlangan, faqat izohni o'zgartirish mumkin</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {editItems.map((it, idx) => (
+                    <div key={it.id} style={{
+                      background: '#F8FAFC',
+                      border: '1px solid var(--sky-border)',
+                      borderRadius: '14px',
+                      padding: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: '#DBEAFE',
+                            color: '#1D4ED8',
+                            fontSize: '12px',
+                            fontWeight: 900,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            {idx + 1}
+                          </span>
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy)' }}>
+                            {it.title}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', background: '#E2E8F0', padding: '2px 8px', borderRadius: '6px' }}>
+                          {it.itemType === 'Vocabulary' ? "📖 Lug'at" : it.itemType === 'MediaSubmission' ? "🎙️ Audio/Video" : "📌 Matn"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                          Izoh / Ko'rsatma:
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={it.instructions}
+                          onChange={e => {
+                            const copy = [...editItems];
+                            copy[idx].instructions = e.target.value;
+                            setEditItems(copy);
+                          }}
+                          placeholder="Ushbu topshiriq uchun o'quvchilarga ko'rsatma yoki izoh..."
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--sky-border)',
+                            fontSize: '13px',
+                            color: 'var(--text-navy)',
+                            background: '#fff',
+                            resize: 'vertical'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1.5px solid var(--sky-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              background: '#F8FAFC'
+            }}>
+              <button
+                type="button"
+                onClick={() => setEditingAssignment(null)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #CBD5E1',
+                  background: '#fff',
+                  color: '#64748B',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Bekor qilish
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveEditAssignment}
+                disabled={isSavingEdit}
+                className="btn-big-blue"
+                style={{
+                  minHeight: '40px',
+                  padding: '0 22px',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {isSavingEdit ? (
+                  <>
+                    <RefreshCw className="animate-spin" size={14} />
+                    <span>Saqlanmoqda...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>O'zgarishlarni saqlash</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

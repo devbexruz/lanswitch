@@ -303,6 +303,31 @@ public class AssignmentsController : ControllerBase
     }
 
     /// <summary>
+    /// Vazifani tahrirlash (Title, Deadline, Items izohlari)
+    /// </summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateAssignment(long id, [FromBody] UpdateAssignmentDto dto, [FromQuery] long? teacherId = null)
+    {
+        var tId = teacherId ?? GetUserId();
+        if (tId == 0) return Unauthorized(new { message = "Teacher ID not identified" });
+
+        try
+        {
+            var ok = await _assignmentService.UpdateAssignmentAsync(id, tId, dto);
+            if (!ok) return NotFound(new { message = "Vazifa topilmadi yoki tahrirlab bo'lmadi" });
+            return Ok(new { success = true, message = "Vazifa muvaffaqiyatli yangilandi" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { message = ex.Message });
+        }
+        catch (System.Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Vazifani to'liq o'chirish (Assignment, unga tegishli items va submissions)
     /// </summary>
     [HttpDelete("{id}")]

@@ -244,6 +244,7 @@ export interface AssignmentReport {
   punishedCount?: number;
   submittedStudents: StudentAssignmentStatus[];
   missingStudents: StudentAssignmentStatus[];
+  items?: { id: number; title: string; itemType: string; instructions?: string; orderIndex?: number }[];
 }
 
 export interface SyncMembersResult {
@@ -475,6 +476,31 @@ export const api = {
       return { success: true };
     } catch (e: any) {
       return { success: false, message: e?.message || 'Server bilan aloqa xatosi' };
+    }
+  },
+
+  // Teacher Update Assignment (Title, Deadline, Items Instructions)
+  async updateAssignment(
+    assignmentId: number, 
+    payload: { title?: string; deadline?: string; items?: { id: number; instructions?: string }[] }, 
+    teacherId?: number
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const url = teacherId 
+        ? `${API_BASE}/assignments/${assignmentId}?teacherId=${teacherId}`
+        : `${API_BASE}/assignments/${assignmentId}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        return { success: false, message: err?.message || "Vazifani tahrirlashda xatolik yuz berdi" };
+      }
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.message || "Server bilan aloqa xatosi" };
     }
   },
 

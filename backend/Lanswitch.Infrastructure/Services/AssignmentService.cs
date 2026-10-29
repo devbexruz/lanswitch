@@ -282,7 +282,7 @@ public class AssignmentService : IAssignmentService
             .Include(a => a.Group)
             .Include(a => a.Items).ThenInclude(i => i.TargetUnit).ThenInclude(u => u!.Part).ThenInclude(p => p.Book)
             .Include(a => a.Items).ThenInclude(i => i.Submissions.Where(s => s.StudentId == studentId)).ThenInclude(s => s.Attachments)
-            .Where(a => a.GroupId == groupId && a.Status == "Published");
+            .Where(a => a.GroupId == groupId && a.Status == "Published" && a.Deadline > now);
 
         var assignments = await query.OrderByDescending(a => a.CreatedAt).ToListAsync();
 
@@ -968,7 +968,15 @@ public class AssignmentService : IAssignmentService
             PunishmentCount = punishmentCount,
             PunishedCount = punishedCount,
             SubmittedStudents = submittedList.OrderByDescending(s => s.SubmittedAt).ToList(),
-            MissingStudents = missingList.OrderBy(s => s.FullName).ToList()
+            MissingStudents = missingList.OrderBy(s => s.FullName).ToList(),
+            Items = assignment.Items.OrderBy(i => i.OrderIndex).Select(i => new AssignmentItemDetailDto
+            {
+                Id = i.Id,
+                Title = i.Title,
+                ItemType = i.ItemType,
+                Instructions = i.Instructions,
+                OrderIndex = i.OrderIndex
+            }).ToList()
         };
     }
 
@@ -1537,6 +1545,52 @@ public class AssignmentService : IAssignmentService
         }
 
         _db.ItemSubmissionAttachments.Remove(att);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateAssignmentAsync(long assignmentId, long teacherId, UpdateAssignmentDto dto)
+    {
+        var assignment = await _db.Assignments
+            .Include(a => a.Group).ThenInclude(g => g.Admins)
+            .Include(a => a.Items)
+            .FirstOrDefaultAsync(a => a.Id == assignmentId);
+
+        if (assignment == null) return false;
+
+        var teacher = await _db.Users.FindAsync(teacherId);
+        bool hasAccess = (teacher != null && teacher.IsAdmin)
+                         || assignment.CreatorId == teacherId
+                         || (assignment.Group != null && (assignment.Group.OwnerId == teacherId || assignment.Group.Admins.Any(ga => ga.UserId == teacherId)));
+
+        if (!hasAccess)
+        {
+            throw new UnauthorizedAccessException("Ushbu vazifani tahrirlash uchun sizda ruxsat yo'q!");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Title))
+        {
+            assignment.Title = dto.Title.Trim();
+        }
+
+        if (dto.Deadline.HasValue)
+        {
+            assignment.Deadline = dto.Deadline.Value;
+        }
+
+        // Qismlar (items): Faqat mavjud itemlarning izohini (Instructions) tahrirlash mumkin
+        if (dto.Items != null && dto.Items.Any())
+        {
+            foreach (var itemDto in dto.Items)
+            {
+                var existingItem = assignment.Items.FirstOrDefault(i => i.Id == itemDto.Id);
+                if (existingItem != null)
+                {
+                    existingItem.Instructions = itemDto.Instructions?.Trim();
+                }
+            }
+        }
+
         await _db.SaveChangesAsync();
         return true;
     }

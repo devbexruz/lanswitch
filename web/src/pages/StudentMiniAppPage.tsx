@@ -313,7 +313,10 @@ export default function StudentMiniAppPage() {
     setIsLoading(true);
     const resolvedId = sId ?? studentId;
     try {
-      const data = await api.getStudentAssignments(groupId, filter, resolvedId);
+      const rawData = await api.getStudentAssignments(groupId, filter, resolvedId);
+      const now = new Date();
+      // Faqat faol topshiriqlar (muddati o'tmagan) ko'rinishi lozim
+      const data = (rawData || []).filter(a => !a.deadline || new Date(a.deadline) > now);
       const urlParams = new URLSearchParams(window.location.search);
       const qAssId = urlParams.get('assignment_id') || urlParams.get('assignmentId');
 
@@ -647,7 +650,7 @@ export default function StudentMiniAppPage() {
     return matchesSearch && matchesLevel;
   });
 
-  const renderAssignmentItem = (item: AssignmentItemDetail, idx: number, _assignment: AssignmentDetail) => {
+  const renderAssignmentItem = (item: AssignmentItemDetail, idx: number, _assignment: AssignmentDetail, isLast: boolean = false) => {
     const isCompleted = item.mySubmissionStatus === 1 || item.mySubmissionStatus === 2;
     const isPenalty = item.mySubmissionStatus === 0;
 
@@ -655,96 +658,109 @@ export default function StudentMiniAppPage() {
       <div
         key={item.id}
         style={{
-          background: 'var(--ice-blue-card)',
-          borderRadius: 'var(--radius-card-sm)',
-          border: isPenalty 
-            ? '1.5px solid var(--status-danger-border)' 
-            : isCompleted 
-            ? '1.5px solid var(--status-success-border)' 
-            : '1.5px solid var(--sky-border)',
-          padding: '16px',
+          padding: '14px 18px',
+          borderBottom: isLast ? 'none' : '1px solid #E2E8F0',
+          background: isPenalty ? '#FEF2F2' : isCompleted ? '#F0FDF4' : idx % 2 === 1 ? '#FAFCFF' : '#fff',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px'
+          gap: '10px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 auto' }}>
+            {/* Tartib raqami badge */}
             <span style={{
-              background: 'var(--ice-blue-bg)',
-              color: 'var(--primary-blue)',
-              border: '1.5px solid var(--sky-border)',
-              borderRadius: 'var(--radius-pill)',
-              padding: '2px 10px',
+              width: '26px',
+              height: '26px',
+              borderRadius: '50%',
+              background: isPenalty ? '#FEE2E2' : isCompleted ? '#DCFCE7' : '#EFF6FF',
+              color: isPenalty ? '#DC2626' : isCompleted ? '#16A34A' : '#1D4ED8',
               fontSize: '12px',
-              fontWeight: 800
+              fontWeight: 900,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
             }}>
-              {idx + 1}-QISM
+              {idx + 1}
             </span>
-            <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-navy-secondary)' }}>
+
+            <span style={{
+              background: item.itemType === 'Vocabulary' ? '#EFF6FF' : item.itemType === 'MediaSubmission' ? '#FAF5FF' : '#FEF3C7',
+              color: item.itemType === 'Vocabulary' ? '#1D4ED8' : item.itemType === 'MediaSubmission' ? '#7E22CE' : '#B45309',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 800,
+              flexShrink: 0
+            }}>
               {item.itemType === 'TextReminder' && '📌 Eslatma'}
-              {item.itemType === 'Vocabulary' && (item.targetUnitId && item.targetUnitId > 0 ? '📚 Lug\'at (Test)' : '📌 Eslatma')}
-              {item.itemType === 'MediaSubmission' && '🎬 Media vazifa'}
+              {item.itemType === 'Vocabulary' && (item.targetUnitId && item.targetUnitId > 0 ? '📚 Lug\'at' : '📌 Eslatma')}
+              {item.itemType === 'MediaSubmission' && '🎬 Media'}
+            </span>
+
+            <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-navy)' }}>
+              {item.title}
             </span>
           </div>
 
           <div>
             {item.mySubmissionStatus === 1 && (
               <span style={{
-                background: 'var(--status-success-bg)',
-                color: 'var(--status-success)',
-                border: '1px solid var(--status-success-border)',
-                padding: '4px 10px',
+                background: '#DCFCE7',
+                color: '#15803D',
+                border: '1px solid #BBF7D0',
+                padding: '3px 8px',
                 borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 800,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                <CheckCircle2 size={13} /> Bajarildi
+                <CheckCircle2 size={12} /> Bajarildi
               </span>
             )}
             {item.mySubmissionStatus === 0 && (
               <span style={{
-                background: 'var(--status-danger-bg)',
-                color: 'var(--status-danger)',
-                border: '1px solid var(--status-danger-border)',
-                padding: '4px 10px',
+                background: '#FEE2E2',
+                color: '#DC2626',
+                border: '1px solid #FECACA',
+                padding: '3px 8px',
                 borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 800,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                <XCircle size={13} /> Jarima (0)
+                <XCircle size={12} /> Jarima (0)
               </span>
             )}
             {item.mySubmissionStatus === 2 && (
               <span style={{
-                background: 'var(--status-warning-bg)',
-                color: 'var(--status-warning)',
-                border: '1px solid var(--status-warning-border)',
-                padding: '4px 10px',
+                background: '#FEF3C7',
+                color: '#B45309',
+                border: '1px solid #FDE68A',
+                padding: '3px 8px',
                 borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 800,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                <AlertTriangle size={13} /> Jarima Bajarildi (2)
+                <AlertTriangle size={12} /> Jarima Bajarildi (2)
               </span>
             )}
             {item.mySubmissionStatus === null && item.mySubmittedAt && (
               <span style={{
-                background: 'var(--ice-blue-bg)',
-                color: 'var(--primary-blue)',
-                border: '1px solid var(--sky-border)',
-                padding: '4px 10px',
+                background: '#EFF6FF',
+                color: '#1D4ED8',
+                border: '1px solid #BFDBFE',
+                padding: '3px 8px',
                 borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 800
               }}>
                 ⏳ Tekshirilmoqda
@@ -754,9 +770,9 @@ export default function StudentMiniAppPage() {
               <span style={{
                 background: '#F1F5F9',
                 color: 'var(--text-muted)',
-                padding: '4px 10px',
+                padding: '3px 8px',
                 borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 700
               }}>
                 Kutilmoqda
@@ -765,16 +781,11 @@ export default function StudentMiniAppPage() {
           </div>
         </div>
 
-        <div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '4px' }}>
-            {item.title}
+        {item.instructions && (
+          <div style={{ fontSize: '13px', color: 'var(--text-navy-secondary)', lineHeight: 1.35, paddingLeft: '34px' }}>
+            {item.instructions}
           </div>
-          {item.instructions && (
-            <div style={{ fontSize: '14px', color: 'var(--text-navy-secondary)', lineHeight: 1.4 }}>
-              {item.instructions}
-            </div>
-          )}
-        </div>
+        )}
 
         {item.mySubmissionComment && (
           <div style={{
@@ -1564,8 +1575,8 @@ export default function StudentMiniAppPage() {
                         </div>
                       </div>
 
-                      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                        {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment, idx === assignment.items.length - 1))}
                       </div>
                     </div>
                     );
@@ -1630,8 +1641,8 @@ export default function StudentMiniAppPage() {
                           </span>
                         </div>
 
-                        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {assignment.items.map((item, idx) => renderAssignmentItem(item, idx, assignment, idx === assignment.items.length - 1))}
                         </div>
                       </div>
                     );
@@ -1784,8 +1795,8 @@ export default function StudentMiniAppPage() {
                           </span>
                         </div>
 
-                        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          {completedItems.map((item, idx) => renderAssignmentItem(item, idx, assignment))}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {completedItems.map((item, idx) => renderAssignmentItem(item, idx, assignment, idx === completedItems.length - 1))}
                         </div>
                       </div>
                     );

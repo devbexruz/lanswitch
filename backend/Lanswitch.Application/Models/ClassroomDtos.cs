@@ -42,6 +42,19 @@ public class CreateAssignmentDto
     public List<CreateAssignmentItemDto> Items { get; set; } = new();
 }
 
+public class UpdateAssignmentDto
+{
+    public string? Title { get; set; }
+    public DateTime? Deadline { get; set; }
+    public List<UpdateAssignmentItemDto>? Items { get; set; }
+}
+
+public class UpdateAssignmentItemDto
+{
+    public long Id { get; set; }
+    public string? Instructions { get; set; }
+}
+
 public class AssignmentDetailDto
 {
     public long Id { get; set; }
@@ -162,6 +175,7 @@ public class AssignmentReportDto
     public int PunishedCount { get; set; }
     public List<StudentAssignmentStatusDto> SubmittedStudents { get; set; } = new();
     public List<StudentAssignmentStatusDto> MissingStudents { get; set; } = new();
+    public List<AssignmentItemDetailDto> Items { get; set; } = new();
 }
 
 public class StudentAssignmentStatusDto
