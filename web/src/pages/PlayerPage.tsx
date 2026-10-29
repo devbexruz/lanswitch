@@ -81,13 +81,19 @@ const PlayerPage: React.FC = () => {
   const [isFullscreenDrawerOpen, setIsFullscreenDrawerOpen] = useState(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
 
-  // Deep AI Analysis & Chat toggle state
-  const [isDeepAiOpen, setIsDeepAiOpen] = useState(false);
+  // AI Tutor Modal & Streaming Chat state
+  const [showAiTutorModal, setShowAiTutorModal] = useState(false);
+  const [aiModalActiveTab, setAiModalActiveTab] = useState<'analysis' | 'chat'>('chat');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatSending, setIsChatSending] = useState(false);
   const [isAnalyzingSub, setIsAnalyzingSub] = useState(false);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [streamingAiText, setStreamingAiText] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const typewriterIntervalRef = useRef<any>(null);
+  const latestAiMsgRef = useRef<HTMLDivElement | null>(null);
+  const modalChatFeedRef = useRef<HTMLDivElement | null>(null);
 
   // Mobile detection (screen width <= 768px)
   const [isMobile, setIsMobile] = useState<boolean>(() => 
@@ -420,14 +426,57 @@ const PlayerPage: React.FC = () => {
     }
   };
 
-  // Send message to AI Tutor
+  // Open AI Tutor Modal & automatically pause video
+  const handleOpenAiTutorModal = () => {
+    window.dispatchEvent(new CustomEvent('pause-video'));
+    const video = document.querySelector('video');
+    if (video) video.pause();
+    setShowAiTutorModal(true);
+  };
+
+  const handleCloseAiTutorModal = () => {
+    setShowAiTutorModal(false);
+    if (typewriterIntervalRef.current) {
+      clearInterval(typewriterIntervalRef.current);
+      typewriterIntervalRef.current = null;
+    }
+    setIsStreaming(false);
+    setStreamingAiText(null);
+  };
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showAiTutorModal) {
+        handleCloseAiTutorModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAiTutorModal]);
+
+  // Cleanup typewriter interval on unmount
+  useEffect(() => {
+    return () => {
+      if (typewriterIntervalRef.current) {
+        clearInterval(typewriterIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Send message to AI Tutor with Typewriter streaming and top-aligned smooth scroll
   const handleSendChatMessage = async (msgToSend?: string) => {
     const text = (msgToSend || chatInput).trim();
-    if (!text || isChatSending || !media) return;
+    if (!text || isChatSending || isStreaming || !media) return;
 
     setChatInput('');
     setChatMessages(prev => [...prev, { role: 'User', content: text }]);
     setIsChatSending(true);
+
+    // Initial scroll down so user sees their own question & thinking indicator
+    setTimeout(() => {
+      modalChatFeedRef.current?.scrollTo({ top: modalChatFeedRef.current.scrollHeight, behavior: 'smooth' });
+    }, 40);
 
     try {
       const endpoint = currentEpisodeId ? '/api/EpisodeChat' : '/api/MediaChat';
@@ -441,21 +490,51 @@ const PlayerPage: React.FC = () => {
         body: JSON.stringify(body)
       });
 
+      let reply = '';
       if (res.ok) {
         const data = await res.json();
-        setChatMessages(prev => [...prev, { role: 'AI', content: data.response }]);
+        reply = data.response || "Javob topilmadi.";
       } else {
         const err = await res.json().catch(() => null);
-        setChatMessages(prev => [...prev, { role: 'AI', content: err?.message || "Kechirasiz, javob olishda xatolik yuz berdi." }]);
+        reply = err?.message || "Kechirasiz, javob olishda xatolik yuz berdi.";
       }
+
+      // Start typewriter streaming animation
+      setIsChatSending(false);
+      setIsStreaming(true);
+      setStreamingAiText('');
+
+      // CRITICAL REQUIREMENT: Smooth scroll to the TOP of the newest message, NOT to the bottom!
+      setTimeout(() => {
+        latestAiMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+
+      let charIndex = 0;
+      const totalChars = reply.length;
+      const step = Math.max(2, Math.ceil(totalChars / 55));
+
+      if (typewriterIntervalRef.current) clearInterval(typewriterIntervalRef.current);
+
+      typewriterIntervalRef.current = setInterval(() => {
+        charIndex += step;
+        if (charIndex >= totalChars) {
+          clearInterval(typewriterIntervalRef.current);
+          typewriterIntervalRef.current = null;
+          setStreamingAiText(null);
+          setIsStreaming(false);
+          setChatMessages(prev => [...prev, { role: 'AI', content: reply }]);
+        } else {
+          setStreamingAiText(reply.slice(0, charIndex));
+        }
+      }, 20);
+
     } catch (e) {
       console.error('Chat error:', e);
-      setChatMessages(prev => [...prev, { role: 'AI', content: "Server bilan bog'lanishda xatolik yuz berdi." }]);
-    } finally {
       setIsChatSending(false);
+      setChatMessages(prev => [...prev, { role: 'AI', content: "Server bilan bog'lanishda xatolik yuz berdi." }]);
       setTimeout(() => {
-        chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
-      }, 100);
+        latestAiMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
     }
   };
 
@@ -640,140 +719,20 @@ const PlayerPage: React.FC = () => {
             </div>
           )}
 
-          {/* Button to toggle Deep AI Analysis & Chat */}
-          <div className="deep-ai-toggle-row">
+          {/* Button to Launch AI Tutor Modal */}
+          <div className="ai-tutor-launch-row">
             <button
-              className={`btn-deep-ai-toggle ${isDeepAiOpen ? 'active' : ''}`}
-              onClick={() => setIsDeepAiOpen(prev => !prev)}
+              className="btn-ai-tutor-launch"
+              onClick={handleOpenAiTutorModal}
+              title="AI Ustoz bilan tahlil qilish va savol-javob oynasini ochish"
             >
-              <span className="ai-sparkle-icon">✨</span>
-              <span>{isDeepAiOpen ? "Chuqur tahlilni yopish ▲" : "🧠 Chuqurroq AI tahlili & Savol berish ▼"}</span>
+              <div className="launch-btn-left">
+                <span className="ai-sparkle-icon">✨</span>
+                <span className="launch-btn-title">AI Ustoz Bilan Tahlil</span>
+              </div>
+              <span className="launch-btn-badge">Interaktiv Chat ➔</span>
             </button>
           </div>
-
-          {/* Deep Pre-Generated AI Analysis + Interactive Chat Section */}
-          {isDeepAiOpen && (
-            <div className="deep-ai-accordion-content animate-fade-in">
-              {/* 1. Pre-generated Deep AI Analysis (Markdown) */}
-              <div className="pre-generated-analysis-card">
-                <div className="deep-card-title-row">
-                  <span className="deep-card-badge">Oldindan tahlil qilingan</span>
-                  <h4>📖 To'liq Grammatik & Mazmun Tahlili</h4>
-                </div>
-
-                {currentSub?.gaps && currentSub.gaps.length > 0 ? (
-                  currentSub.gaps.map((gap, gIdx) => (
-                    <div key={gap.id || gIdx} className="gap-markdown-wrapper">
-                      {gap.text && gap.text !== currentSub.text && (
-                        <div className="gap-focus-label">🎯 {gap.text}</div>
-                      )}
-                      <div className="ai-markdown-body">
-                        <ReactMarkdown>{gap.aiAnalysis || "Ushbu ibora grammatikasi tahlil qilinmoqda..."}</ReactMarkdown>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="no-deep-analysis-state">
-                    <p>Ushbu gap uchun chuqur tahlil hali saqlanmagan.</p>
-                    <button
-                      className="btn-create-analysis"
-                      onClick={handleAnalyzeCurrentSub}
-                      disabled={isAnalyzingSub}
-                    >
-                      {isAnalyzingSub ? "⏳ Tahlil qilinmoqda..." : "⚡ AI tahlilini yaratish"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Interactive AI Tutor Chat */}
-              <div className="interactive-ai-chat-card">
-                <div className="chat-card-header">
-                  <div className="chat-tutor-title">
-                    <span className="tutor-avatar">🤖</span>
-                    <div>
-                      <h5>AI Ustoz bilan muloqot</h5>
-                      <span className="tutor-status">Ushbu gap yuzasidan savol bering</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Prompts Chips */}
-                <div className="quick-prompts-row">
-                  <button
-                    className="quick-prompt-chip"
-                    onClick={() => handleSendChatMessage("Nega aynan ushbu zamon ishlatildi?")}
-                  >
-                    💡 Nega bu zamon?
-                  </button>
-                  <button
-                    className="quick-prompt-chip"
-                    onClick={() => handleSendChatMessage("Shunga o'xshash 2 ta kundalik misol keltir.")}
-                  >
-                    💡 O'xshash 2 ta misol
-                  </button>
-                  <button
-                    className="quick-prompt-chip"
-                    onClick={() => handleSendChatMessage("Bu yerdagi iboralar va o'zak so'zlarni tushuntir.")}
-                  >
-                    💡 Iboralarni tushuntir
-                  </button>
-                </div>
-
-                {/* Chat Messages Feed */}
-                <div className="chat-messages-feed" ref={chatScrollRef}>
-                  {chatMessages.length === 0 ? (
-                    <div className="chat-empty-hint">
-                      AI Ustozga ushbu gap yuzasidan istalgan savolingizni bering!
-                    </div>
-                  ) : (
-                    chatMessages.map((msg, mIdx) => (
-                      <div
-                        key={mIdx}
-                        className={`chat-bubble-row ${msg.role === 'User' ? 'is-user-msg' : 'is-ai-msg'}`}
-                      >
-                        <div className="chat-bubble-bubble">
-                          <span className="bubble-author">{msg.role === 'User' ? 'Siz' : 'AI Ustoz'}</span>
-                          <div className="bubble-content-text">
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {isChatSending && (
-                    <div className="chat-bubble-row is-ai-msg">
-                      <div className="chat-bubble-bubble typing-bubble">
-                        <span>AI Ustoz javob yozmoqda...</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Chat Input Row */}
-                <div className="chat-input-row">
-                  <input
-                    type="text"
-                    placeholder="Ushbu gap haqida savolingizni yozing..."
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSendChatMessage();
-                    }}
-                    className="chat-text-input"
-                    disabled={isChatSending}
-                  />
-                  <button
-                    className="chat-send-btn"
-                    onClick={() => handleSendChatMessage()}
-                    disabled={isChatSending || !chatInput.trim()}
-                  >
-                    Jo'natish
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Subtitles Transcript Section (📋 Dialoglar matni) */}
@@ -1195,6 +1154,249 @@ const PlayerPage: React.FC = () => {
           </>
         )}
       </main>
+
+      {/* AI Ustoz Bilan Tahlil - Dark Style Popup Screen Modal */}
+      {showAiTutorModal && (
+        <div className="ai-tutor-modal-overlay" onClick={handleCloseAiTutorModal}>
+          <div className="ai-tutor-modal-container" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="ai-modal-header">
+              <div className="ai-modal-header-left">
+                <div className="ai-modal-robot-badge">
+                  <span>🤖</span>
+                  <span className="online-indicator-dot" title="Onlayn"></span>
+                </div>
+                <div className="ai-modal-title-group">
+                  <h3 className="ai-modal-title">AI Ustoz Bilan Tahlil</h3>
+                  <span className="ai-modal-timing">
+                    {currentSub ? `Vaqt: ${formatSecondsToMMSS(currentSub.startTimeSeconds)} - ${formatSecondsToMMSS(currentSub.endTimeSeconds)}` : 'Grammatik tahlil va jonli muloqot'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="ai-modal-header-actions">
+                <button
+                  className="ai-modal-close-btn"
+                  onClick={handleCloseAiTutorModal}
+                  aria-label="Yopish"
+                  title="Yopish (Esc)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Target Subtitle Context Banner */}
+            {currentSub && (
+              <div className="ai-modal-sub-banner">
+                <div className="ai-banner-en-line">
+                  <span className="quote-mark">“</span>
+                  <span className="quote-text">{currentSub.text}</span>
+                  <span className="quote-mark">”</span>
+                </div>
+                {summaryData.translation && (
+                  <div className="ai-banner-uz-line">
+                    <span className="flag-icon">🇺🇿</span>
+                    <span className="uz-text">{summaryData.translation}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mobile Tab Switcher */}
+            <div className="ai-modal-tabs-mobile">
+              <button
+                className={`ai-tab-mobile-btn ${aiModalActiveTab === 'analysis' ? 'active' : ''}`}
+                onClick={() => setAiModalActiveTab('analysis')}
+              >
+                📖 Avvaldan qilingan tahlil
+              </button>
+              <button
+                className={`ai-tab-mobile-btn ${aiModalActiveTab === 'chat' ? 'active' : ''}`}
+                onClick={() => setAiModalActiveTab('chat')}
+              >
+                💬 AI Ustoz Chat
+              </button>
+            </div>
+
+            {/* Two-Column Body Grid */}
+            <div className="ai-modal-grid-body">
+              {/* Left Column: Avvaldan qilingan tahlil */}
+              <div className={`ai-modal-col-analysis ${aiModalActiveTab === 'analysis' ? 'is-active-tab' : ''}`}>
+                <div className="ai-panel-header">
+                  <div className="ai-panel-title-wrap">
+                    <span className="ai-panel-icon">📖</span>
+                    <h4>Avvaldan qilingan tahlil</h4>
+                  </div>
+                  <span className="ai-panel-badge">To'liq tahlil</span>
+                </div>
+
+                <div className="ai-analysis-content-scroll">
+                  {currentSub?.gaps && currentSub.gaps.length > 0 ? (
+                    currentSub.gaps.map((gap, gIdx) => (
+                      <div key={gap.id || gIdx} className="ai-gap-card-dark">
+                        {gap.text && gap.text !== currentSub.text && (
+                          <div className="ai-gap-target-badge">🎯 {gap.text}</div>
+                        )}
+                        <div className="ai-dark-markdown">
+                          <ReactMarkdown>{gap.aiAnalysis || "Ushbu ibora grammatikasi tahlil qilinmoqda..."}</ReactMarkdown>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="ai-modal-no-analysis">
+                      <div className="empty-analysis-icon">📝</div>
+                      <h5>Chuqur tahlil hali saqlanmagan</h5>
+                      <p>Ushbu gapning grammatik qoidalari, iboralari va talaffuz xususiyatlarini avtomatik tahlil qiling.</p>
+                      <button
+                        className="btn-create-analysis-dark"
+                        onClick={handleAnalyzeCurrentSub}
+                        disabled={isAnalyzingSub}
+                      >
+                        {isAnalyzingSub ? "⏳ Tahlil qilinmoqda..." : "⚡ AI tahlilini yaratish"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Center / Right Column: Interactive AI Tutor Chat */}
+              <div className={`ai-modal-col-chat ${aiModalActiveTab === 'chat' ? 'is-active-tab' : ''}`}>
+                <div className="ai-panel-header">
+                  <div className="ai-panel-title-wrap">
+                    <span className="ai-panel-icon">💬</span>
+                    <h4>AI Ustoz Chat</h4>
+                  </div>
+                  <span className="ai-panel-status-pill">
+                    <span className="pulse-indicator"></span> Jonli muloqot
+                  </span>
+                </div>
+
+                {/* Quick Prompts Chips */}
+                <div className="ai-modal-chips-row">
+                  <button
+                    className="ai-modal-chip"
+                    onClick={() => handleSendChatMessage("Nega aynan ushbu zamon ishlatildi?")}
+                    disabled={isChatSending || isStreaming}
+                  >
+                    💡 Nega bu zamon?
+                  </button>
+                  <button
+                    className="ai-modal-chip"
+                    onClick={() => handleSendChatMessage("Shunga o'xshash 2 ta kundalik misol keltir.")}
+                    disabled={isChatSending || isStreaming}
+                  >
+                    💡 O'xshash 2 ta misol
+                  </button>
+                  <button
+                    className="ai-modal-chip"
+                    onClick={() => handleSendChatMessage("Bu yerdagi iboralar va o'zak so'zlarni tushuntir.")}
+                    disabled={isChatSending || isStreaming}
+                  >
+                    💡 Iboralarni tushuntir
+                  </button>
+                  <button
+                    className="ai-modal-chip"
+                    onClick={() => handleSendChatMessage("Gapning ma'nosini o'zbek tilida batafsil tushuntir.")}
+                    disabled={isChatSending || isStreaming}
+                  >
+                    💡 O'zbekcha batafsil
+                  </button>
+                </div>
+
+                {/* Chat Feed */}
+                <div className="ai-modal-chat-feed" ref={modalChatFeedRef}>
+                  {chatMessages.length === 0 && !isChatSending && !isStreaming ? (
+                    <div className="ai-chat-feed-empty">
+                      <div className="empty-chat-stars">✨</div>
+                      <h5>Savolingizni bering!</h5>
+                      <p>Ushbu gap bo'yicha tushunarsiz so'z, zamon yoki talaffuz bo'yicha AI Ustoz bilan suhbatlashing.</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, mIdx) => {
+                      const isLatest = mIdx === chatMessages.length - 1 && !isStreaming && !isChatSending;
+                      return (
+                        <div
+                          key={mIdx}
+                          ref={isLatest ? latestAiMsgRef : null}
+                          className={`ai-chat-bubble-row ${msg.role === 'User' ? 'is-user-msg' : 'is-ai-msg'}`}
+                        >
+                          <div className="ai-chat-bubble-box">
+                            <span className="ai-bubble-author">{msg.role === 'User' ? 'Siz' : 'AI Ustoz'}</span>
+                            <div className="ai-bubble-text">
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* Typewriter Streaming AI Message */}
+                  {isStreaming && streamingAiText !== null && (
+                    <div
+                      ref={latestAiMsgRef}
+                      className="ai-chat-bubble-row is-ai-msg is-streaming"
+                    >
+                      <div className="ai-chat-bubble-box">
+                        <span className="ai-bubble-author">AI Ustoz</span>
+                        <div className="ai-bubble-text">
+                          <ReactMarkdown>{streamingAiText}</ReactMarkdown>
+                          <span className="streaming-cursor-pulse">▋</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Animated Thinking State */}
+                  {isChatSending && (
+                    <div
+                      ref={latestAiMsgRef}
+                      className="ai-chat-bubble-row is-ai-msg is-thinking-state"
+                    >
+                      <div className="ai-chat-bubble-box thinking-box">
+                        <div className="thinking-dots-anim">
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                        </div>
+                        <span className="thinking-text-label">AI Ustoz javob yozmoqda...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input Row */}
+                <div className="ai-modal-input-container">
+                  <input
+                    type="text"
+                    placeholder="Ushbu gap yuzasidan savol bering..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSendChatMessage();
+                    }}
+                    className="ai-modal-input-field"
+                    disabled={isChatSending || isStreaming}
+                  />
+                  <button
+                    className="ai-modal-send-button"
+                    onClick={() => handleSendChatMessage()}
+                    disabled={isChatSending || isStreaming || !chatInput.trim()}
+                    title="Yuborish"
+                  >
+                    <span>Jo'natish</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="send-arrow-svg">
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Subscription Plans Modal */}
       <SubscriptionPlansModal 
