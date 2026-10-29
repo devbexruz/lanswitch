@@ -562,20 +562,24 @@ const PlayerPage: React.FC = () => {
 
   // Dynamic mount node for AI Tutor modal (in Fullscreen mode, it mounts inside the fullscreen element)
   const [modalMountNode, setModalMountNode] = useState<Element | null>(null);
+  const [isClosingAiModal, setIsClosingAiModal] = useState(false);
+  const isTransitioningAiModalRef = useRef(false);
 
   useEffect(() => {
     const updateMountNode = () => {
       if (typeof document === 'undefined') return;
-      if (wasFullscreenBeforeAiModalRef.current || (isMobile && showAiTutorModal)) {
-        setModalMountNode(document.body);
-        return;
-      }
+      if (isTransitioningAiModalRef.current) return;
+
       const fsEl = 
         document.fullscreenElement || 
         (document as any).webkitFullscreenElement || 
-        document.querySelector('.custom-video-container.fullscreen') || 
-        document.body;
-      setModalMountNode(fsEl);
+        document.querySelector('.custom-video-container.fullscreen');
+      
+      if (fsEl) {
+        setModalMountNode(fsEl);
+      } else {
+        setModalMountNode(document.body);
+      }
     };
 
     updateMountNode();
@@ -591,6 +595,8 @@ const PlayerPage: React.FC = () => {
 
   // Open AI Tutor Modal & automatically pause video
   const handleOpenAiTutorModal = (targetSubtitleIndex?: number | React.MouseEvent) => {
+    if (isTransitioningAiModalRef.current) return;
+
     if (typeof targetSubtitleIndex === 'number' && targetSubtitleIndex >= 0 && targetSubtitleIndex < subtitles.length) {
       setSelectedSubtitleIndex(targetSubtitleIndex);
     }
@@ -602,27 +608,39 @@ const PlayerPage: React.FC = () => {
 
     if (isMobileDevice && isFullscreen) {
       wasFullscreenBeforeAiModalRef.current = true;
-      // Exit fullscreen so mobile switches to normal mode with standard header
-      window.dispatchEvent(new CustomEvent('exit-fullscreen'));
-      setIsFullscreen(false);
-      setModalMountNode(document.body);
-    } else {
-      wasFullscreenBeforeAiModalRef.current = false;
+      isTransitioningAiModalRef.current = true;
+
+      // 1. Birinchi navbatda AI panel ochiladi (fullscreen konteyner ichida yoki to'liq ekranda)
       const fsEl = 
         (typeof document !== 'undefined' && (
           document.fullscreenElement || 
           (document as any).webkitFullscreenElement || 
-          document.querySelector('.custom-video-container.fullscreen')
-        )) || 
-        (typeof document !== 'undefined' ? document.body : null);
+          document.querySelector('.custom-video-container.fullscreen') || 
+          document.querySelector('.custom-video-container')
+        )) || (typeof document !== 'undefined' ? document.body : null);
+      
       setModalMountNode(fsEl);
-    }
+      setShowAiTutorModal(true);
+      setIsClosingAiModal(false);
 
-    setShowAiTutorModal(true);
+      // 2. Panel ochilib ekranni to'liq qoplab olgach, keyin ekran full dan oddiyga o'tadi (pirillash bo'lmaydi)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('exit-fullscreen'));
+        setIsFullscreen(false);
+        setModalMountNode(document.body);
+        isTransitioningAiModalRef.current = false;
+      }, 240);
+    } else {
+      wasFullscreenBeforeAiModalRef.current = false;
+      setModalMountNode(document.body);
+      setShowAiTutorModal(true);
+      setIsClosingAiModal(false);
+    }
   };
 
   const handleCloseAiTutorModal = () => {
-    setShowAiTutorModal(false);
+    if (isTransitioningAiModalRef.current || isClosingAiModal) return;
+
     if (typewriterIntervalRef.current) {
       clearInterval(typewriterIntervalRef.current);
       typewriterIntervalRef.current = null;
@@ -630,12 +648,38 @@ const PlayerPage: React.FC = () => {
     setIsStreaming(false);
     setStreamingAiText(null);
 
-    // If cinema was in fullscreen before opening on mobile, restore fullscreen when closing modal
+    // Agar kino avval full screenda bo'lgan bo'lsa:
     if (wasFullscreenBeforeAiModalRef.current) {
-      wasFullscreenBeforeAiModalRef.current = false;
+      isTransitioningAiModalRef.current = true;
+      setIsClosingAiModal(true);
+
+      // 1. Avval full screen bo'ladi (modal esa ekranni qoplab turadi, pirillash ko'rinmaydi)
+      const containerEl = 
+        document.fullscreenElement || 
+        (document as any).webkitFullscreenElement || 
+        document.querySelector('.custom-video-container.fullscreen') || 
+        document.querySelector('.custom-video-container');
+      
+      if (containerEl) {
+        setModalMountNode(containerEl);
+      }
+      window.dispatchEvent(new CustomEvent('enter-fullscreen'));
+      setIsFullscreen(true);
+
+      // 2. Fullscreen bo'lib bo'lgach, keyin modal yopiladi
       setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('enter-fullscreen'));
-      }, 60);
+        setShowAiTutorModal(false);
+        setIsClosingAiModal(false);
+        wasFullscreenBeforeAiModalRef.current = false;
+        isTransitioningAiModalRef.current = false;
+      }, 260);
+    } else {
+      // Agar avval full screenda bo'lmagan bo'lsa: oddiy holatda yopiladi
+      setIsClosingAiModal(true);
+      setTimeout(() => {
+        setShowAiTutorModal(false);
+        setIsClosingAiModal(false);
+      }, 180);
     }
   };
 
@@ -1501,7 +1545,7 @@ const PlayerPage: React.FC = () => {
       {/* AI Ustoz Bilan Tahlil - Dark Style Popup Screen Modal (Portaled into fullscreen element when in fullscreen) */}
       {showAiTutorModal && (modalMountNode || typeof document !== 'undefined') && createPortal(
         <div 
-          className={`ai-tutor-modal-overlay ${(isFullscreen || Boolean(typeof document !== 'undefined' && document.fullscreenElement)) ? 'in-fullscreen' : ''}`} 
+          className={`ai-tutor-modal-overlay ${(isFullscreen || Boolean(typeof document !== 'undefined' && document.fullscreenElement)) ? 'in-fullscreen' : ''} ${isClosingAiModal ? 'is-closing' : ''}`} 
           onClick={(e) => {
             e.stopPropagation();
             handleCloseAiTutorModal();

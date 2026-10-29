@@ -1070,6 +1070,17 @@
     z-index: 2147483647 !important;
 }
 
+.ai-tutor-modal-overlay.is-closing {
+    opacity: 0;
+    transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+}
+
+.ai-tutor-modal-overlay.is-closing .ai-tutor-modal-container {
+    transform: scale(0.97);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .ai-tutor-modal-container {
     width: 100%;
     max-width: 1100px;
